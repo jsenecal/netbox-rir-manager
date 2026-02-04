@@ -1,0 +1,147 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: netbox
+          POSTGRES_USER: netbox
+          POSTGRES_PASSWORD: J5brHrAXFLQSif0K
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install NetBox
+        run: |
+          git clone --depth 1 --branch v4.5.0 https://github.com/netbox-community/netbox.git /tmp/netbox
+          pip install --upgrade pip
+          pip install -r /tmp/netbox/requirements.txt
+
+      - name: Configure NetBox
+        run: |
+          cp .devcontainer/configuration/configuration.py /tmp/netbox/netbox/netbox/
+
+          cat >> /tmp/netbox/netbox/netbox/configuration.py << 'EOF_PLUGINS'
+
+          PLUGINS.append("netbox_rir_manager")
+          PLUGINS_CONFIG["netbox_rir_manager"] = {}
+          EOF_PLUGINS
+
+          cat >> /tmp/netbox/netbox/netbox/configuration.py << EOF
+
+          DATABASE = {
+              'NAME': 'netbox',
+              'USER': 'netbox',
+              'PASSWORD': 'J5brHrAXFLQSif0K',
+              'HOST': 'localhost',
+              'PORT': '5432',
+          }
+
+          REDIS = {
+              'tasks': {
+                  'HOST': 'localhost',
+                  'PORT': 6379,
+                  'PASSWORD': '',
+                  'DATABASE': 0,
+                  'SSL': False,
+              },
+              'caching': {
+                  'HOST': 'localhost',
+                  'PORT': 6379,
+                  'PASSWORD': '',
+                  'DATABASE': 1,
+                  'SSL': False,
+              }
+          }
+          EOF
+
+      - name: Install plugin
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run migrations
+        env:
+          PYTHONPATH: /tmp/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+          SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
+        run: |
+          cd /tmp/netbox/netbox
+          python manage.py migrate --noinput
+
+      - name: Run linting
+        run: |
+          ruff check netbox_rir_manager/ tests/
+          ruff format --check netbox_rir_manager/ tests/
+
+      - name: Run tests with coverage
+        env:
+          PYTHONPATH: /tmp/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+          SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
+        run: |
+          pytest tests/ -v --tb=short --cov=netbox_rir_manager --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Check migrations
+        env:
+          PYTHONPATH: /tmp/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+          SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
+        run: |
+          cd /tmp/netbox/netbox
+          python manage.py makemigrations --check --dry-run
+
+      - name: Django system check
+        env:
+          PYTHONPATH: /tmp/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+          SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
+        run: |
+          cd /tmp/netbox/netbox
+          python manage.py check
