@@ -1,0 +1,80 @@
+from netbox.plugins import PluginMenu, PluginMenuButton, PluginMenuItem
+
+menu = PluginMenu(
+    label="RIR Manager",
+    groups=(
+        (
+            "Accounts",
+            (
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:riraccount_list",
+                    link_text="RIR Accounts",
+                    permissions=["netbox_rir_manager.view_riraccount"],
+                    buttons=(
+                        PluginMenuButton(
+                            link="plugins:netbox_rir_manager:riraccount_add",
+                            title="Add",
+                            icon_class="mdi mdi-plus-thick",
+                            permissions=["netbox_rir_manager.add_riraccount"],
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        (
+            "Resources",
+            (
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:rirorganization_list",
+                    link_text="Organizations",
+                    permissions=["netbox_rir_manager.view_rirorganization"],
+                    buttons=(
+                        PluginMenuButton(
+                            link="plugins:netbox_rir_manager:rirorganization_add",
+                            title="Add",
+                            icon_class="mdi mdi-plus-thick",
+                            permissions=["netbox_rir_manager.add_rirorganization"],
+                        ),
+                    ),
+                ),
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:rircontact_list",
+                    link_text="Contacts (POCs)",
+                    permissions=["netbox_rir_manager.view_rircontact"],
+                    buttons=(
+                        PluginMenuButton(
+                            link="plugins:netbox_rir_manager:rircontact_add",
+                            title="Add",
+                            icon_class="mdi mdi-plus-thick",
+                            permissions=["netbox_rir_manager.add_rircontact"],
+                        ),
+                    ),
+                ),
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:rirnetwork_list",
+                    link_text="Networks",
+                    permissions=["netbox_rir_manager.view_rirnetwork"],
+                    buttons=(
+                        PluginMenuButton(
+                            link="plugins:netbox_rir_manager:rirnetwork_add",
+                            title="Add",
+                            icon_class="mdi mdi-plus-thick",
+                            permissions=["netbox_rir_manager.add_rirnetwork"],
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        (
+            "Operations",
+            (
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:rirsynclog_list",
+                    link_text="Sync Logs",
+                    permissions=["netbox_rir_manager.view_rirsynclog"],
+                ),
+            ),
+        ),
+    ),
+    icon_class="mdi mdi-earth",
+)

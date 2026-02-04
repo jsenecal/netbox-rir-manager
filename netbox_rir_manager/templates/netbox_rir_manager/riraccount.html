@@ -1,0 +1,49 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">RIR Account</h5>
+            <table class="table table-hover attr-table">
+                <tr>
+                    <th scope="row">RIR</th>
+                    <td>{{ object.rir|linkify }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Name</th>
+                    <td>{{ object.name }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Org Handle</th>
+                    <td>{{ object.org_handle|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">API URL</th>
+                    <td>{{ object.api_url|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Active</th>
+                    <td>{% checkmark object.is_active %}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Last Sync</th>
+                    <td>{{ object.last_sync|placeholder }}</td>
+                </tr>
+            </table>
+        </div>
+        {% plugin_left_page object %}
+    </div>
+    <div class="col col-md-6">
+        {% include 'inc/panels/tags.html' %}
+        {% plugin_right_page object %}
+    </div>
+</div>
+<div class="row">
+    <div class="col col-md-12">
+        {% plugin_full_width_page object %}
+    </div>
+</div>
+{% endblock content %}

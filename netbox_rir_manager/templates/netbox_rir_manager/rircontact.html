@@ -1,0 +1,65 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Contact</h5>
+            <table class="table table-hover attr-table">
+                <tr>
+                    <th scope="row">Account</th>
+                    <td>{{ object.account|linkify }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Handle</th>
+                    <td>{{ object.handle }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Type</th>
+                    <td>{{ object.contact_type }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">First Name</th>
+                    <td>{{ object.first_name|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Last Name</th>
+                    <td>{{ object.last_name }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Company</th>
+                    <td>{{ object.company_name|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Email</th>
+                    <td>{{ object.email|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Phone</th>
+                    <td>{{ object.phone|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Organization</th>
+                    <td>{{ object.organization|linkify|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Last Synced</th>
+                    <td>{{ object.last_synced|placeholder }}</td>
+                </tr>
+            </table>
+        </div>
+        {% plugin_left_page object %}
+    </div>
+    <div class="col col-md-6">
+        {% include 'inc/panels/tags.html' %}
+        {% plugin_right_page object %}
+    </div>
+</div>
+<div class="row">
+    <div class="col col-md-12">
+        {% plugin_full_width_page object %}
+    </div>
+</div>
+{% endblock content %}
