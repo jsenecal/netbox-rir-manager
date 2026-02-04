@@ -20,7 +20,7 @@ services:
       - ./configuration:/etc/netbox/config:z,ro
       - netbox-scripts:/etc/netbox/scripts
     ports:
-      - "8008:8008"
+      - "8009:8009"
     command:
       - sleep
       - infinity
