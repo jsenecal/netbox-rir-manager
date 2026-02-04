@@ -1,5 +1,0 @@
-.claude/
-.claude.json
-.config/*
-!.config/fish/
-!.config/omf/

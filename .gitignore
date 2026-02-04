@@ -95,6 +95,13 @@ venv.bak/
 # Git worktrees
 .worktrees/
 
+# IDE
+.vscode/
+.idea/
+
+# Devcontainer local state
+.devcontainer/home/
+
 # Claude Code
 CLAUDE.md
 
