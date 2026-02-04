@@ -6,6 +6,7 @@ from netbox_rir_manager.models import RIRAccount, RIRContact, RIRNetwork, RIROrg
 
 class RIRAccountSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:riraccount-detail")
+    api_key = serializers.CharField(write_only=True)
 
     class Meta:
         model = RIRAccount
@@ -15,6 +16,7 @@ class RIRAccountSerializer(NetBoxModelSerializer):
             "display",
             "rir",
             "name",
+            "api_key",
             "api_url",
             "org_handle",
             "is_active",
@@ -23,7 +25,6 @@ class RIRAccountSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
-        # api_key is intentionally excluded for security
 
 
 class RIROrganizationSerializer(NetBoxModelSerializer):

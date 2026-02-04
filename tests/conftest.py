@@ -110,14 +110,71 @@ if _netbox_available:
         )
 
     @pytest.fixture
-    def admin_client(db):
+    def rir_organization(db, rir_account):
+        """Create a test RIR organization."""
+        from netbox_rir_manager.models import RIROrganization
+
+        return RIROrganization.objects.create(
+            account=rir_account,
+            handle="TESTORG-ARIN",
+            name="Test Organization",
+            city="Anytown",
+            state_province="VA",
+            postal_code="12345",
+            country="US",
+        )
+
+    @pytest.fixture
+    def rir_contact(db, rir_account, rir_organization):
+        """Create a test RIR contact."""
+        from netbox_rir_manager.models import RIRContact
+
+        return RIRContact.objects.create(
+            account=rir_account,
+            handle="JD123-ARIN",
+            contact_type="PERSON",
+            first_name="John",
+            last_name="Doe",
+            email="jdoe@example.com",
+            organization=rir_organization,
+        )
+
+    @pytest.fixture
+    def rir_network(db, rir_account, rir_organization):
+        """Create a test RIR network."""
+        from netbox_rir_manager.models import RIRNetwork
+
+        return RIRNetwork.objects.create(
+            account=rir_account,
+            handle="NET-192-0-2-0-1",
+            net_name="EXAMPLE-NET",
+            organization=rir_organization,
+        )
+
+    @pytest.fixture
+    def admin_user(db):
+        """Create an admin user."""
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        return User.objects.create_superuser("admin", "admin@example.com", "password")
+
+    @pytest.fixture
+    def admin_client(admin_user):
         """Create an admin user and return a Django test client."""
-        from django.contrib.auth.models import User
         from django.test import Client
 
-        user = User.objects.create_superuser("admin", "admin@example.com", "password")
         client = Client()
-        client.force_login(user)
+        client.force_login(admin_user)
+        return client
+
+    @pytest.fixture
+    def admin_api_client(admin_user):
+        """Create an admin user and return a DRF API client."""
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=admin_user)
         return client
 
 else:
