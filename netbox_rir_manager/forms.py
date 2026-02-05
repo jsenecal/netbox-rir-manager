@@ -158,3 +158,47 @@ class RIRUserKeyFilterForm(NetBoxModelFilterSetForm):
     rir_config_id = DynamicModelMultipleChoiceField(
         queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
     )
+
+
+class RIRNetworkReassignForm(forms.Form):
+    """Form for reassigning a network (simple or detailed)."""
+
+    reassignment_type = forms.ChoiceField(
+        choices=[("simple", "Simple Reassignment"), ("detailed", "Detailed Reassignment")],
+        initial="simple",
+    )
+    # Simple reassignment fields (customer)
+    customer_name = forms.CharField(max_length=255, required=False, help_text="Customer/recipient name")
+    street_address = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False)
+    city = forms.CharField(max_length=100, required=False)
+    state_province = forms.CharField(max_length=100, required=False)
+    postal_code = forms.CharField(max_length=20, required=False)
+    country = forms.CharField(max_length=2, required=False, help_text="ISO 3166-1 two-letter code")
+    # Detailed reassignment fields
+    org_handle = forms.CharField(
+        max_length=50, required=False, help_text="Recipient ORG handle for detailed reassignment"
+    )
+    # Common fields
+    net_name = forms.CharField(max_length=100, required=False, help_text="Name for the reassigned subnet")
+    start_address = forms.GenericIPAddressField(help_text="Start IP of the subnet to reassign")
+    end_address = forms.GenericIPAddressField(help_text="End IP of the subnet to reassign")
+
+    def clean(self):
+        cleaned = super().clean()
+        rtype = cleaned.get("reassignment_type")
+        if rtype == "simple":
+            for field in ("customer_name", "city", "country"):
+                if not cleaned.get(field):
+                    self.add_error(field, "Required for simple reassignment.")
+        elif rtype == "detailed" and not cleaned.get("org_handle"):
+            self.add_error("org_handle", "Required for detailed reassignment.")
+        return cleaned
+
+
+class RIRNetworkReallocateForm(forms.Form):
+    """Form for reallocating a network to an ORG."""
+
+    org_handle = forms.CharField(max_length=50, help_text="Recipient ORG handle")
+    net_name = forms.CharField(max_length=100, required=False, help_text="Name for the reallocated subnet")
+    start_address = forms.GenericIPAddressField(help_text="Start IP of the subnet to reallocate")
+    end_address = forms.GenericIPAddressField(help_text="End IP of the subnet to reallocate")

@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.urls import reverse
 
@@ -197,3 +199,153 @@ class TestUnauthenticatedAccess:
         url = reverse("plugins:netbox_rir_manager:rirconfig_list")
         response = client.get(url)
         assert response.status_code == 302  # Redirect to login
+
+
+@pytest.mark.django_db
+class TestRIRNetworkActionViews:
+    def test_reassign_get(self, admin_client, rir_network):
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_reassign", args=[rir_network.pk])
+        response = admin_client.get(url)
+        assert response.status_code == 200
+
+    def test_reallocate_get(self, admin_client, rir_network):
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_reallocate", args=[rir_network.pk])
+        response = admin_client.get(url)
+        assert response.status_code == 200
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_reassign_simple_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.create_customer.return_value = {"handle": "C-TEST"}
+        mock_backend.reassign_network.return_value = {
+            "ticket_number": "TKT-REASSIGN-001",
+            "ticket_type": "IPV4_SIMPLE_REASSIGN",
+            "ticket_status": "PENDING_REVIEW",
+            "raw_data": {},
+        }
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_reassign", args=[rir_network.pk])
+        response = admin_client.post(
+            url,
+            {
+                "reassignment_type": "simple",
+                "customer_name": "Test Customer",
+                "city": "Testville",
+                "country": "US",
+                "start_address": "10.0.0.0",
+                "end_address": "10.0.0.255",
+            },
+        )
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.get(ticket_number="TKT-REASSIGN-001")
+        assert response.status_code == 302
+        assert response.url == ticket.get_absolute_url()
+        assert ticket.ticket_type == "IPV4_SIMPLE_REASSIGN"
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_reassign_no_api_key(self, mock_backend_cls, admin_client, rir_network):
+        """Reassign without an API key should redirect with error."""
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_reassign", args=[rir_network.pk])
+        response = admin_client.post(
+            url,
+            {
+                "reassignment_type": "detailed",
+                "org_handle": "TARGET-ORG",
+                "start_address": "10.0.0.0",
+                "end_address": "10.0.0.255",
+            },
+        )
+        assert response.status_code == 302
+        assert response.url == rir_network.get_absolute_url()
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_remove_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.remove_network.return_value = True
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_remove", args=[rir_network.pk])
+        response = admin_client.post(url)
+        assert response.status_code == 302
+        assert response.url == rir_network.get_absolute_url()
+
+        from netbox_rir_manager.models import RIRSyncLog
+
+        log = RIRSyncLog.objects.filter(object_handle=rir_network.handle, operation="delete", status="success").first()
+        assert log is not None
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_remove_failure(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.remove_network.return_value = False
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_remove", args=[rir_network.pk])
+        response = admin_client.post(url)
+        assert response.status_code == 302
+        assert response.url == rir_network.get_absolute_url()
+
+        from netbox_rir_manager.models import RIRSyncLog
+
+        log = RIRSyncLog.objects.filter(object_handle=rir_network.handle, operation="delete", status="error").first()
+        assert log is not None
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_delete_arin_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.delete_network.return_value = {
+            "ticket_number": "TKT-DELETE-001",
+            "ticket_type": "NET_DELETE_REQUEST",
+            "ticket_status": "PENDING_REVIEW",
+            "raw_data": {},
+        }
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_delete_arin", args=[rir_network.pk])
+        response = admin_client.post(url)
+
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.get(ticket_number="TKT-DELETE-001")
+        assert response.status_code == 302
+        assert response.url == ticket.get_absolute_url()
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_delete_arin_failure(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.delete_network.return_value = None
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_delete_arin", args=[rir_network.pk])
+        response = admin_client.post(url)
+        assert response.status_code == 302
+        assert response.url == rir_network.get_absolute_url()
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_reallocate_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.reallocate_network.return_value = {
+            "ticket_number": "TKT-REALLOC-001",
+            "ticket_type": "IPV4_REALLOCATE",
+            "ticket_status": "PENDING_REVIEW",
+            "raw_data": {},
+        }
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_reallocate", args=[rir_network.pk])
+        response = admin_client.post(
+            url,
+            {
+                "org_handle": "TARGET-ORG",
+                "start_address": "10.0.0.0",
+                "end_address": "10.0.0.255",
+            },
+        )
+
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.get(ticket_number="TKT-REALLOC-001")
+        assert response.status_code == 302
+        assert response.url == ticket.get_absolute_url()

@@ -62,6 +62,11 @@ urlpatterns = [
         name="rirnetwork_changelog",
         kwargs={"model": RIRNetwork},
     ),
+    # RIRNetwork actions
+    path("networks/<int:pk>/reassign/", views.RIRNetworkReassignView.as_view(), name="rirnetwork_reassign"),
+    path("networks/<int:pk>/reallocate/", views.RIRNetworkReallocateView.as_view(), name="rirnetwork_reallocate"),
+    path("networks/<int:pk>/remove/", views.RIRNetworkRemoveView.as_view(), name="rirnetwork_remove"),
+    path("networks/<int:pk>/delete-arin/", views.RIRNetworkDeleteARINView.as_view(), name="rirnetwork_delete_arin"),
     # RIRSyncLog
     path("sync-logs/", views.RIRSyncLogListView.as_view(), name="rirsynclog_list"),
     path("sync-logs/<int:pk>/", views.RIRSyncLogView.as_view(), name="rirsynclog"),

@@ -43,6 +43,33 @@
                 </tr>
             </table>
         </div>
+        <div class="card">
+            <h5 class="card-header">ARIN Actions</h5>
+            <div class="card-body">
+                <a href="{% url 'plugins:netbox_rir_manager:rirnetwork_reassign' object.pk %}"
+                   class="btn btn-sm btn-primary me-1">
+                    <i class="mdi mdi-swap-horizontal"></i> Reassign
+                </a>
+                <a href="{% url 'plugins:netbox_rir_manager:rirnetwork_reallocate' object.pk %}"
+                   class="btn btn-sm btn-info me-1">
+                    <i class="mdi mdi-arrow-right-bold"></i> Reallocate
+                </a>
+                <form method="post" action="{% url 'plugins:netbox_rir_manager:rirnetwork_remove' object.pk %}"
+                      class="d-inline" onsubmit="return confirm('Remove this network from ARIN?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-warning me-1">
+                        <i class="mdi mdi-minus-circle"></i> Remove
+                    </button>
+                </form>
+                <form method="post" action="{% url 'plugins:netbox_rir_manager:rirnetwork_delete_arin' object.pk %}"
+                      class="d-inline" onsubmit="return confirm('Submit delete request to ARIN?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="mdi mdi-delete"></i> Delete at ARIN
+                    </button>
+                </form>
+            </div>
+        </div>
         {% plugin_left_page object %}
     </div>
     <div class="col col-md-6">
