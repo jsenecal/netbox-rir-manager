@@ -92,6 +92,70 @@ class ARINBackend(RIRBackend):
         return []
 
     # ------------------------------------------------------------------
+    # Write operations
+    # ------------------------------------------------------------------
+
+    def update_network(self, handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
+        net = self._call_with_retry(self.api.net.from_handle, handle)
+        if net is None or isinstance(net, Error):
+            return None
+        if "net_name" in data:
+            net.net_name = data["net_name"]
+        result = self._call_with_retry(net.save)
+        if result is None or isinstance(result, Error):
+            return None
+        return self._net_to_dict(result)
+
+    def reassign_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
+        parent = self._call_with_retry(self.api.net.from_handle, parent_handle)
+        if parent is None or isinstance(parent, Error):
+            return None
+        from regrws.models import Net
+
+        child_net = Net(**net_data)
+        result = self._call_with_retry(self.api.net.reassign, parent, child_net)
+        if result is None or isinstance(result, Error):
+            return None
+        return self._ticket_request_to_dict(result)
+
+    def reallocate_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
+        parent = self._call_with_retry(self.api.net.from_handle, parent_handle)
+        if parent is None or isinstance(parent, Error):
+            return None
+        from regrws.models import Net
+
+        child_net = Net(**net_data)
+        result = self._call_with_retry(self.api.net.reallocate, parent, child_net)
+        if result is None or isinstance(result, Error):
+            return None
+        return self._ticket_request_to_dict(result)
+
+    def remove_network(self, handle: str) -> bool:
+        net = self._call_with_retry(self.api.net.from_handle, handle)
+        if net is None or isinstance(net, Error):
+            return False
+        result = self._call_with_retry(self.api.net.remove, net)
+        return not (result is None or isinstance(result, Error))
+
+    def delete_network(self, handle: str) -> dict[str, Any] | None:
+        net = self._call_with_retry(self.api.net.from_handle, handle)
+        if net is None or isinstance(net, Error):
+            return None
+        result = self._call_with_retry(net.delete)
+        if result is None or isinstance(result, Error):
+            return None
+        return self._ticket_request_to_dict(result)
+
+    def create_customer(self, parent_net_handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
+        parent = self._call_with_retry(self.api.net.from_handle, parent_net_handle)
+        if parent is None or isinstance(parent, Error):
+            return None
+        result = self._call_with_retry(self.api.customer.create_for_net, parent, **data)
+        if result is None or isinstance(result, Error):
+            return None
+        return self._customer_to_dict(result)
+
+    # ------------------------------------------------------------------
     # Internal helpers to normalise pyregrws models to plain dicts
     # ------------------------------------------------------------------
 
@@ -174,6 +238,30 @@ class ARINBackend(RIRBackend):
             "parent_net_handle": getattr(net, "parent_net_handle", "") or "",
             "net_blocks": net_blocks,
             "raw_data": self._safe_serialize(net),
+        }
+
+    def _ticket_request_to_dict(self, ticket_request: Any) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        ticket = getattr(ticket_request, "ticket", None)
+        if ticket:
+            result["ticket_number"] = getattr(ticket, "ticket_no", "")
+            result["ticket_status"] = getattr(ticket, "web_ticket_status", "")
+            result["ticket_type"] = getattr(ticket, "web_ticket_type", "")
+            result["ticket_resolution"] = getattr(ticket, "web_ticket_resolution", "")
+            result["created_date"] = getattr(ticket, "created_date", "")
+            result["resolved_date"] = getattr(ticket, "resolved_date", "")
+            result["raw_data"] = self._safe_serialize(ticket)
+        net = getattr(ticket_request, "net", None)
+        if net:
+            result["net"] = self._net_to_dict(net)
+        return result
+
+    def _customer_to_dict(self, customer: Any) -> dict[str, Any]:
+        return {
+            "handle": getattr(customer, "handle", ""),
+            "customer_name": getattr(customer, "customer_name", ""),
+            "parent_org_handle": getattr(customer, "parent_org_handle", ""),
+            "raw_data": self._safe_serialize(customer),
         }
 
     @staticmethod

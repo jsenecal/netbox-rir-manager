@@ -41,3 +41,33 @@ class RIRBackend(ABC):
     def sync_resources(self, rir_config: RIRConfig, resource_type: str | None = None) -> list[dict[str, Any]]:
         """Sync resources from RIR. Returns list of synced resource dicts."""
         ...
+
+    @abstractmethod
+    def update_network(self, handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
+        """Update a network's details (name, POC links, comments). Returns updated net dict or None."""
+        ...
+
+    @abstractmethod
+    def reassign_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
+        """Reassign a subnet from parent NET. Returns ticket info dict or None."""
+        ...
+
+    @abstractmethod
+    def reallocate_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
+        """Reallocate a subnet from parent NET. Returns ticket info dict or None."""
+        ...
+
+    @abstractmethod
+    def remove_network(self, handle: str) -> bool:
+        """Remove a reassigned/reallocated network. Returns True on success."""
+        ...
+
+    @abstractmethod
+    def delete_network(self, handle: str) -> dict[str, Any] | None:
+        """Delete a network. Returns ticket info dict or None."""
+        ...
+
+    @abstractmethod
+    def create_customer(self, parent_net_handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
+        """Create a customer under a parent NET for simple reassignment. Returns customer dict or None."""
+        ...
