@@ -6,6 +6,7 @@ from django.views import View
 from netbox.views import generic
 
 from netbox_rir_manager.backends.arin import ARINBackend
+from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
     RIRConfigFilterSet,
     RIRContactFilterSet,
@@ -209,20 +210,6 @@ class RIRConfigSyncView(LoginRequiredMixin, View):
         return redirect(rir_config.get_absolute_url())
 
 
-def _normalize_status(arin_status: str) -> str:
-    """Map ARIN ticket status strings to TicketStatusChoices values."""
-    mapping = {
-        "PENDING_CONFIRMATION": "pending_confirmation",
-        "PENDING_REVIEW": "pending_review",
-        "ASSIGNED": "assigned",
-        "IN_PROGRESS": "in_progress",
-        "RESOLVED": "resolved",
-        "CLOSED": "closed",
-        "APPROVED": "approved",
-    }
-    return mapping.get(arin_status, "pending_review")
-
-
 class RIRTicketRefreshView(LoginRequiredMixin, View):
     """Refresh ticket status from ARIN (placeholder)."""
 
@@ -308,7 +295,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
             messages.error(request, "Reassignment failed at ARIN.")
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="create",
+                operation="reassign",
                 object_type="network",
                 object_handle=network.handle,
                 status="error",
@@ -320,7 +307,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
             rir_config=network.rir_config,
             ticket_number=result.get("ticket_number", ""),
             ticket_type=result.get("ticket_type", "IPV4_SIMPLE_REASSIGN"),
-            status=_normalize_status(result.get("ticket_status", "")),
+            status=normalize_ticket_status(result.get("ticket_status", "")),
             network=network,
             submitted_by=user_key,
             created_date=timezone.now(),
@@ -328,7 +315,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
         )
         RIRSyncLog.objects.create(
             rir_config=network.rir_config,
-            operation="create",
+            operation="reassign",
             object_type="network",
             object_handle=network.handle,
             status="success",
@@ -386,7 +373,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
             messages.error(request, "Reallocation failed at ARIN.")
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="create",
+                operation="reallocate",
                 object_type="network",
                 object_handle=network.handle,
                 status="error",
@@ -398,7 +385,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
             rir_config=network.rir_config,
             ticket_number=result.get("ticket_number", ""),
             ticket_type=result.get("ticket_type", "IPV4_REALLOCATE"),
-            status=_normalize_status(result.get("ticket_status", "")),
+            status=normalize_ticket_status(result.get("ticket_status", "")),
             network=network,
             submitted_by=user_key,
             created_date=timezone.now(),
@@ -406,7 +393,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
         )
         RIRSyncLog.objects.create(
             rir_config=network.rir_config,
-            operation="create",
+            operation="reallocate",
             object_type="network",
             object_handle=network.handle,
             status="success",
@@ -434,7 +421,7 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
         if success:
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="delete",
+                operation="remove",
                 object_type="network",
                 object_handle=network.handle,
                 status="success",
@@ -444,7 +431,7 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
         else:
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="delete",
+                operation="remove",
                 object_type="network",
                 object_handle=network.handle,
                 status="error",
@@ -485,7 +472,7 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
             rir_config=network.rir_config,
             ticket_number=result.get("ticket_number", ""),
             ticket_type="NET_DELETE_REQUEST",
-            status=_normalize_status(result.get("ticket_status", "")),
+            status=normalize_ticket_status(result.get("ticket_status", "")),
             network=network,
             submitted_by=user_key,
             created_date=timezone.now(),

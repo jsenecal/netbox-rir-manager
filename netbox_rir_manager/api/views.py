@@ -16,6 +16,7 @@ from netbox_rir_manager.api.serializers import (
     RIRUserKeySerializer,
 )
 from netbox_rir_manager.backends.arin import ARINBackend
+from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
     RIRConfigFilterSet,
     RIRContactFilterSet,
@@ -34,20 +35,6 @@ from netbox_rir_manager.models import (
     RIRTicket,
     RIRUserKey,
 )
-
-
-def _normalize_status(arin_status: str) -> str:
-    """Map ARIN ticket status strings to TicketStatusChoices values."""
-    mapping = {
-        "PENDING_CONFIRMATION": "pending_confirmation",
-        "PENDING_REVIEW": "pending_review",
-        "ASSIGNED": "assigned",
-        "IN_PROGRESS": "in_progress",
-        "RESOLVED": "resolved",
-        "CLOSED": "closed",
-        "APPROVED": "approved",
-    }
-    return mapping.get(arin_status, "pending_review")
 
 
 class RIRConfigViewSet(NetBoxModelViewSet):
@@ -135,7 +122,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         if result is None:
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="create",
+                operation="reassign",
                 object_type="network",
                 object_handle=network.handle,
                 status="error",
@@ -150,7 +137,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             rir_config=network.rir_config,
             ticket_number=result.get("ticket_number", ""),
             ticket_type=result.get("ticket_type", "IPV4_SIMPLE_REASSIGN"),
-            status=_normalize_status(result.get("ticket_status", "")),
+            status=normalize_ticket_status(result.get("ticket_status", "")),
             network=network,
             submitted_by=user_key,
             created_date=timezone.now(),
@@ -158,7 +145,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         )
         RIRSyncLog.objects.create(
             rir_config=network.rir_config,
-            operation="create",
+            operation="reassign",
             object_type="network",
             object_handle=network.handle,
             status="success",
@@ -194,7 +181,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         if result is None:
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="create",
+                operation="reallocate",
                 object_type="network",
                 object_handle=network.handle,
                 status="error",
@@ -209,7 +196,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             rir_config=network.rir_config,
             ticket_number=result.get("ticket_number", ""),
             ticket_type=result.get("ticket_type", "IPV4_REALLOCATE"),
-            status=_normalize_status(result.get("ticket_status", "")),
+            status=normalize_ticket_status(result.get("ticket_status", "")),
             network=network,
             submitted_by=user_key,
             created_date=timezone.now(),
@@ -217,7 +204,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         )
         RIRSyncLog.objects.create(
             rir_config=network.rir_config,
-            operation="create",
+            operation="reallocate",
             object_type="network",
             object_handle=network.handle,
             status="success",
@@ -243,7 +230,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         if success:
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="delete",
+                operation="remove",
                 object_type="network",
                 object_handle=network.handle,
                 status="success",
@@ -256,7 +243,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         else:
             RIRSyncLog.objects.create(
                 rir_config=network.rir_config,
-                operation="delete",
+                operation="remove",
                 object_type="network",
                 object_handle=network.handle,
                 status="error",
@@ -297,7 +284,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             rir_config=network.rir_config,
             ticket_number=result.get("ticket_number", ""),
             ticket_type="NET_DELETE_REQUEST",
-            status=_normalize_status(result.get("ticket_status", "")),
+            status=normalize_ticket_status(result.get("ticket_status", "")),
             network=network,
             submitted_by=user_key,
             created_date=timezone.now(),

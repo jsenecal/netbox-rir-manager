@@ -273,7 +273,7 @@ class TestRIRNetworkActionViews:
 
         from netbox_rir_manager.models import RIRSyncLog
 
-        log = RIRSyncLog.objects.filter(object_handle=rir_network.handle, operation="delete", status="success").first()
+        log = RIRSyncLog.objects.filter(object_handle=rir_network.handle, operation="remove", status="success").first()
         assert log is not None
 
     @patch("netbox_rir_manager.views.ARINBackend")
@@ -289,7 +289,7 @@ class TestRIRNetworkActionViews:
 
         from netbox_rir_manager.models import RIRSyncLog
 
-        log = RIRSyncLog.objects.filter(object_handle=rir_network.handle, operation="delete", status="error").first()
+        log = RIRSyncLog.objects.filter(object_handle=rir_network.handle, operation="remove", status="error").first()
         assert log is not None
 
     @patch("netbox_rir_manager.views.ARINBackend")

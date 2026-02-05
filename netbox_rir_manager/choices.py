@@ -72,3 +72,17 @@ class TicketTypeChoices(ChoiceSet):
         ("IPV6_REALLOCATE", "IPv6 Reallocate", "purple"),
         ("NET_DELETE_REQUEST", "NET Delete Request", "red"),
     ]
+
+
+def normalize_ticket_status(arin_status: str) -> str:
+    """Map ARIN ticket status strings to TicketStatusChoices values."""
+    mapping = {
+        "PENDING_CONFIRMATION": "pending_confirmation",
+        "PENDING_REVIEW": "pending_review",
+        "ASSIGNED": "assigned",
+        "IN_PROGRESS": "in_progress",
+        "RESOLVED": "resolved",
+        "CLOSED": "closed",
+        "APPROVED": "approved",
+    }
+    return mapping.get(arin_status, "pending_review")
