@@ -3,6 +3,8 @@ from django.db import models
 from django.urls import reverse
 from netbox.models import NetBoxModel
 
+from netbox_rir_manager.fields import EncryptedCharField
+
 
 class RIRUserKey(NetBoxModel):
     """Per-user API key for RIR access, scoped to an RIRConfig."""
@@ -17,7 +19,7 @@ class RIRUserKey(NetBoxModel):
         on_delete=models.CASCADE,
         related_name="user_keys",
     )
-    api_key = models.CharField(max_length=255)
+    api_key = EncryptedCharField(max_length=512)
 
     class Meta:
         ordering = ["user", "rir_config"]
