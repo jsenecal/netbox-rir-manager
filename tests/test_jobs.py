@@ -19,11 +19,12 @@ class TestRIRSyncJob:
             "state_province": "VA",
             "postal_code": "12345",
             "country": "US",
+            "poc_links": [],
             "raw_data": {},
         }
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        logs = sync_rir_config(rir_config, resource_types=["organizations"])
+        logs = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
 
         assert len(logs) == 1
         assert logs[0].status == "success"
@@ -39,7 +40,7 @@ class TestRIRSyncJob:
         mock_backend.get_organization.return_value = None
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        logs = sync_rir_config(rir_config, resource_types=["organizations"])
+        logs = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
 
         assert len(logs) == 1
         assert logs[0].status == "error"
@@ -54,7 +55,72 @@ class TestRIRSyncJob:
         mock_backend_class.from_rir_config.return_value = mock_backend
 
         assert rir_config.last_sync is None
-        sync_rir_config(rir_config, resource_types=["organizations"])
+        sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
 
         rir_config.refresh_from_db()
         assert rir_config.last_sync is not None
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_contacts_from_org(self, mock_backend_class, rir_config):
+        from netbox_rir_manager.jobs import sync_rir_config
+        from netbox_rir_manager.models import RIRContact, RIROrganization
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = {
+            "handle": "TESTORG-ARIN",
+            "name": "Test Org",
+            "street_address": "",
+            "city": "Anytown",
+            "state_province": "VA",
+            "postal_code": "12345",
+            "country": "US",
+            "poc_links": [{"handle": "JD123-ARIN", "function": "AD"}],
+            "raw_data": {},
+        }
+        mock_backend.get_poc.return_value = {
+            "handle": "JD123-ARIN",
+            "contact_type": "PERSON",
+            "first_name": "John",
+            "last_name": "Doe",
+            "company_name": "Test Org",
+            "email": "john@example.com",
+            "phone": "",
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations", "contacts"])
+
+        assert RIROrganization.objects.filter(handle="TESTORG-ARIN").exists()
+        assert RIRContact.objects.filter(handle="JD123-ARIN").exists()
+        contact = RIRContact.objects.get(handle="JD123-ARIN")
+        assert contact.first_name == "John"
+        assert contact.last_name == "Doe"
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_networks_from_ipam(self, mock_backend_class, rir_config, rir):
+        from ipam.models import Aggregate
+        from netbox_rir_manager.jobs import sync_rir_config
+        from netbox_rir_manager.models import RIRNetwork
+
+        Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = None  # no org to sync
+        mock_backend.find_net.return_value = {
+            "handle": "NET-192-0-2-0-1",
+            "net_name": "EXAMPLE-NET",
+            "version": 4,
+            "org_handle": "",
+            "parent_net_handle": "",
+            "net_blocks": [{"start_address": "192.0.2.0", "end_address": "192.0.2.255", "cidr_length": 24, "type": "DS"}],
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+
+        net = RIRNetwork.objects.get(handle="NET-192-0-2-0-1")
+        assert net.net_name == "EXAMPLE-NET"
+        assert net.aggregate is not None
+        assert str(net.aggregate.prefix) == "192.0.2.0/24"

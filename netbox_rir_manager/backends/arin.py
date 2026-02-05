@@ -25,10 +25,10 @@ class ARINBackend(RIRBackend):
         self.api = Api(**kwargs)
 
     @classmethod
-    def from_rir_config(cls, rir_config: RIRConfig) -> ARINBackend:
+    def from_rir_config(cls, rir_config: RIRConfig, api_key: str) -> ARINBackend:
         """Create backend instance from an RIRConfig model."""
         return cls(
-            api_key=rir_config.api_key,
+            api_key=api_key,
             base_url=rir_config.api_url or None,
         )
 
@@ -56,6 +56,13 @@ class ARINBackend(RIRBackend):
             return None
         return self._poc_to_dict(result)
 
+    def find_net(self, start_address: str, end_address: str) -> dict[str, Any] | None:
+        """Find a network by start/end address range."""
+        result = self.api.net.find_net(start_address, end_address)
+        if isinstance(result, Error):
+            return None
+        return self._net_to_dict(result)
+
     def get_asn(self, asn: int) -> dict[str, Any] | None:
         return None
 
@@ -74,12 +81,26 @@ class ARINBackend(RIRBackend):
         return getattr(iso3166_1, "code2", "") or ""
 
     def _poc_to_dict(self, poc: Any) -> dict[str, Any]:
+        email = ""
+        if hasattr(poc, "emails") and poc.emails:
+            email = poc.emails[0] if isinstance(poc.emails[0], str) else getattr(poc.emails[0], "email", "")
+        phone = ""
+        if hasattr(poc, "phones") and poc.phones:
+            phone_obj = poc.phones[0]
+            if isinstance(phone_obj, str):
+                phone = phone_obj
+            else:
+                number = getattr(phone_obj, "number", "") or ""
+                extension = getattr(phone_obj, "extension", "") or ""
+                phone = f"{number}x{extension}" if extension else number
         return {
             "handle": poc.handle,
             "contact_type": poc.contact_type,
             "first_name": getattr(poc, "first_name", "") or "",
             "last_name": poc.last_name or "",
             "company_name": getattr(poc, "company_name", "") or "",
+            "email": email,
+            "phone": phone,
             "city": getattr(poc, "city", "") or "",
             "postal_code": getattr(poc, "postal_code", "") or "",
             "country": self._country_code(getattr(poc, "iso3166_1", None)),
@@ -90,6 +111,13 @@ class ARINBackend(RIRBackend):
         street = ""
         if hasattr(org, "street_address") and org.street_address:
             street = "\n".join(line.line for line in org.street_address if hasattr(line, "line") and line.line)
+        poc_links = []
+        if hasattr(org, "poc_links") and org.poc_links:
+            for link in org.poc_links:
+                poc_links.append({
+                    "handle": link.handle,
+                    "function": getattr(link, "function", ""),
+                })
         return {
             "handle": org.handle,
             "name": org.org_name or "",
@@ -98,6 +126,7 @@ class ARINBackend(RIRBackend):
             "state_province": getattr(org, "iso3166_2", "") or "",
             "postal_code": getattr(org, "postal_code", "") or "",
             "country": self._country_code(getattr(org, "iso3166_1", None)),
+            "poc_links": poc_links,
             "raw_data": self._safe_serialize(org),
         }
 

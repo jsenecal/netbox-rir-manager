@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from django.utils import timezone
 
 from netbox_rir_manager.backends.arin import ARINBackend
-from netbox_rir_manager.models import RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
 
 if TYPE_CHECKING:
     from netbox_rir_manager.models import RIRConfig
@@ -14,18 +14,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def sync_rir_config(rir_config: RIRConfig, resource_types: list[str] | None = None) -> list[RIRSyncLog]:
+def sync_rir_config(rir_config: RIRConfig, api_key: str, resource_types: list[str] | None = None) -> list[RIRSyncLog]:
     """
     Sync RIR data for the given config.
     resource_types: list of "organizations", "contacts", "networks". None = all.
     """
     logs: list[RIRSyncLog] = []
-    backend = ARINBackend.from_rir_config(rir_config)
+    backend = ARINBackend.from_rir_config(rir_config, api_key=api_key)
 
     types_to_sync = resource_types or ["organizations", "contacts", "networks"]
 
+    org = None
     if "organizations" in types_to_sync and rir_config.org_handle:
-        logs.extend(_sync_organization(backend, rir_config))
+        org_logs, org = _sync_organization(backend, rir_config)
+        logs.extend(org_logs)
+
+    if "contacts" in types_to_sync and org:
+        poc_links = (org.raw_data or {}).get("poc_links", [])
+        logs.extend(_sync_contacts(backend, rir_config, poc_links, org))
+
+    if "networks" in types_to_sync:
+        logs.extend(_sync_networks(backend, rir_config))
 
     rir_config.last_sync = timezone.now()
     rir_config.save(update_fields=["last_sync"])
@@ -33,7 +42,7 @@ def sync_rir_config(rir_config: RIRConfig, resource_types: list[str] | None = No
     return logs
 
 
-def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRSyncLog]:
+def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> tuple[list[RIRSyncLog], RIROrganization | None]:
     """Sync the primary organization for a config."""
     logs: list[RIRSyncLog] = []
 
@@ -48,7 +57,7 @@ def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRS
             message=f"Failed to retrieve organization {rir_config.org_handle}",
         )
         logs.append(log)
-        return logs
+        return logs, None
 
     org, created = RIROrganization.objects.update_or_create(
         handle=org_data["handle"],
@@ -60,7 +69,7 @@ def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRS
             "state_province": org_data.get("state_province", ""),
             "postal_code": org_data.get("postal_code", ""),
             "country": org_data.get("country", ""),
-            "raw_data": org_data.get("raw_data", {}),
+            "raw_data": org_data,
             "last_synced": timezone.now(),
         },
     )
@@ -74,5 +83,103 @@ def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRS
         message=f"{'Created' if created else 'Updated'} organization {org_data['handle']}",
     )
     logs.append(log)
+
+    return logs, org
+
+
+def _sync_contacts(backend: ARINBackend, rir_config: RIRConfig, poc_links: list[dict], org: RIROrganization) -> list[RIRSyncLog]:
+    """Sync POC contacts from org poc_links."""
+    logs: list[RIRSyncLog] = []
+
+    for link in poc_links:
+        handle = link.get("handle")
+        if not handle:
+            continue
+
+        poc_data = backend.get_poc(handle)
+        if poc_data is None:
+            log = RIRSyncLog.objects.create(
+                rir_config=rir_config,
+                operation="sync",
+                object_type="contact",
+                object_handle=handle,
+                status="error",
+                message=f"Failed to retrieve POC {handle}",
+            )
+            logs.append(log)
+            continue
+
+        contact, created = RIRContact.objects.update_or_create(
+            handle=poc_data["handle"],
+            defaults={
+                "rir_config": rir_config,
+                "contact_type": poc_data.get("contact_type", ""),
+                "first_name": poc_data.get("first_name", ""),
+                "last_name": poc_data.get("last_name", ""),
+                "company_name": poc_data.get("company_name", ""),
+                "email": poc_data.get("email", ""),
+                "phone": poc_data.get("phone", ""),
+                "organization": org,
+                "raw_data": poc_data.get("raw_data", {}),
+                "last_synced": timezone.now(),
+            },
+        )
+
+        log = RIRSyncLog.objects.create(
+            rir_config=rir_config,
+            operation="sync",
+            object_type="contact",
+            object_handle=poc_data["handle"],
+            status="success",
+            message=f"{'Created' if created else 'Updated'} contact {poc_data['handle']}",
+        )
+        logs.append(log)
+
+    return logs
+
+
+def _sync_networks(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRSyncLog]:
+    """Sync networks by matching NetBox IPAM Aggregates against ARIN."""
+    from ipam.models import Aggregate
+
+    logs: list[RIRSyncLog] = []
+
+    aggregates = Aggregate.objects.filter(rir=rir_config.rir)
+    for agg in aggregates:
+        network = agg.prefix
+        start_address = str(network.network)
+        end_address = str(network.broadcast)
+
+        net_data = backend.find_net(start_address, end_address)
+        if net_data is None:
+            continue
+
+        # Try to find the org
+        org = None
+        org_handle = net_data.get("org_handle")
+        if org_handle:
+            org = RIROrganization.objects.filter(handle=org_handle).first()
+
+        net, created = RIRNetwork.objects.update_or_create(
+            handle=net_data["handle"],
+            defaults={
+                "rir_config": rir_config,
+                "net_name": net_data.get("net_name", ""),
+                "organization": org,
+                "aggregate": agg,
+                "raw_data": net_data,
+                "last_synced": timezone.now(),
+            },
+        )
+
+        log = RIRSyncLog.objects.create(
+            rir_config=rir_config,
+            operation="sync",
+            object_type="network",
+            object_handle=net_data["handle"],
+            status="success",
+            message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
+        )
+        logs.append(log)
 
     return logs

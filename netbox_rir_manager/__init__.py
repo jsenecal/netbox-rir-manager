@@ -20,5 +20,9 @@ class NetBoxRIRManagerConfig(PluginConfig):
         "enabled_backends": ["ARIN"],
     }
 
+    def ready(self):
+        super().ready()
+        from . import signals  # noqa: F401
+
 
 config = NetBoxRIRManagerConfig

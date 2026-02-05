@@ -30,24 +30,22 @@ def test_arin_backend_init_custom_url(mock_api_class):
 def test_from_rir_config(mock_api_class):
     """from_rir_config should create a backend from an RIRConfig-like object."""
     rir_config = MagicMock()
-    rir_config.api_key = "config-key"
     rir_config.api_url = "https://reg.ote.arin.net/"
 
-    backend = ARINBackend.from_rir_config(rir_config)
+    backend = ARINBackend.from_rir_config(rir_config, api_key="test-key")
     assert isinstance(backend, ARINBackend)
-    mock_api_class.assert_called_once_with(api_key="config-key", base_url="https://reg.ote.arin.net/")
+    mock_api_class.assert_called_once_with(api_key="test-key", base_url="https://reg.ote.arin.net/")
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
 def test_from_rir_config_no_api_url(mock_api_class):
     """from_rir_config with empty api_url should not pass base_url."""
     rir_config = MagicMock()
-    rir_config.api_key = "config-key"
     rir_config.api_url = ""
 
-    backend = ARINBackend.from_rir_config(rir_config)
+    backend = ARINBackend.from_rir_config(rir_config, api_key="test-key")
     assert isinstance(backend, ARINBackend)
-    mock_api_class.assert_called_once_with(api_key="config-key")
+    mock_api_class.assert_called_once_with(api_key="test-key")
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
