@@ -4,7 +4,8 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.utils import timezone
-from netbox.jobs import JobRunner
+from core.choices import JobIntervalChoices
+from netbox.jobs import JobRunner, system_job
 
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.models import RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
@@ -221,4 +222,53 @@ class SyncRIRConfigJob(JobRunner):
 
         logs = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key)
         self.job.data["sync_logs_count"] = len(logs)
+        self.job.save()
+
+
+@system_job(interval=JobIntervalChoices.INTERVAL_DAILY)
+class ScheduledRIRSyncJob(JobRunner):
+    """Scheduled background job that syncs all active RIR configs."""
+
+    class Meta:
+        name = "Scheduled RIR Sync"
+
+    def run(self, *args, **kwargs):
+        from netbox_rir_manager.models import RIRConfig, RIRUserKey
+
+        configs = RIRConfig.objects.filter(is_active=True)
+        total_logs = 0
+
+        for config in configs:
+            # Collect distinct keys that have synced objects for this config
+            synced_key_ids = set()
+            for model_class in (RIROrganization, RIRContact, RIRNetwork):
+                synced_key_ids.update(
+                    model_class.objects.filter(
+                        rir_config=config, synced_by__isnull=False
+                    ).values_list("synced_by_id", flat=True).distinct()
+                )
+
+            if synced_key_ids:
+                user_keys = RIRUserKey.objects.filter(pk__in=synced_key_ids)
+            else:
+                user_keys = RIRUserKey.objects.filter(rir_config=config).order_by("pk")[:1]
+
+            if not user_keys.exists():
+                logger.warning("No API keys available for config %s, skipping", config.name)
+                continue
+
+            for user_key in user_keys:
+                try:
+                    logs = sync_rir_config(
+                        config, api_key=user_key.api_key, user_key=user_key
+                    )
+                    total_logs += len(logs)
+                except Exception:
+                    logger.exception(
+                        "Scheduled sync failed for config %s with key %s",
+                        config.name,
+                        user_key.pk,
+                    )
+
+        self.job.data = {"configs_synced": len(configs), "total_logs": total_logs}
         self.job.save()

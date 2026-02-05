@@ -4,6 +4,111 @@ import pytest
 
 
 @pytest.mark.django_db
+class TestScheduledSyncJob:
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_scheduled_sync_all_active_configs(self, mock_backend_class, rir_config, rir_user_key):
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+        from netbox_rir_manager.models import RIROrganization
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = {
+            "handle": "SCHED-ARIN",
+            "name": "Scheduled Org",
+            "street_address": "",
+            "city": "",
+            "state_province": "",
+            "postal_code": "",
+            "country": "",
+            "poc_links": [],
+            "raw_data": {},
+        }
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        job = MagicMock()
+        job.data = {}
+        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
+        runner.job = job
+
+        runner.run()
+
+        assert RIROrganization.objects.filter(handle="SCHED-ARIN").exists()
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_scheduled_sync_skips_inactive_configs(self, mock_backend_class, rir_config, rir_user_key):
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+
+        rir_config.is_active = False
+        rir_config.save()
+
+        job = MagicMock()
+        job.data = {}
+        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
+        runner.job = job
+
+        runner.run()
+
+        mock_backend_class.from_rir_config.assert_not_called()
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_scheduled_sync_skips_config_without_keys(self, mock_backend_class, rir_config):
+        """Config without any RIRUserKey entries should be skipped."""
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+
+        job = MagicMock()
+        job.data = {}
+        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
+        runner.job = job
+
+        runner.run()
+
+        mock_backend_class.from_rir_config.assert_not_called()
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_scheduled_sync_groups_by_synced_by_key(
+        self, mock_backend_class, rir_config, admin_user, rir_user_key
+    ):
+        """Objects with synced_by set should be refreshed using the same key."""
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+        from netbox_rir_manager.models import RIROrganization
+
+        # Create an org that was synced_by this user key
+        RIROrganization.objects.create(
+            rir_config=rir_config,
+            handle="GROUPED-ARIN",
+            name="Grouped Org",
+            synced_by=rir_user_key,
+        )
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = {
+            "handle": "GROUPED-ARIN",
+            "name": "Grouped Org Updated",
+            "street_address": "",
+            "city": "",
+            "state_province": "",
+            "postal_code": "",
+            "country": "",
+            "poc_links": [],
+            "raw_data": {},
+        }
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        job = MagicMock()
+        job.data = {}
+        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
+        runner.job = job
+
+        runner.run()
+
+        # Verify the backend was created with the correct key
+        mock_backend_class.from_rir_config.assert_called_once_with(
+            rir_config, api_key=rir_user_key.api_key
+        )
+
+
+@pytest.mark.django_db
 class TestRIRSyncJob:
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_creates_org_and_log(self, mock_backend_class, rir_config):
