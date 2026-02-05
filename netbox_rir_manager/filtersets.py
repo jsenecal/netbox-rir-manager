@@ -4,7 +4,15 @@ from ipam.models import RIR
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Contact
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
+from netbox_rir_manager.models import (
+    RIRConfig,
+    RIRContact,
+    RIRNetwork,
+    RIROrganization,
+    RIRSyncLog,
+    RIRTicket,
+    RIRUserKey,
+)
 
 
 class RIRConfigFilterSet(NetBoxModelFilterSet):
@@ -71,6 +79,20 @@ class RIRSyncLogFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(object_handle__icontains=value) | queryset.filter(message__icontains=value)
+
+
+class RIRTicketFilterSet(NetBoxModelFilterSet):
+    rir_config_id = django_filters.ModelMultipleChoiceFilter(queryset=RIRConfig.objects.all(), label="RIR Config")
+    status = django_filters.CharFilter()
+    ticket_type = django_filters.CharFilter()
+    network_id = django_filters.ModelMultipleChoiceFilter(queryset=RIRNetwork.objects.all(), label="Network")
+
+    class Meta:
+        model = RIRTicket
+        fields = ("id", "ticket_number", "ticket_type", "status", "rir_config_id", "network_id")
+
+    def search(self, queryset, name, value):
+        return queryset.filter(ticket_number__icontains=value)
 
 
 class RIRUserKeyFilterSet(NetBoxModelFilterSet):

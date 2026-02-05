@@ -86,6 +86,11 @@ menu = PluginMenu(
                     link_text="Sync Logs",
                     permissions=["netbox_rir_manager.view_rirsynclog"],
                 ),
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:rirticket_list",
+                    link_text="Tickets",
+                    permissions=["netbox_rir_manager.view_rirticket"],
+                ),
             ),
         ),
     ),

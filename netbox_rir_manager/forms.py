@@ -6,7 +6,7 @@ from tenancy.models import Contact
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRUserKey
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRTicket, RIRUserKey
 
 
 class RIRConfigForm(NetBoxModelForm):
@@ -124,6 +124,15 @@ class RIRNetworkFilterForm(NetBoxModelFilterSetForm):
     organization_id = DynamicModelMultipleChoiceField(
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
     )
+
+
+class RIRTicketFilterForm(NetBoxModelFilterSetForm):
+    model = RIRTicket
+    rir_config_id = DynamicModelMultipleChoiceField(
+        queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
+    )
+    status = forms.CharField(required=False)
+    ticket_type = forms.CharField(required=False)
 
 
 class RIRUserKeyForm(NetBoxModelForm):

@@ -1,6 +1,6 @@
 from netbox.search import SearchIndex, register_search
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRTicket
 
 
 @register_search
@@ -39,3 +39,9 @@ class RIRNetworkIndex(SearchIndex):
         ("handle", 100),
         ("net_name", 200),
     )
+
+
+@register_search
+class RIRTicketIndex(SearchIndex):
+    model = RIRTicket
+    fields = (("ticket_number", 100),)

@@ -152,6 +152,30 @@ class TestRIRUserKeyViews:
 
 
 @pytest.mark.django_db
+class TestRIRTicketViews:
+    def test_list_view(self, admin_client):
+        url = reverse("plugins:netbox_rir_manager:rirticket_list")
+        response = admin_client.get(url)
+        assert response.status_code == 200
+
+    def test_detail_view(self, admin_client, rir_ticket):
+        url = reverse("plugins:netbox_rir_manager:rirticket", args=[rir_ticket.pk])
+        response = admin_client.get(url)
+        assert response.status_code == 200
+
+    def test_delete_view(self, admin_client, rir_ticket):
+        url = reverse("plugins:netbox_rir_manager:rirticket_delete", args=[rir_ticket.pk])
+        response = admin_client.get(url)
+        assert response.status_code == 200
+
+    def test_list_view_with_data(self, admin_client, rir_ticket):
+        url = reverse("plugins:netbox_rir_manager:rirticket_list")
+        response = admin_client.get(url)
+        assert response.status_code == 200
+        assert rir_ticket.ticket_number.encode() in response.content
+
+
+@pytest.mark.django_db
 class TestRIRConfigSyncView:
     def test_sync_without_key_shows_error(self, admin_client, rir_config):
         url = reverse("plugins:netbox_rir_manager:rirconfig_sync", args=[rir_config.pk])

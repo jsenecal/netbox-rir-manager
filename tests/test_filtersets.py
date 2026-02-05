@@ -151,3 +151,52 @@ class TestRIRSyncLogFilterSet:
         qs = RIRSyncLog.objects.all()
         fs = RIRSyncLogFilterSet({"status": "error"}, queryset=qs)
         assert fs.qs.count() == 1
+
+
+@pytest.mark.django_db
+class TestRIRTicketFilterSet:
+    def test_search_by_ticket_number(self, rir_ticket):
+        from netbox_rir_manager.filtersets import RIRTicketFilterSet
+        from netbox_rir_manager.models import RIRTicket
+
+        qs = RIRTicket.objects.all()
+        fs = RIRTicketFilterSet({"q": "TKT-TEST"}, queryset=qs)
+        assert fs.qs.count() == 1
+
+    def test_search_no_match(self, rir_ticket):
+        from netbox_rir_manager.filtersets import RIRTicketFilterSet
+        from netbox_rir_manager.models import RIRTicket
+
+        qs = RIRTicket.objects.all()
+        fs = RIRTicketFilterSet({"q": "nonexistent"}, queryset=qs)
+        assert fs.qs.count() == 0
+
+    def test_filter_by_status(self, rir_ticket):
+        from netbox_rir_manager.filtersets import RIRTicketFilterSet
+        from netbox_rir_manager.models import RIRTicket
+
+        qs = RIRTicket.objects.all()
+        fs = RIRTicketFilterSet({"status": "pending_review"}, queryset=qs)
+        assert fs.qs.count() == 1
+
+        fs = RIRTicketFilterSet({"status": "resolved"}, queryset=qs)
+        assert fs.qs.count() == 0
+
+    def test_filter_by_ticket_type(self, rir_ticket):
+        from netbox_rir_manager.filtersets import RIRTicketFilterSet
+        from netbox_rir_manager.models import RIRTicket
+
+        qs = RIRTicket.objects.all()
+        fs = RIRTicketFilterSet({"ticket_type": "IPV4_SIMPLE_REASSIGN"}, queryset=qs)
+        assert fs.qs.count() == 1
+
+        fs = RIRTicketFilterSet({"ticket_type": "IPV6_REALLOCATE"}, queryset=qs)
+        assert fs.qs.count() == 0
+
+    def test_filter_by_rir_config(self, rir_ticket, rir_config):
+        from netbox_rir_manager.filtersets import RIRTicketFilterSet
+        from netbox_rir_manager.models import RIRTicket
+
+        qs = RIRTicket.objects.all()
+        fs = RIRTicketFilterSet({"rir_config_id": [rir_config.pk]}, queryset=qs)
+        assert fs.qs.count() == 1

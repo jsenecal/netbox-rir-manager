@@ -1,7 +1,15 @@
 import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
+from netbox_rir_manager.models import (
+    RIRConfig,
+    RIRContact,
+    RIRNetwork,
+    RIROrganization,
+    RIRSyncLog,
+    RIRTicket,
+    RIRUserKey,
+)
 
 
 class RIRConfigTable(NetBoxTable):
@@ -94,6 +102,39 @@ class RIRSyncLogTable(NetBoxTable):
         model = RIRSyncLog
         fields = ("pk", "id", "rir_config", "operation", "object_type", "object_handle", "status", "message", "created")
         default_columns = ("rir_config", "operation", "object_type", "object_handle", "status", "created")
+
+
+class RIRTicketTable(NetBoxTable):
+    ticket_number = tables.Column(linkify=True)
+    ticket_type = tables.Column()
+    status = tables.Column()
+    resolution = tables.Column()
+    rir_config = tables.Column(linkify=True)
+    network = tables.Column(linkify=True)
+    created_date = columns.DateTimeColumn()
+    actions = columns.ActionsColumn(actions=("delete", "changelog"))
+
+    class Meta(NetBoxTable.Meta):
+        model = RIRTicket
+        fields = (
+            "pk",
+            "id",
+            "ticket_number",
+            "ticket_type",
+            "status",
+            "resolution",
+            "rir_config",
+            "network",
+            "created_date",
+        )
+        default_columns = (
+            "ticket_number",
+            "ticket_type",
+            "status",
+            "rir_config",
+            "network",
+            "created_date",
+        )
 
 
 class RIRUserKeyTable(NetBoxTable):

@@ -1,7 +1,15 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
+from netbox_rir_manager.models import (
+    RIRConfig,
+    RIRContact,
+    RIRNetwork,
+    RIROrganization,
+    RIRSyncLog,
+    RIRTicket,
+    RIRUserKey,
+)
 
 
 class RIRConfigSerializer(NetBoxModelSerializer):
@@ -115,6 +123,31 @@ class RIRSyncLogSerializer(NetBoxModelSerializer):
             "object_handle",
             "status",
             "message",
+            "tags",
+            "created",
+            "last_updated",
+        )
+
+
+class RIRTicketSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:rirticket-detail")
+
+    class Meta:
+        model = RIRTicket
+        fields = (
+            "id",
+            "url",
+            "display",
+            "rir_config",
+            "ticket_number",
+            "ticket_type",
+            "status",
+            "resolution",
+            "network",
+            "submitted_by",
+            "created_date",
+            "resolved_date",
+            "raw_data",
             "tags",
             "created",
             "last_updated",

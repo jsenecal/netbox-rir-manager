@@ -8,6 +8,7 @@ router.register("organizations", views.RIROrganizationViewSet)
 router.register("contacts", views.RIRContactViewSet)
 router.register("networks", views.RIRNetworkViewSet)
 router.register("sync-logs", views.RIRSyncLogViewSet)
+router.register("tickets", views.RIRTicketViewSet)
 router.register("user-keys", views.RIRUserKeyViewSet)
 
 urlpatterns = router.urls

@@ -162,6 +162,21 @@ if _netbox_available:
         )
 
     @pytest.fixture
+    def rir_ticket(db, rir_config):
+        """Create a test RIR ticket."""
+        from django.utils import timezone
+
+        from netbox_rir_manager.models import RIRTicket
+
+        return RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-TEST-001",
+            ticket_type="IPV4_SIMPLE_REASSIGN",
+            status="pending_review",
+            created_date=timezone.now(),
+        )
+
+    @pytest.fixture
     def admin_user(db):
         """Create an admin user."""
         from django.contrib.auth import get_user_model

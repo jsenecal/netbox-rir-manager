@@ -10,6 +10,7 @@ from netbox_rir_manager.filtersets import (
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
     RIRSyncLogFilterSet,
+    RIRTicketFilterSet,
     RIRUserKeyFilterSet,
 )
 from netbox_rir_manager.forms import (
@@ -21,6 +22,7 @@ from netbox_rir_manager.forms import (
     RIRNetworkForm,
     RIROrganizationFilterForm,
     RIROrganizationForm,
+    RIRTicketFilterForm,
     RIRUserKeyFilterForm,
     RIRUserKeyForm,
 )
@@ -39,6 +41,7 @@ from netbox_rir_manager.tables import (
     RIRNetworkTable,
     RIROrganizationTable,
     RIRSyncLogTable,
+    RIRTicketTable,
     RIRUserKeyTable,
 )
 
@@ -166,6 +169,9 @@ class RIRUserKeyDeleteView(generic.ObjectDeleteView):
 # --- RIRTicket Views ---
 class RIRTicketListView(generic.ObjectListView):
     queryset = RIRTicket.objects.all()
+    table = RIRTicketTable
+    filterset = RIRTicketFilterSet
+    filterset_form = RIRTicketFilterForm
 
 
 class RIRTicketView(generic.ObjectView):
