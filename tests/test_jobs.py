@@ -124,3 +124,28 @@ class TestRIRSyncJob:
         assert net.net_name == "EXAMPLE-NET"
         assert net.aggregate is not None
         assert str(net.aggregate.prefix) == "192.0.2.0/24"
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_job_runner(self, mock_backend_class, rir_config, admin_user):
+        from netbox_rir_manager.jobs import SyncRIRConfigJob
+        from netbox_rir_manager.models import RIRUserKey
+
+        RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="job-key")
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = None
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        # Create a mock job object
+        job = MagicMock()
+        job.object_id = rir_config.pk
+        job.data = {}
+
+        runner = SyncRIRConfigJob.__new__(SyncRIRConfigJob)
+        runner.job = job
+
+        runner.run(user_id=admin_user.pk)
+
+        # Verify the job data was updated
+        assert "rir_config" in job.data

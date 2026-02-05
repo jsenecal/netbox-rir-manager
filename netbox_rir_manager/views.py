@@ -1,3 +1,7 @@
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import get_object_or_404, redirect
+from django.views import View
 from netbox.views import generic
 
 from netbox_rir_manager.filtersets import (
@@ -149,3 +153,26 @@ class RIRUserKeyEditView(generic.ObjectEditView):
 
 class RIRUserKeyDeleteView(generic.ObjectDeleteView):
     queryset = RIRUserKey.objects.all()
+
+
+# --- Sync Trigger View ---
+class RIRConfigSyncView(LoginRequiredMixin, View):
+    """Trigger a background sync job for an RIRConfig."""
+
+    def post(self, request, pk):
+        from netbox_rir_manager.jobs import SyncRIRConfigJob
+        from netbox_rir_manager.models import RIRUserKey as RIRUserKeyModel
+
+        rir_config = get_object_or_404(RIRConfig, pk=pk)
+
+        if not RIRUserKeyModel.objects.filter(user=request.user, rir_config=rir_config).exists():
+            messages.error(request, "You don't have an API key configured for this RIR config.")
+            return redirect(rir_config.get_absolute_url())
+
+        SyncRIRConfigJob.enqueue(
+            instance=rir_config,
+            user=request.user,
+            user_id=request.user.pk,
+        )
+        messages.success(request, f"Sync job queued for {rir_config.name}.")
+        return redirect(rir_config.get_absolute_url())

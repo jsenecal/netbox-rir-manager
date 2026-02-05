@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
+from netbox.jobs import JobRunner
+
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.models import RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
 
@@ -183,3 +185,25 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRSyncL
         logs.append(log)
 
     return logs
+
+
+class SyncRIRConfigJob(JobRunner):
+    """Background job for syncing RIR data."""
+
+    class Meta:
+        name = "RIR Sync"
+
+    def run(self, *args, **kwargs):
+        from netbox_rir_manager.models import RIRConfig, RIRUserKey
+
+        rir_config = RIRConfig.objects.get(pk=self.job.object_id)
+        user_id = kwargs.get("user_id") or (args[0] if args else None)
+
+        user_key = RIRUserKey.objects.get(user_id=user_id, rir_config=rir_config)
+
+        self.job.data = {"rir_config": rir_config.name}
+        self.job.save()
+
+        logs = sync_rir_config(rir_config, api_key=user_key.api_key)
+        self.job.data["sync_logs_count"] = len(logs)
+        self.job.save()

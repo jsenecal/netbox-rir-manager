@@ -152,6 +152,19 @@ class TestRIRUserKeyViews:
 
 
 @pytest.mark.django_db
+class TestRIRConfigSyncView:
+    def test_sync_without_key_shows_error(self, admin_client, rir_config):
+        url = reverse("plugins:netbox_rir_manager:rirconfig_sync", args=[rir_config.pk])
+        response = admin_client.post(url)
+        assert response.status_code == 302  # redirect back
+
+    def test_sync_requires_post(self, admin_client, rir_config):
+        url = reverse("plugins:netbox_rir_manager:rirconfig_sync", args=[rir_config.pk])
+        response = admin_client.get(url)
+        assert response.status_code == 405  # Method Not Allowed
+
+
+@pytest.mark.django_db
 class TestUnauthenticatedAccess:
     def test_list_view_requires_login(self):
         from django.test import Client

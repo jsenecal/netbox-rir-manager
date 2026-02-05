@@ -11,6 +11,7 @@ urlpatterns = [
     path("configs/<int:pk>/", views.RIRConfigView.as_view(), name="rirconfig"),
     path("configs/<int:pk>/edit/", views.RIRConfigEditView.as_view(), name="rirconfig_edit"),
     path("configs/<int:pk>/delete/", views.RIRConfigDeleteView.as_view(), name="rirconfig_delete"),
+    path("configs/<int:pk>/sync/", views.RIRConfigSyncView.as_view(), name="rirconfig_sync"),
     path(
         "configs/<int:pk>/changelog/",
         ObjectChangeLogView.as_view(),
