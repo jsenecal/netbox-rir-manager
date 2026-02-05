@@ -45,6 +45,14 @@
                     <td>{{ object.resolved_date|placeholder }}</td>
                 </tr>
             </table>
+            <div class="card-footer text-end">
+                <form method="post" action="{% url 'plugins:netbox_rir_manager:rirticket_refresh' object.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="mdi mdi-refresh"></i> Refresh Status
+                    </button>
+                </form>
+            </div>
         </div>
         {% plugin_left_page object %}
     </div>

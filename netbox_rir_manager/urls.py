@@ -81,6 +81,7 @@ urlpatterns = [
     path("tickets/", views.RIRTicketListView.as_view(), name="rirticket_list"),
     path("tickets/<int:pk>/", views.RIRTicketView.as_view(), name="rirticket"),
     path("tickets/<int:pk>/delete/", views.RIRTicketDeleteView.as_view(), name="rirticket_delete"),
+    path("tickets/<int:pk>/refresh/", views.RIRTicketRefreshView.as_view(), name="rirticket_refresh"),
     path(
         "tickets/<int:pk>/changelog/",
         ObjectChangeLogView.as_view(),

@@ -171,3 +171,34 @@ class RIRUserKeySerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
+
+
+class NetworkReassignSerializer(serializers.Serializer):
+    reassignment_type = serializers.ChoiceField(choices=["simple", "detailed"])
+    customer_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    street_address = serializers.CharField(required=False, allow_blank=True, default="")
+    city = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    state_province = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    postal_code = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+    country = serializers.CharField(max_length=2, required=False, allow_blank=True, default="")
+    org_handle = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    net_name = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    start_address = serializers.IPAddressField()
+    end_address = serializers.IPAddressField()
+
+    def validate(self, data):
+        rtype = data.get("reassignment_type")
+        if rtype == "simple":
+            for field in ("customer_name", "city", "country"):
+                if not data.get(field):
+                    raise serializers.ValidationError({field: "Required for simple reassignment."})
+        elif rtype == "detailed" and not data.get("org_handle"):
+            raise serializers.ValidationError({"org_handle": "Required for detailed reassignment."})
+        return data
+
+
+class NetworkReallocateSerializer(serializers.Serializer):
+    org_handle = serializers.CharField(max_length=50)
+    net_name = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    start_address = serializers.IPAddressField()
+    end_address = serializers.IPAddressField()

@@ -223,6 +223,15 @@ def _normalize_status(arin_status: str) -> str:
     return mapping.get(arin_status, "pending_review")
 
 
+class RIRTicketRefreshView(LoginRequiredMixin, View):
+    """Refresh ticket status from ARIN (placeholder)."""
+
+    def post(self, request, pk):
+        ticket = get_object_or_404(RIRTicket, pk=pk)
+        messages.info(request, f"Ticket {ticket.ticket_number} status is: {ticket.get_status_display()}")
+        return redirect(ticket.get_absolute_url())
+
+
 class RIRNetworkReassignView(LoginRequiredMixin, View):
     """Reassign a subnet from this network."""
 

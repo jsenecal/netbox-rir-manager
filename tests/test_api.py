@@ -1,5 +1,8 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 
 
@@ -259,3 +262,114 @@ class TestAPIAuthentication:
         url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-list")
         response = client.get(url)
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+class TestRIRNetworkAPIActions:
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_reassign_api_simple(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.create_customer.return_value = {"handle": "C-TEST"}
+        mock_backend.reassign_network.return_value = {
+            "ticket_number": "TKT-API-001",
+            "ticket_type": "IPV4_SIMPLE_REASSIGN",
+            "ticket_status": "PENDING_REVIEW",
+            "raw_data": {},
+        }
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-reassign", args=[rir_network.pk])
+        response = admin_api_client.post(
+            url,
+            {
+                "reassignment_type": "simple",
+                "customer_name": "Test Customer",
+                "city": "Testville",
+                "country": "US",
+                "start_address": "10.0.0.0",
+                "end_address": "10.0.0.255",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert "ticket_number" in response.json()
+
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_reassign_api_no_key(self, mock_backend_cls, admin_api_client, rir_network):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-reassign", args=[rir_network.pk])
+        response = admin_api_client.post(
+            url,
+            {
+                "reassignment_type": "detailed",
+                "org_handle": "TARGET-ORG",
+                "start_address": "10.0.0.0",
+                "end_address": "10.0.0.255",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_reassign_api_invalid_data(self, admin_api_client, rir_network, rir_user_key):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-reassign", args=[rir_network.pk])
+        response = admin_api_client.post(
+            url,
+            {
+                "reassignment_type": "simple",
+                # Missing required fields: start_address, end_address
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_reallocate_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.reallocate_network.return_value = {
+            "ticket_number": "TKT-API-REALLOC",
+            "ticket_type": "IPV4_REALLOCATE",
+            "ticket_status": "PENDING_REVIEW",
+            "raw_data": {},
+        }
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-reallocate", args=[rir_network.pk])
+        response = admin_api_client.post(
+            url,
+            {
+                "org_handle": "TARGET-ORG",
+                "start_address": "10.0.0.0",
+                "end_address": "10.0.0.255",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_remove_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.remove_network.return_value = True
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-remove-net", args=[rir_network.pk])
+        response = admin_api_client.post(url, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_delete_arin_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.delete_network.return_value = {
+            "ticket_number": "TKT-API-DELETE",
+            "ticket_type": "NET_DELETE_REQUEST",
+            "ticket_status": "PENDING_REVIEW",
+            "raw_data": {},
+        }
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-delete-arin", args=[rir_network.pk])
+        response = admin_api_client.post(url, format="json")
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_ticket_refresh_api(self, admin_api_client, rir_ticket):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirticket-refresh", args=[rir_ticket.pk])
+        response = admin_api_client.post(url, format="json")
+        assert response.status_code == status.HTTP_200_OK
