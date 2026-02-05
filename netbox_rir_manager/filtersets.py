@@ -1,8 +1,10 @@
 import django_filters
+from django.contrib.auth import get_user_model
 from ipam.models import RIR
 from netbox.filtersets import NetBoxModelFilterSet
+from tenancy.models import Contact
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
 
 
 class RIRConfigFilterSet(NetBoxModelFilterSet):
@@ -34,10 +36,13 @@ class RIRContactFilterSet(NetBoxModelFilterSet):
     organization_id = django_filters.ModelMultipleChoiceFilter(
         queryset=RIROrganization.objects.all(), label="Organization"
     )
+    contact_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Contact.objects.all(), label="Contact"
+    )
 
     class Meta:
         model = RIRContact
-        fields = ("id", "handle", "contact_type", "rir_config_id", "organization_id")
+        fields = ("id", "handle", "contact_type", "rir_config_id", "organization_id", "contact_id")
 
     def search(self, queryset, name, value):
         return queryset.filter(handle__icontains=value) | queryset.filter(last_name__icontains=value)
@@ -68,3 +73,15 @@ class RIRSyncLogFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(object_handle__icontains=value) | queryset.filter(message__icontains=value)
+
+
+class RIRUserKeyFilterSet(NetBoxModelFilterSet):
+    user = django_filters.ModelMultipleChoiceFilter(queryset=get_user_model().objects.all(), label="User")
+    rir_config_id = django_filters.ModelMultipleChoiceFilter(queryset=RIRConfig.objects.all(), label="RIR Config")
+
+    class Meta:
+        model = RIRUserKey
+        fields = ("id", "user", "rir_config_id")
+
+    def search(self, queryset, name, value):
+        return queryset.filter(user__username__icontains=value)

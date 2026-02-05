@@ -188,6 +188,32 @@ class TestRIRSyncLogAPI:
 
 
 @pytest.mark.django_db
+class TestRIRUserKeyAPI:
+    def test_list_user_keys(self, admin_api_client, rir_user_key):
+        url = reverse("plugins-api:netbox_rir_manager-api:riruserkey-list")
+        response = admin_api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["count"] == 1
+
+    def test_get_user_key(self, admin_api_client, rir_user_key):
+        url = reverse("plugins-api:netbox_rir_manager-api:riruserkey-detail", args=[rir_user_key.pk])
+        response = admin_api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        # api_key should NOT be in response (write-only)
+        assert "api_key" not in response.json()
+
+    def test_create_user_key(self, admin_api_client, admin_user, rir_config):
+        url = reverse("plugins-api:netbox_rir_manager-api:riruserkey-list")
+        data = {
+            "user": admin_user.pk,
+            "rir_config": rir_config.pk,
+            "api_key": "new-api-key",
+        }
+        response = admin_api_client.post(url, data, format="json")
+        assert response.status_code == status.HTTP_201_CREATED
+
+
+@pytest.mark.django_db
 class TestAPIAuthentication:
     def test_unauthenticated_request_rejected(self):
         from rest_framework.test import APIClient

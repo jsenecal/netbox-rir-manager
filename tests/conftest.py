@@ -151,6 +151,17 @@ if _netbox_available:
         )
 
     @pytest.fixture
+    def rir_user_key(db, admin_user, rir_config):
+        """Create a test RIR user key."""
+        from netbox_rir_manager.models import RIRUserKey
+
+        return RIRUserKey.objects.create(
+            user=admin_user,
+            rir_config=rir_config,
+            api_key="test-api-key-123",
+        )
+
+    @pytest.fixture
     def admin_user(db):
         """Create an admin user."""
         from django.contrib.auth import get_user_model

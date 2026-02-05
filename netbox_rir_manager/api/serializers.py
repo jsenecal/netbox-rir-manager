@@ -1,7 +1,7 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
 
 
 class RIRConfigSerializer(NetBoxModelSerializer):
@@ -68,6 +68,7 @@ class RIRContactSerializer(NetBoxModelSerializer):
             "email",
             "phone",
             "organization",
+            "contact",
             "raw_data",
             "last_synced",
             "tags",
@@ -114,6 +115,25 @@ class RIRSyncLogSerializer(NetBoxModelSerializer):
             "object_handle",
             "status",
             "message",
+            "tags",
+            "created",
+            "last_updated",
+        )
+
+
+class RIRUserKeySerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:riruserkey-detail")
+    api_key = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = RIRUserKey
+        fields = (
+            "id",
+            "url",
+            "display",
+            "user",
+            "rir_config",
+            "api_key",
             "tags",
             "created",
             "last_updated",

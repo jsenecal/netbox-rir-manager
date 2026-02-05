@@ -2,7 +2,7 @@ from django.urls import path
 from netbox.views.generic import ObjectChangeLogView
 
 from netbox_rir_manager import views
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
 
 urlpatterns = [
     # RIRConfig
@@ -62,5 +62,17 @@ urlpatterns = [
         ObjectChangeLogView.as_view(),
         name="rirsynclog_changelog",
         kwargs={"model": RIRSyncLog},
+    ),
+    # RIRUserKey
+    path("user-keys/", views.RIRUserKeyListView.as_view(), name="riruserkey_list"),
+    path("user-keys/add/", views.RIRUserKeyEditView.as_view(), name="riruserkey_add"),
+    path("user-keys/<int:pk>/", views.RIRUserKeyView.as_view(), name="riruserkey"),
+    path("user-keys/<int:pk>/edit/", views.RIRUserKeyEditView.as_view(), name="riruserkey_edit"),
+    path("user-keys/<int:pk>/delete/", views.RIRUserKeyDeleteView.as_view(), name="riruserkey_delete"),
+    path(
+        "user-keys/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="riruserkey_changelog",
+        kwargs={"model": RIRUserKey},
     ),
 ]

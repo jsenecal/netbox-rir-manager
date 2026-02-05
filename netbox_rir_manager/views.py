@@ -6,6 +6,7 @@ from netbox_rir_manager.filtersets import (
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
     RIRSyncLogFilterSet,
+    RIRUserKeyFilterSet,
 )
 from netbox_rir_manager.forms import (
     RIRConfigFilterForm,
@@ -16,14 +17,17 @@ from netbox_rir_manager.forms import (
     RIRNetworkForm,
     RIROrganizationFilterForm,
     RIROrganizationForm,
+    RIRUserKeyFilterForm,
+    RIRUserKeyForm,
 )
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
 from netbox_rir_manager.tables import (
     RIRConfigTable,
     RIRContactTable,
     RIRNetworkTable,
     RIROrganizationTable,
     RIRSyncLogTable,
+    RIRUserKeyTable,
 )
 
 
@@ -124,3 +128,24 @@ class RIRSyncLogView(generic.ObjectView):
 
 class RIRSyncLogDeleteView(generic.ObjectDeleteView):
     queryset = RIRSyncLog.objects.all()
+
+
+# --- RIRUserKey Views ---
+class RIRUserKeyListView(generic.ObjectListView):
+    queryset = RIRUserKey.objects.all()
+    table = RIRUserKeyTable
+    filterset = RIRUserKeyFilterSet
+    filterset_form = RIRUserKeyFilterForm
+
+
+class RIRUserKeyView(generic.ObjectView):
+    queryset = RIRUserKey.objects.all()
+
+
+class RIRUserKeyEditView(generic.ObjectEditView):
+    queryset = RIRUserKey.objects.all()
+    form = RIRUserKeyForm
+
+
+class RIRUserKeyDeleteView(generic.ObjectDeleteView):
+    queryset = RIRUserKey.objects.all()

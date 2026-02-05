@@ -54,6 +54,13 @@ class RIRContact(NetBoxModel):
         blank=True,
         related_name="contacts",
     )
+    contact = models.ForeignKey(
+        "tenancy.Contact",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rir_contacts",
+    )
     raw_data = models.JSONField(default=dict, blank=True)
     last_synced = models.DateTimeField(null=True, blank=True)
 

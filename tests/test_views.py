@@ -139,6 +139,19 @@ class TestRIRSyncLogViews:
 
 
 @pytest.mark.django_db
+class TestRIRUserKeyViews:
+    def test_list_view(self, admin_client):
+        url = reverse("plugins:netbox_rir_manager:riruserkey_list")
+        response = admin_client.get(url)
+        assert response.status_code == 200
+
+    def test_detail_view(self, admin_client, rir_user_key):
+        url = reverse("plugins:netbox_rir_manager:riruserkey", args=[rir_user_key.pk])
+        response = admin_client.get(url)
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
 class TestUnauthenticatedAccess:
     def test_list_view_requires_login(self):
         from django.test import Client

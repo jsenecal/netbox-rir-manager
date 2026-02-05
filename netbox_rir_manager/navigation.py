@@ -19,6 +19,19 @@ menu = PluginMenu(
                         ),
                     ),
                 ),
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:riruserkey_list",
+                    link_text="User Keys",
+                    permissions=["netbox_rir_manager.view_riruserkey"],
+                    buttons=(
+                        PluginMenuButton(
+                            link="plugins:netbox_rir_manager:riruserkey_add",
+                            title="Add",
+                            icon_class="mdi mdi-plus-thick",
+                            permissions=["netbox_rir_manager.add_riruserkey"],
+                        ),
+                    ),
+                ),
             ),
         ),
         (

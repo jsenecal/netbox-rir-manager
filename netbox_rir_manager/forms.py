@@ -1,10 +1,12 @@
 from django import forms
 from ipam.models import RIR
 from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
+from tenancy.models import Contact
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization
+from django.contrib.auth import get_user_model
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRUserKey
 
 
 class RIRConfigForm(NetBoxModelForm):
@@ -61,11 +63,12 @@ class RIROrganizationFilterForm(NetBoxModelFilterSetForm):
 class RIRContactForm(NetBoxModelForm):
     rir_config = DynamicModelChoiceField(queryset=RIRConfig.objects.all())
     organization = DynamicModelChoiceField(queryset=RIROrganization.objects.all(), required=False)
+    contact = DynamicModelChoiceField(queryset=Contact.objects.all(), required=False)
 
     fieldsets = (
         FieldSet("rir_config", "handle", "contact_type", name="Contact"),
         FieldSet("first_name", "last_name", "company_name", "email", "phone", name="Details"),
-        FieldSet("organization", name="Organization"),
+        FieldSet("organization", "contact", name="Links"),
         FieldSet("tags", name="Tags"),
     )
 
@@ -81,6 +84,7 @@ class RIRContactForm(NetBoxModelForm):
             "email",
             "phone",
             "organization",
+            "contact",
             "tags",
         )
 
@@ -93,6 +97,9 @@ class RIRContactFilterForm(NetBoxModelFilterSetForm):
     contact_type = forms.CharField(required=False)
     organization_id = DynamicModelMultipleChoiceField(
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
+    )
+    contact_id = DynamicModelMultipleChoiceField(
+        queryset=Contact.objects.all(), required=False, label="Contact"
     )
 
 
@@ -118,4 +125,31 @@ class RIRNetworkFilterForm(NetBoxModelFilterSetForm):
     )
     organization_id = DynamicModelMultipleChoiceField(
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
+    )
+
+
+class RIRUserKeyForm(NetBoxModelForm):
+    user = DynamicModelChoiceField(queryset=get_user_model().objects.all())
+    rir_config = DynamicModelChoiceField(queryset=RIRConfig.objects.all())
+
+    fieldsets = (
+        FieldSet("user", "rir_config", "api_key", name="User Key"),
+        FieldSet("tags", name="Tags"),
+    )
+
+    class Meta:
+        model = RIRUserKey
+        fields = ("user", "rir_config", "api_key", "tags")
+        widgets = {
+            "api_key": forms.PasswordInput(),
+        }
+
+
+class RIRUserKeyFilterForm(NetBoxModelFilterSetForm):
+    model = RIRUserKey
+    user = DynamicModelMultipleChoiceField(
+        queryset=get_user_model().objects.all(), required=False, label="User"
+    )
+    rir_config_id = DynamicModelMultipleChoiceField(
+        queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
     )

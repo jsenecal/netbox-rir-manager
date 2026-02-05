@@ -1,7 +1,7 @@
 import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
 
 
 class RIRConfigTable(NetBoxTable):
@@ -38,6 +38,7 @@ class RIRContactTable(NetBoxTable):
     company_name = tables.Column()
     email = tables.Column()
     organization = tables.Column(linkify=True)
+    contact = tables.Column(linkify=True)
     last_synced = columns.DateTimeColumn()
 
     class Meta(NetBoxTable.Meta):
@@ -52,9 +53,10 @@ class RIRContactTable(NetBoxTable):
             "company_name",
             "email",
             "organization",
+            "contact",
             "last_synced",
         )
-        default_columns = ("handle", "contact_type", "first_name", "last_name", "email", "organization")
+        default_columns = ("handle", "contact_type", "first_name", "last_name", "email", "organization", "contact")
 
 
 class RIRNetworkTable(NetBoxTable):
@@ -92,3 +94,13 @@ class RIRSyncLogTable(NetBoxTable):
         model = RIRSyncLog
         fields = ("pk", "id", "rir_config", "operation", "object_type", "object_handle", "status", "message", "created")
         default_columns = ("rir_config", "operation", "object_type", "object_handle", "status", "created")
+
+
+class RIRUserKeyTable(NetBoxTable):
+    user = tables.Column(linkify=True)
+    rir_config = tables.Column(linkify=True)
+
+    class Meta(NetBoxTable.Meta):
+        model = RIRUserKey
+        fields = ("pk", "id", "user", "rir_config")
+        default_columns = ("user", "rir_config")

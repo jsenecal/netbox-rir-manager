@@ -148,6 +148,28 @@ class TestRIRContact:
 
 
 @pytest.mark.django_db
+class TestRIRContactLink:
+    def test_link_to_netbox_contact(self, rir_contact):
+        from tenancy.models import Contact
+
+        nb_contact = Contact.objects.create(name="John Doe")
+        rir_contact.contact = nb_contact
+        rir_contact.save()
+        rir_contact.refresh_from_db()
+        assert rir_contact.contact == nb_contact
+
+    def test_contact_set_null_on_delete(self, rir_contact):
+        from tenancy.models import Contact
+
+        nb_contact = Contact.objects.create(name="Jane Doe")
+        rir_contact.contact = nb_contact
+        rir_contact.save()
+        nb_contact.delete()
+        rir_contact.refresh_from_db()
+        assert rir_contact.contact is None
+
+
+@pytest.mark.django_db
 class TestRIRNetwork:
     def test_create_rir_network(self, rir_config):
         from netbox_rir_manager.models import RIRNetwork
@@ -263,3 +285,42 @@ class TestRIRSyncLog:
         assert RIRSyncLog.objects.filter(rir_config=rir_config).exists()
         rir_config.delete()
         assert not RIRSyncLog.objects.filter(rir_config_id=rir_config.pk).exists()
+
+
+@pytest.mark.django_db
+class TestRIRUserKey:
+    def test_create_user_key(self, rir_config, admin_user):
+        from netbox_rir_manager.models import RIRUserKey
+
+        key = RIRUserKey.objects.create(
+            user=admin_user,
+            rir_config=rir_config,
+            api_key="user-api-key-123",
+        )
+        assert key.pk is not None
+        assert str(key) == f"admin - {rir_config.name}"
+
+    def test_user_key_unique_per_config(self, rir_config, admin_user):
+        from django.db import IntegrityError
+
+        from netbox_rir_manager.models import RIRUserKey
+
+        RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="key1")
+        with pytest.raises(IntegrityError):
+            RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="key2")
+
+    def test_user_key_get_absolute_url(self, rir_user_key):
+        url = rir_user_key.get_absolute_url()
+        assert "/user-keys/" in url
+
+    def test_user_key_cascade_on_config_delete(self, rir_user_key, rir_config):
+        from netbox_rir_manager.models import RIRUserKey
+
+        rir_config.delete()
+        assert not RIRUserKey.objects.filter(pk=rir_user_key.pk).exists()
+
+    def test_user_key_cascade_on_user_delete(self, rir_user_key, admin_user):
+        from netbox_rir_manager.models import RIRUserKey
+
+        admin_user.delete()
+        assert not RIRUserKey.objects.filter(pk=rir_user_key.pk).exists()

@@ -6,6 +6,7 @@ from netbox_rir_manager.api.serializers import (
     RIRNetworkSerializer,
     RIROrganizationSerializer,
     RIRSyncLogSerializer,
+    RIRUserKeySerializer,
 )
 from netbox_rir_manager.filtersets import (
     RIRConfigFilterSet,
@@ -13,8 +14,9 @@ from netbox_rir_manager.filtersets import (
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
     RIRSyncLogFilterSet,
+    RIRUserKeyFilterSet,
 )
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
 
 
 class RIRConfigViewSet(NetBoxModelViewSet):
@@ -45,3 +47,9 @@ class RIRSyncLogViewSet(NetBoxModelViewSet):
     queryset = RIRSyncLog.objects.prefetch_related("tags")
     serializer_class = RIRSyncLogSerializer
     filterset_class = RIRSyncLogFilterSet
+
+
+class RIRUserKeyViewSet(NetBoxModelViewSet):
+    queryset = RIRUserKey.objects.prefetch_related("tags")
+    serializer_class = RIRUserKeySerializer
+    filterset_class = RIRUserKeyFilterSet
