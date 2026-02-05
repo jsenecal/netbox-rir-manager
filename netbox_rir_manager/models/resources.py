@@ -7,8 +7,8 @@ from netbox.models import NetBoxModel
 class RIROrganization(NetBoxModel):
     """Organization record from RIR."""
 
-    account = models.ForeignKey(
-        "netbox_rir_manager.RIRAccount",
+    rir_config = models.ForeignKey(
+        "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="organizations",
     )
@@ -35,8 +35,8 @@ class RIROrganization(NetBoxModel):
 class RIRContact(NetBoxModel):
     """Point of Contact record from RIR."""
 
-    account = models.ForeignKey(
-        "netbox_rir_manager.RIRAccount",
+    rir_config = models.ForeignKey(
+        "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="contacts",
     )
@@ -70,8 +70,8 @@ class RIRContact(NetBoxModel):
 class RIRNetwork(NetBoxModel):
     """Network allocation record from RIR, linked to NetBox Aggregates/Prefixes."""
 
-    account = models.ForeignKey(
-        "netbox_rir_manager.RIRAccount",
+    rir_config = models.ForeignKey(
+        "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="networks",
     )

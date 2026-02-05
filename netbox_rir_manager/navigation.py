@@ -4,18 +4,18 @@ menu = PluginMenu(
     label="RIR Manager",
     groups=(
         (
-            "Accounts",
+            "Configs",
             (
                 PluginMenuItem(
-                    link="plugins:netbox_rir_manager:riraccount_list",
-                    link_text="RIR Accounts",
-                    permissions=["netbox_rir_manager.view_riraccount"],
+                    link="plugins:netbox_rir_manager:rirconfig_list",
+                    link_text="RIR Configs",
+                    permissions=["netbox_rir_manager.view_rirconfig"],
                     buttons=(
                         PluginMenuButton(
-                            link="plugins:netbox_rir_manager:riraccount_add",
+                            link="plugins:netbox_rir_manager:rirconfig_add",
                             title="Add",
                             icon_class="mdi mdi-plus-thick",
-                            permissions=["netbox_rir_manager.add_riraccount"],
+                            permissions=["netbox_rir_manager.add_rirconfig"],
                         ),
                     ),
                 ),

@@ -8,8 +8,8 @@ from netbox_rir_manager.choices import SyncOperationChoices, SyncStatusChoices
 class RIRSyncLog(NetBoxModel):
     """Audit log for sync operations."""
 
-    account = models.ForeignKey(
-        "netbox_rir_manager.RIRAccount",
+    rir_config = models.ForeignKey(
+        "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="sync_logs",
     )

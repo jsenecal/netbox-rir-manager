@@ -27,27 +27,27 @@ def test_arin_backend_init_custom_url(mock_api_class):
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
-def test_from_account(mock_api_class):
-    """from_account should create a backend from an RIRAccount-like object."""
-    account = MagicMock()
-    account.api_key = "account-key"
-    account.api_url = "https://reg.ote.arin.net/"
+def test_from_rir_config(mock_api_class):
+    """from_rir_config should create a backend from an RIRConfig-like object."""
+    rir_config = MagicMock()
+    rir_config.api_key = "config-key"
+    rir_config.api_url = "https://reg.ote.arin.net/"
 
-    backend = ARINBackend.from_account(account)
+    backend = ARINBackend.from_rir_config(rir_config)
     assert isinstance(backend, ARINBackend)
-    mock_api_class.assert_called_once_with(api_key="account-key", base_url="https://reg.ote.arin.net/")
+    mock_api_class.assert_called_once_with(api_key="config-key", base_url="https://reg.ote.arin.net/")
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
-def test_from_account_no_api_url(mock_api_class):
-    """from_account with empty api_url should not pass base_url."""
-    account = MagicMock()
-    account.api_key = "account-key"
-    account.api_url = ""
+def test_from_rir_config_no_api_url(mock_api_class):
+    """from_rir_config with empty api_url should not pass base_url."""
+    rir_config = MagicMock()
+    rir_config.api_key = "config-key"
+    rir_config.api_url = ""
 
-    backend = ARINBackend.from_account(account)
+    backend = ARINBackend.from_rir_config(rir_config)
     assert isinstance(backend, ARINBackend)
-    mock_api_class.assert_called_once_with(api_key="account-key")
+    mock_api_class.assert_called_once_with(api_key="config-key")
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -57,21 +57,21 @@ def test_authenticate_success(mock_api_class):
     mock_api.org.from_handle.return_value = mock_org
     mock_api_class.return_value = mock_api
 
-    account = MagicMock()
-    account.org_handle = "EXAMPLE-ARIN"
+    rir_config = MagicMock()
+    rir_config.org_handle = "EXAMPLE-ARIN"
 
     backend = ARINBackend(api_key="test-key")
-    assert backend.authenticate(account) is True
+    assert backend.authenticate(rir_config) is True
     mock_api.org.from_handle.assert_called_once_with("EXAMPLE-ARIN")
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
 def test_authenticate_no_org_handle(mock_api_class):
-    account = MagicMock()
-    account.org_handle = ""
+    rir_config = MagicMock()
+    rir_config.org_handle = ""
 
     backend = ARINBackend(api_key="test-key")
-    assert backend.authenticate(account) is False
+    assert backend.authenticate(rir_config) is False
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -88,12 +88,12 @@ def test_authenticate_error(mock_api_class):
     mock_error.__class__ = real_error_class
     mock_api.org.from_handle.return_value = mock_error
 
-    account = MagicMock()
-    account.org_handle = "BADHANDLE"
+    rir_config = MagicMock()
+    rir_config.org_handle = "BADHANDLE"
 
     backend = ARINBackend(api_key="test-key")
     with patch.object(arin_mod, "Error", real_error_class):
-        assert backend.authenticate(account) is False
+        assert backend.authenticate(rir_config) is False
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -318,9 +318,9 @@ def test_get_asn_returns_none(mock_api_class):
 @patch("netbox_rir_manager.backends.arin.Api")
 def test_sync_resources_returns_empty(mock_api_class):
     """sync_resources is not yet implemented and should return empty list."""
-    account = MagicMock()
+    rir_config = MagicMock()
     backend = ARINBackend(api_key="test-key")
-    assert backend.sync_resources(account) == []
+    assert backend.sync_resources(rir_config) == []
 
 
 @patch("netbox_rir_manager.backends.arin.Api")

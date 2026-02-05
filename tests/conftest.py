@@ -97,25 +97,24 @@ if _netbox_available:
         return RIR.objects.create(name="ARIN", slug="arin", is_private=False)
 
     @pytest.fixture
-    def rir_account(db, rir):
-        """Create a test RIR account."""
-        from netbox_rir_manager.models import RIRAccount
+    def rir_config(db, rir):
+        """Create a test RIR config."""
+        from netbox_rir_manager.models import RIRConfig
 
-        return RIRAccount.objects.create(
+        return RIRConfig.objects.create(
             rir=rir,
-            name="Test ARIN Account",
-            api_key="test-api-key-12345",
+            name="Test ARIN Config",
             org_handle="TESTORG-ARIN",
             is_active=True,
         )
 
     @pytest.fixture
-    def rir_organization(db, rir_account):
+    def rir_organization(db, rir_config):
         """Create a test RIR organization."""
         from netbox_rir_manager.models import RIROrganization
 
         return RIROrganization.objects.create(
-            account=rir_account,
+            rir_config=rir_config,
             handle="TESTORG-ARIN",
             name="Test Organization",
             city="Anytown",
@@ -125,12 +124,12 @@ if _netbox_available:
         )
 
     @pytest.fixture
-    def rir_contact(db, rir_account, rir_organization):
+    def rir_contact(db, rir_config, rir_organization):
         """Create a test RIR contact."""
         from netbox_rir_manager.models import RIRContact
 
         return RIRContact.objects.create(
-            account=rir_account,
+            rir_config=rir_config,
             handle="JD123-ARIN",
             contact_type="PERSON",
             first_name="John",
@@ -140,12 +139,12 @@ if _netbox_available:
         )
 
     @pytest.fixture
-    def rir_network(db, rir_account, rir_organization):
+    def rir_network(db, rir_config, rir_organization):
         """Create a test RIR network."""
         from netbox_rir_manager.models import RIRNetwork
 
         return RIRNetwork.objects.create(
-            account=rir_account,
+            rir_config=rir_config,
             handle="NET-192-0-2-0-1",
             net_name="EXAMPLE-NET",
             organization=rir_organization,

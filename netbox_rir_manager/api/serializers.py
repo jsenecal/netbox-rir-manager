@@ -1,22 +1,20 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from netbox_rir_manager.models import RIRAccount, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
 
 
-class RIRAccountSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:riraccount-detail")
-    api_key = serializers.CharField(write_only=True)
+class RIRConfigSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:rirconfig-detail")
 
     class Meta:
-        model = RIRAccount
+        model = RIRConfig
         fields = (
             "id",
             "url",
             "display",
             "rir",
             "name",
-            "api_key",
             "api_url",
             "org_handle",
             "is_active",
@@ -36,7 +34,7 @@ class RIROrganizationSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
-            "account",
+            "rir_config",
             "handle",
             "name",
             "street_address",
@@ -61,7 +59,7 @@ class RIRContactSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
-            "account",
+            "rir_config",
             "handle",
             "contact_type",
             "first_name",
@@ -87,7 +85,7 @@ class RIRNetworkSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
-            "account",
+            "rir_config",
             "handle",
             "net_name",
             "organization",
@@ -110,7 +108,7 @@ class RIRSyncLogSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
-            "account",
+            "rir_config",
             "operation",
             "object_type",
             "object_handle",

@@ -1,11 +1,11 @@
 from netbox.search import SearchIndex, register_search
 
-from netbox_rir_manager.models import RIRAccount, RIRContact, RIRNetwork, RIROrganization
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization
 
 
 @register_search
-class RIRAccountIndex(SearchIndex):
-    model = RIRAccount
+class RIRConfigIndex(SearchIndex):
+    model = RIRConfig
     fields = (
         ("name", 100),
         ("org_handle", 150),

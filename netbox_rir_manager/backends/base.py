@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from netbox_rir_manager.models import RIRAccount
+    from netbox_rir_manager.models import RIRConfig
 
 
 class RIRBackend(ABC):
@@ -13,7 +13,7 @@ class RIRBackend(ABC):
     name: str
 
     @abstractmethod
-    def authenticate(self, account: RIRAccount) -> bool:
+    def authenticate(self, rir_config: RIRConfig) -> bool:
         """Validate credentials and establish connection."""
         ...
 
@@ -38,6 +38,6 @@ class RIRBackend(ABC):
         ...
 
     @abstractmethod
-    def sync_resources(self, account: RIRAccount, resource_type: str | None = None) -> list[dict[str, Any]]:
+    def sync_resources(self, rir_config: RIRConfig, resource_type: str | None = None) -> list[dict[str, Any]]:
         """Sync resources from RIR. Returns list of synced resource dicts."""
         ...

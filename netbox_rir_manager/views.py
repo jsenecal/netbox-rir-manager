@@ -1,15 +1,15 @@
 from netbox.views import generic
 
 from netbox_rir_manager.filtersets import (
-    RIRAccountFilterSet,
+    RIRConfigFilterSet,
     RIRContactFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
     RIRSyncLogFilterSet,
 )
 from netbox_rir_manager.forms import (
-    RIRAccountFilterForm,
-    RIRAccountForm,
+    RIRConfigFilterForm,
+    RIRConfigForm,
     RIRContactFilterForm,
     RIRContactForm,
     RIRNetworkFilterForm,
@@ -17,9 +17,9 @@ from netbox_rir_manager.forms import (
     RIROrganizationFilterForm,
     RIROrganizationForm,
 )
-from netbox_rir_manager.models import RIRAccount, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
 from netbox_rir_manager.tables import (
-    RIRAccountTable,
+    RIRConfigTable,
     RIRContactTable,
     RIRNetworkTable,
     RIROrganizationTable,
@@ -27,25 +27,25 @@ from netbox_rir_manager.tables import (
 )
 
 
-# --- RIRAccount Views ---
-class RIRAccountListView(generic.ObjectListView):
-    queryset = RIRAccount.objects.all()
-    table = RIRAccountTable
-    filterset = RIRAccountFilterSet
-    filterset_form = RIRAccountFilterForm
+# --- RIRConfig Views ---
+class RIRConfigListView(generic.ObjectListView):
+    queryset = RIRConfig.objects.all()
+    table = RIRConfigTable
+    filterset = RIRConfigFilterSet
+    filterset_form = RIRConfigFilterForm
 
 
-class RIRAccountView(generic.ObjectView):
-    queryset = RIRAccount.objects.all()
+class RIRConfigView(generic.ObjectView):
+    queryset = RIRConfig.objects.all()
 
 
-class RIRAccountEditView(generic.ObjectEditView):
-    queryset = RIRAccount.objects.all()
-    form = RIRAccountForm
+class RIRConfigEditView(generic.ObjectEditView):
+    queryset = RIRConfig.objects.all()
+    form = RIRConfigForm
 
 
-class RIRAccountDeleteView(generic.ObjectDeleteView):
-    queryset = RIRAccount.objects.all()
+class RIRConfigDeleteView(generic.ObjectDeleteView):
+    queryset = RIRConfig.objects.all()
 
 
 # --- RIROrganization Views ---

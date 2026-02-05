@@ -4,50 +4,44 @@ from rest_framework import status
 
 
 @pytest.mark.django_db
-class TestRIRAccountAPI:
-    def test_list_accounts(self, admin_api_client, rir_account):
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-list")
+class TestRIRConfigAPI:
+    def test_list_configs(self, admin_api_client, rir_config):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-list")
         response = admin_api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["count"] == 1
 
-    def test_get_account(self, admin_api_client, rir_account):
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-detail", args=[rir_account.pk])
+    def test_get_config(self, admin_api_client, rir_config):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-detail", args=[rir_config.pk])
         response = admin_api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["name"] == rir_account.name
+        assert response.json()["name"] == rir_config.name
 
-    def test_api_key_not_in_response(self, admin_api_client, rir_account):
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-detail", args=[rir_account.pk])
-        response = admin_api_client.get(url)
-        assert "api_key" not in response.json()
-
-    def test_create_account(self, admin_api_client, rir):
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-list")
+    def test_create_config(self, admin_api_client, rir):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-list")
         data = {
             "rir": rir.pk,
-            "name": "New API Account",
-            "api_key": "new-api-key",
+            "name": "New API Config",
             "org_handle": "NEW-ARIN",
             "is_active": True,
         }
         response = admin_api_client.post(url, data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.json()["name"] == "New API Account"
+        assert response.json()["name"] == "New API Config"
 
-    def test_update_account(self, admin_api_client, rir_account):
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-detail", args=[rir_account.pk])
+    def test_update_config(self, admin_api_client, rir_config):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-detail", args=[rir_config.pk])
         response = admin_api_client.patch(url, {"name": "Updated Name"}, format="json")
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["name"] == "Updated Name"
 
-    def test_delete_account(self, admin_api_client, rir_account):
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-detail", args=[rir_account.pk])
+    def test_delete_config(self, admin_api_client, rir_config):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-detail", args=[rir_config.pk])
         response = admin_api_client.delete(url)
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    def test_filter_by_active(self, admin_api_client, rir_account):
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-list")
+    def test_filter_by_active(self, admin_api_client, rir_config):
+        url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-list")
         response = admin_api_client.get(url, {"is_active": "true"})
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["count"] == 1
@@ -70,10 +64,10 @@ class TestRIROrganizationAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["handle"] == rir_organization.handle
 
-    def test_create_organization(self, admin_api_client, rir_account):
+    def test_create_organization(self, admin_api_client, rir_config):
         url = reverse("plugins-api:netbox_rir_manager-api:rirorganization-list")
         data = {
-            "account": rir_account.pk,
+            "rir_config": rir_config.pk,
             "handle": "NEWORG-ARIN",
             "name": "New Organization",
             "city": "Springfield",
@@ -83,9 +77,9 @@ class TestRIROrganizationAPI:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.json()["handle"] == "NEWORG-ARIN"
 
-    def test_filter_by_account(self, admin_api_client, rir_organization, rir_account):
+    def test_filter_by_rir_config(self, admin_api_client, rir_organization, rir_config):
         url = reverse("plugins-api:netbox_rir_manager-api:rirorganization-list")
-        response = admin_api_client.get(url, {"account_id": rir_account.pk})
+        response = admin_api_client.get(url, {"rir_config_id": rir_config.pk})
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["count"] == 1
 
@@ -104,10 +98,10 @@ class TestRIRContactAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["handle"] == rir_contact.handle
 
-    def test_create_contact(self, admin_api_client, rir_account):
+    def test_create_contact(self, admin_api_client, rir_config):
         url = reverse("plugins-api:netbox_rir_manager-api:rircontact-list")
         data = {
-            "account": rir_account.pk,
+            "rir_config": rir_config.pk,
             "handle": "NEWPOC-ARIN",
             "contact_type": "ROLE",
             "last_name": "NOC",
@@ -141,10 +135,10 @@ class TestRIRNetworkAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["handle"] == rir_network.handle
 
-    def test_create_network(self, admin_api_client, rir_account):
+    def test_create_network(self, admin_api_client, rir_config):
         url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-list")
         data = {
-            "account": rir_account.pk,
+            "rir_config": rir_config.pk,
             "handle": "NET-10-0-0-0-1",
             "net_name": "TEN-NET",
         }
@@ -155,36 +149,36 @@ class TestRIRNetworkAPI:
 
 @pytest.mark.django_db
 class TestRIRSyncLogAPI:
-    def test_list_sync_logs(self, admin_api_client, rir_account):
+    def test_list_sync_logs(self, admin_api_client, rir_config):
         from netbox_rir_manager.models import RIRSyncLog
 
         RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="TEST", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="TEST", status="success"
         )
         url = reverse("plugins-api:netbox_rir_manager-api:rirsynclog-list")
         response = admin_api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["count"] == 1
 
-    def test_get_sync_log(self, admin_api_client, rir_account):
+    def test_get_sync_log(self, admin_api_client, rir_config):
         from netbox_rir_manager.models import RIRSyncLog
 
         log = RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="TEST", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="TEST", status="success"
         )
         url = reverse("plugins-api:netbox_rir_manager-api:rirsynclog-detail", args=[log.pk])
         response = admin_api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["status"] == "success"
 
-    def test_filter_by_status(self, admin_api_client, rir_account):
+    def test_filter_by_status(self, admin_api_client, rir_config):
         from netbox_rir_manager.models import RIRSyncLog
 
         RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="A", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="A", status="success"
         )
         RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="B", status="error"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="B", status="error"
         )
         url = reverse("plugins-api:netbox_rir_manager-api:rirsynclog-list")
         response = admin_api_client.get(url, {"status": "success"})
@@ -199,6 +193,6 @@ class TestAPIAuthentication:
         from rest_framework.test import APIClient
 
         client = APIClient()
-        url = reverse("plugins-api:netbox_rir_manager-api:riraccount-list")
+        url = reverse("plugins-api:netbox_rir_manager-api:rirconfig-list")
         response = client.get(url)
         assert response.status_code == status.HTTP_403_FORBIDDEN

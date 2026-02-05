@@ -9,7 +9,7 @@ from netbox_rir_manager.backends import register_backend
 from netbox_rir_manager.backends.base import RIRBackend
 
 if TYPE_CHECKING:
-    from netbox_rir_manager.models import RIRAccount
+    from netbox_rir_manager.models import RIRConfig
 
 
 @register_backend
@@ -25,17 +25,17 @@ class ARINBackend(RIRBackend):
         self.api = Api(**kwargs)
 
     @classmethod
-    def from_account(cls, account: RIRAccount) -> ARINBackend:
-        """Create backend instance from an RIRAccount model."""
+    def from_rir_config(cls, rir_config: RIRConfig) -> ARINBackend:
+        """Create backend instance from an RIRConfig model."""
         return cls(
-            api_key=account.api_key,
-            base_url=account.api_url or None,
+            api_key=rir_config.api_key,
+            base_url=rir_config.api_url or None,
         )
 
-    def authenticate(self, account: RIRAccount) -> bool:
-        if not account.org_handle:
+    def authenticate(self, rir_config: RIRConfig) -> bool:
+        if not rir_config.org_handle:
             return False
-        result = self.api.org.from_handle(account.org_handle)
+        result = self.api.org.from_handle(rir_config.org_handle)
         return not isinstance(result, Error)
 
     def get_organization(self, handle: str) -> dict[str, Any] | None:
@@ -59,7 +59,7 @@ class ARINBackend(RIRBackend):
     def get_asn(self, asn: int) -> dict[str, Any] | None:
         return None
 
-    def sync_resources(self, account: RIRAccount, resource_type: str | None = None) -> list[dict[str, Any]]:
+    def sync_resources(self, rir_config: RIRConfig, resource_type: str | None = None) -> list[dict[str, Any]]:
         return []
 
     # ------------------------------------------------------------------

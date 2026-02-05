@@ -2,35 +2,35 @@ import pytest
 
 
 @pytest.mark.django_db
-class TestRIRAccountFilterSet:
-    def test_search_by_name(self, rir_account):
-        from netbox_rir_manager.filtersets import RIRAccountFilterSet
-        from netbox_rir_manager.models import RIRAccount
+class TestRIRConfigFilterSet:
+    def test_search_by_name(self, rir_config):
+        from netbox_rir_manager.filtersets import RIRConfigFilterSet
+        from netbox_rir_manager.models import RIRConfig
 
-        qs = RIRAccount.objects.all()
-        fs = RIRAccountFilterSet({"q": "ARIN"}, queryset=qs)
+        qs = RIRConfig.objects.all()
+        fs = RIRConfigFilterSet({"q": "ARIN"}, queryset=qs)
         assert fs.qs.count() == 1
 
-    def test_search_no_match(self, rir_account):
-        from netbox_rir_manager.filtersets import RIRAccountFilterSet
-        from netbox_rir_manager.models import RIRAccount
+    def test_search_no_match(self, rir_config):
+        from netbox_rir_manager.filtersets import RIRConfigFilterSet
+        from netbox_rir_manager.models import RIRConfig
 
-        qs = RIRAccount.objects.all()
-        fs = RIRAccountFilterSet({"q": "nonexistent"}, queryset=qs)
+        qs = RIRConfig.objects.all()
+        fs = RIRConfigFilterSet({"q": "nonexistent"}, queryset=qs)
         assert fs.qs.count() == 0
 
-    def test_filter_by_active(self, rir, rir_account):
-        from netbox_rir_manager.filtersets import RIRAccountFilterSet
-        from netbox_rir_manager.models import RIRAccount
+    def test_filter_by_active(self, rir, rir_config):
+        from netbox_rir_manager.filtersets import RIRConfigFilterSet
+        from netbox_rir_manager.models import RIRConfig
 
-        RIRAccount.objects.create(rir=rir, name="Inactive", api_key="key", is_active=False)
-        qs = RIRAccount.objects.all()
+        RIRConfig.objects.create(rir=rir, name="Inactive", is_active=False)
+        qs = RIRConfig.objects.all()
 
-        fs = RIRAccountFilterSet({"is_active": True}, queryset=qs)
+        fs = RIRConfigFilterSet({"is_active": True}, queryset=qs)
         assert fs.qs.count() == 1
-        assert fs.qs.first().name == rir_account.name
+        assert fs.qs.first().name == rir_config.name
 
-        fs = RIRAccountFilterSet({"is_active": False}, queryset=qs)
+        fs = RIRConfigFilterSet({"is_active": False}, queryset=qs)
         assert fs.qs.count() == 1
         assert fs.qs.first().name == "Inactive"
 
@@ -53,12 +53,12 @@ class TestRIROrganizationFilterSet:
         fs = RIROrganizationFilterSet({"q": "Test Organization"}, queryset=qs)
         assert fs.qs.count() == 1
 
-    def test_filter_by_account(self, rir_organization, rir_account):
+    def test_filter_by_rir_config(self, rir_organization, rir_config):
         from netbox_rir_manager.filtersets import RIROrganizationFilterSet
         from netbox_rir_manager.models import RIROrganization
 
         qs = RIROrganization.objects.all()
-        fs = RIROrganizationFilterSet({"account_id": [rir_account.pk]}, queryset=qs)
+        fs = RIROrganizationFilterSet({"rir_config_id": [rir_config.pk]}, queryset=qs)
         assert fs.qs.count() == 1
 
 
@@ -113,40 +113,40 @@ class TestRIRNetworkFilterSet:
 
 @pytest.mark.django_db
 class TestRIRSyncLogFilterSet:
-    def test_search_by_handle(self, rir_account):
+    def test_search_by_handle(self, rir_config):
         from netbox_rir_manager.filtersets import RIRSyncLogFilterSet
         from netbox_rir_manager.models import RIRSyncLog
 
         RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="SEARCHME", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="SEARCHME", status="success"
         )
         qs = RIRSyncLog.objects.all()
         fs = RIRSyncLogFilterSet({"q": "SEARCHME"}, queryset=qs)
         assert fs.qs.count() == 1
 
-    def test_filter_by_operation(self, rir_account):
+    def test_filter_by_operation(self, rir_config):
         from netbox_rir_manager.filtersets import RIRSyncLogFilterSet
         from netbox_rir_manager.models import RIRSyncLog
 
         RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="A", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="A", status="success"
         )
         RIRSyncLog.objects.create(
-            account=rir_account, operation="create", object_type="org", object_handle="B", status="success"
+            rir_config=rir_config, operation="create", object_type="org", object_handle="B", status="success"
         )
         qs = RIRSyncLog.objects.all()
         fs = RIRSyncLogFilterSet({"operation": "sync"}, queryset=qs)
         assert fs.qs.count() == 1
 
-    def test_filter_by_status(self, rir_account):
+    def test_filter_by_status(self, rir_config):
         from netbox_rir_manager.filtersets import RIRSyncLogFilterSet
         from netbox_rir_manager.models import RIRSyncLog
 
         RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="A", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="A", status="success"
         )
         RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="B", status="error"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="B", status="error"
         )
         qs = RIRSyncLog.objects.all()
         fs = RIRSyncLogFilterSet({"status": "error"}, queryset=qs)

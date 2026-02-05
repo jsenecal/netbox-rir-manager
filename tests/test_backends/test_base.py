@@ -15,7 +15,7 @@ def test_backend_subclass_works():
     class TestBackend(RIRBackend):
         name = "TEST"
 
-        def authenticate(self, account):
+        def authenticate(self, rir_config):
             return True
 
         def get_organization(self, handle):
@@ -30,7 +30,7 @@ def test_backend_subclass_works():
         def get_asn(self, asn):
             return {}
 
-        def sync_resources(self, account, resource_type=None):
+        def sync_resources(self, rir_config, resource_type=None):
             return []
 
     backend = TestBackend()

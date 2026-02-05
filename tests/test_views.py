@@ -3,42 +3,42 @@ from django.urls import reverse
 
 
 @pytest.mark.django_db
-class TestRIRAccountViews:
+class TestRIRConfigViews:
     def test_list_view(self, admin_client):
-        url = reverse("plugins:netbox_rir_manager:riraccount_list")
+        url = reverse("plugins:netbox_rir_manager:rirconfig_list")
         response = admin_client.get(url)
         assert response.status_code == 200
 
-    def test_detail_view(self, admin_client, rir_account):
-        url = reverse("plugins:netbox_rir_manager:riraccount", args=[rir_account.pk])
+    def test_detail_view(self, admin_client, rir_config):
+        url = reverse("plugins:netbox_rir_manager:rirconfig", args=[rir_config.pk])
         response = admin_client.get(url)
         assert response.status_code == 200
 
     def test_add_view(self, admin_client):
-        url = reverse("plugins:netbox_rir_manager:riraccount_add")
+        url = reverse("plugins:netbox_rir_manager:rirconfig_add")
         response = admin_client.get(url)
         assert response.status_code == 200
 
-    def test_edit_view(self, admin_client, rir_account):
-        url = reverse("plugins:netbox_rir_manager:riraccount_edit", args=[rir_account.pk])
+    def test_edit_view(self, admin_client, rir_config):
+        url = reverse("plugins:netbox_rir_manager:rirconfig_edit", args=[rir_config.pk])
         response = admin_client.get(url)
         assert response.status_code == 200
 
-    def test_delete_view(self, admin_client, rir_account):
-        url = reverse("plugins:netbox_rir_manager:riraccount_delete", args=[rir_account.pk])
+    def test_delete_view(self, admin_client, rir_config):
+        url = reverse("plugins:netbox_rir_manager:rirconfig_delete", args=[rir_config.pk])
         response = admin_client.get(url)
         assert response.status_code == 200
 
-    def test_changelog_view(self, admin_client, rir_account):
-        url = reverse("plugins:netbox_rir_manager:riraccount_changelog", args=[rir_account.pk])
+    def test_changelog_view(self, admin_client, rir_config):
+        url = reverse("plugins:netbox_rir_manager:rirconfig_changelog", args=[rir_config.pk])
         response = admin_client.get(url)
         assert response.status_code == 200
 
-    def test_list_view_with_data(self, admin_client, rir_account):
-        url = reverse("plugins:netbox_rir_manager:riraccount_list")
+    def test_list_view_with_data(self, admin_client, rir_config):
+        url = reverse("plugins:netbox_rir_manager:rirconfig_list")
         response = admin_client.get(url)
         assert response.status_code == 200
-        assert rir_account.name.encode() in response.content
+        assert rir_config.name.encode() in response.content
 
 
 @pytest.mark.django_db
@@ -117,21 +117,21 @@ class TestRIRSyncLogViews:
         response = admin_client.get(url)
         assert response.status_code == 200
 
-    def test_detail_view(self, admin_client, rir_account):
+    def test_detail_view(self, admin_client, rir_config):
         from netbox_rir_manager.models import RIRSyncLog
 
         log = RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="TEST", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="TEST", status="success"
         )
         url = reverse("plugins:netbox_rir_manager:rirsynclog", args=[log.pk])
         response = admin_client.get(url)
         assert response.status_code == 200
 
-    def test_delete_view(self, admin_client, rir_account):
+    def test_delete_view(self, admin_client, rir_config):
         from netbox_rir_manager.models import RIRSyncLog
 
         log = RIRSyncLog.objects.create(
-            account=rir_account, operation="sync", object_type="org", object_handle="TEST", status="success"
+            rir_config=rir_config, operation="sync", object_type="org", object_handle="TEST", status="success"
         )
         url = reverse("plugins:netbox_rir_manager:rirsynclog_delete", args=[log.pk])
         response = admin_client.get(url)
@@ -144,6 +144,6 @@ class TestUnauthenticatedAccess:
         from django.test import Client
 
         client = Client()
-        url = reverse("plugins:netbox_rir_manager:riraccount_list")
+        url = reverse("plugins:netbox_rir_manager:rirconfig_list")
         response = client.get(url)
         assert response.status_code == 302  # Redirect to login

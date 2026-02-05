@@ -1,26 +1,26 @@
 from netbox.api.viewsets import NetBoxModelViewSet
 
 from netbox_rir_manager.api.serializers import (
-    RIRAccountSerializer,
+    RIRConfigSerializer,
     RIRContactSerializer,
     RIRNetworkSerializer,
     RIROrganizationSerializer,
     RIRSyncLogSerializer,
 )
 from netbox_rir_manager.filtersets import (
-    RIRAccountFilterSet,
+    RIRConfigFilterSet,
     RIRContactFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
     RIRSyncLogFilterSet,
 )
-from netbox_rir_manager.models import RIRAccount, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
 
 
-class RIRAccountViewSet(NetBoxModelViewSet):
-    queryset = RIRAccount.objects.prefetch_related("tags")
-    serializer_class = RIRAccountSerializer
-    filterset_class = RIRAccountFilterSet
+class RIRConfigViewSet(NetBoxModelViewSet):
+    queryset = RIRConfig.objects.prefetch_related("tags")
+    serializer_class = RIRConfigSerializer
+    filterset_class = RIRConfigFilterSet
 
 
 class RIROrganizationViewSet(NetBoxModelViewSet):

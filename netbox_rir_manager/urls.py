@@ -2,20 +2,20 @@ from django.urls import path
 from netbox.views.generic import ObjectChangeLogView
 
 from netbox_rir_manager import views
-from netbox_rir_manager.models import RIRAccount, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
 
 urlpatterns = [
-    # RIRAccount
-    path("accounts/", views.RIRAccountListView.as_view(), name="riraccount_list"),
-    path("accounts/add/", views.RIRAccountEditView.as_view(), name="riraccount_add"),
-    path("accounts/<int:pk>/", views.RIRAccountView.as_view(), name="riraccount"),
-    path("accounts/<int:pk>/edit/", views.RIRAccountEditView.as_view(), name="riraccount_edit"),
-    path("accounts/<int:pk>/delete/", views.RIRAccountDeleteView.as_view(), name="riraccount_delete"),
+    # RIRConfig
+    path("configs/", views.RIRConfigListView.as_view(), name="rirconfig_list"),
+    path("configs/add/", views.RIRConfigEditView.as_view(), name="rirconfig_add"),
+    path("configs/<int:pk>/", views.RIRConfigView.as_view(), name="rirconfig"),
+    path("configs/<int:pk>/edit/", views.RIRConfigEditView.as_view(), name="rirconfig_edit"),
+    path("configs/<int:pk>/delete/", views.RIRConfigDeleteView.as_view(), name="rirconfig_delete"),
     path(
-        "accounts/<int:pk>/changelog/",
+        "configs/<int:pk>/changelog/",
         ObjectChangeLogView.as_view(),
-        name="riraccount_changelog",
-        kwargs={"model": RIRAccount},
+        name="rirconfig_changelog",
+        kwargs={"model": RIRConfig},
     ),
     # RIROrganization
     path("organizations/", views.RIROrganizationListView.as_view(), name="rirorganization_list"),

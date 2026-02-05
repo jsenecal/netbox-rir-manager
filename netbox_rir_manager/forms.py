@@ -4,36 +4,33 @@ from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
 
-from netbox_rir_manager.models import RIRAccount, RIRContact, RIRNetwork, RIROrganization
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization
 
 
-class RIRAccountForm(NetBoxModelForm):
+class RIRConfigForm(NetBoxModelForm):
     rir = DynamicModelChoiceField(queryset=RIR.objects.all())
 
     fieldsets = (
-        FieldSet("rir", "name", "api_key", "api_url", "org_handle", "is_active", name="RIR Account"),
+        FieldSet("rir", "name", "api_url", "org_handle", "is_active", name="RIR Config"),
         FieldSet("tags", name="Tags"),
     )
 
     class Meta:
-        model = RIRAccount
-        fields = ("rir", "name", "api_key", "api_url", "org_handle", "is_active", "tags")
-        widgets = {
-            "api_key": forms.PasswordInput(render_value=True),
-        }
+        model = RIRConfig
+        fields = ("rir", "name", "api_url", "org_handle", "is_active", "tags")
 
 
-class RIRAccountFilterForm(NetBoxModelFilterSetForm):
-    model = RIRAccount
+class RIRConfigFilterForm(NetBoxModelFilterSetForm):
+    model = RIRConfig
     rir_id = DynamicModelMultipleChoiceField(queryset=RIR.objects.all(), required=False, label="RIR")
     is_active = forms.NullBooleanField(required=False)
 
 
 class RIROrganizationForm(NetBoxModelForm):
-    account = DynamicModelChoiceField(queryset=RIRAccount.objects.all())
+    rir_config = DynamicModelChoiceField(queryset=RIRConfig.objects.all())
 
     fieldsets = (
-        FieldSet("account", "handle", "name", name="Organization"),
+        FieldSet("rir_config", "handle", "name", name="Organization"),
         FieldSet("street_address", "city", "state_province", "postal_code", "country", name="Address"),
         FieldSet("tags", name="Tags"),
     )
@@ -41,7 +38,7 @@ class RIROrganizationForm(NetBoxModelForm):
     class Meta:
         model = RIROrganization
         fields = (
-            "account",
+            "rir_config",
             "handle",
             "name",
             "street_address",
@@ -55,16 +52,18 @@ class RIROrganizationForm(NetBoxModelForm):
 
 class RIROrganizationFilterForm(NetBoxModelFilterSetForm):
     model = RIROrganization
-    account_id = DynamicModelMultipleChoiceField(queryset=RIRAccount.objects.all(), required=False, label="Account")
+    rir_config_id = DynamicModelMultipleChoiceField(
+        queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
+    )
     country = forms.CharField(required=False)
 
 
 class RIRContactForm(NetBoxModelForm):
-    account = DynamicModelChoiceField(queryset=RIRAccount.objects.all())
+    rir_config = DynamicModelChoiceField(queryset=RIRConfig.objects.all())
     organization = DynamicModelChoiceField(queryset=RIROrganization.objects.all(), required=False)
 
     fieldsets = (
-        FieldSet("account", "handle", "contact_type", name="Contact"),
+        FieldSet("rir_config", "handle", "contact_type", name="Contact"),
         FieldSet("first_name", "last_name", "company_name", "email", "phone", name="Details"),
         FieldSet("organization", name="Organization"),
         FieldSet("tags", name="Tags"),
@@ -73,7 +72,7 @@ class RIRContactForm(NetBoxModelForm):
     class Meta:
         model = RIRContact
         fields = (
-            "account",
+            "rir_config",
             "handle",
             "contact_type",
             "first_name",
@@ -88,7 +87,9 @@ class RIRContactForm(NetBoxModelForm):
 
 class RIRContactFilterForm(NetBoxModelFilterSetForm):
     model = RIRContact
-    account_id = DynamicModelMultipleChoiceField(queryset=RIRAccount.objects.all(), required=False, label="Account")
+    rir_config_id = DynamicModelMultipleChoiceField(
+        queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
+    )
     contact_type = forms.CharField(required=False)
     organization_id = DynamicModelMultipleChoiceField(
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
@@ -96,23 +97,25 @@ class RIRContactFilterForm(NetBoxModelFilterSetForm):
 
 
 class RIRNetworkForm(NetBoxModelForm):
-    account = DynamicModelChoiceField(queryset=RIRAccount.objects.all())
+    rir_config = DynamicModelChoiceField(queryset=RIRConfig.objects.all())
     organization = DynamicModelChoiceField(queryset=RIROrganization.objects.all(), required=False)
 
     fieldsets = (
-        FieldSet("account", "handle", "net_name", "organization", name="Network"),
+        FieldSet("rir_config", "handle", "net_name", "organization", name="Network"),
         FieldSet("aggregate", "prefix", name="NetBox Links"),
         FieldSet("tags", name="Tags"),
     )
 
     class Meta:
         model = RIRNetwork
-        fields = ("account", "handle", "net_name", "organization", "aggregate", "prefix", "tags")
+        fields = ("rir_config", "handle", "net_name", "organization", "aggregate", "prefix", "tags")
 
 
 class RIRNetworkFilterForm(NetBoxModelFilterSetForm):
     model = RIRNetwork
-    account_id = DynamicModelMultipleChoiceField(queryset=RIRAccount.objects.all(), required=False, label="Account")
+    rir_config_id = DynamicModelMultipleChoiceField(
+        queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
+    )
     organization_id = DynamicModelMultipleChoiceField(
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
     )
