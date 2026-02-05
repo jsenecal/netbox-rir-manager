@@ -4,7 +4,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.utils import timezone
-
 from netbox.jobs import JobRunner
 
 from netbox_rir_manager.backends.arin import ARINBackend
@@ -89,7 +88,9 @@ def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> tuple[lis
     return logs, org
 
 
-def _sync_contacts(backend: ARINBackend, rir_config: RIRConfig, poc_links: list[dict], org: RIROrganization) -> list[RIRSyncLog]:
+def _sync_contacts(
+    backend: ARINBackend, rir_config: RIRConfig, poc_links: list[dict], org: RIROrganization
+) -> list[RIRSyncLog]:
     """Sync POC contacts from org poc_links."""
     logs: list[RIRSyncLog] = []
 

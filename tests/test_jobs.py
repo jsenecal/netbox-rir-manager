@@ -100,6 +100,7 @@ class TestRIRSyncJob:
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_networks_from_ipam(self, mock_backend_class, rir_config, rir):
         from ipam.models import Aggregate
+
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIRNetwork
 
@@ -113,7 +114,9 @@ class TestRIRSyncJob:
             "version": 4,
             "org_handle": "",
             "parent_net_handle": "",
-            "net_blocks": [{"start_address": "192.0.2.0", "end_address": "192.0.2.255", "cidr_length": 24, "type": "DS"}],
+            "net_blocks": [
+                {"start_address": "192.0.2.0", "end_address": "192.0.2.255", "cidr_length": 24, "type": "DS"}
+            ],
             "raw_data": {},
         }
         mock_backend_class.from_rir_config.return_value = mock_backend

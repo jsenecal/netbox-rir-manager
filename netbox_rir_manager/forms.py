@@ -1,11 +1,11 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from ipam.models import RIR
 from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
 from tenancy.models import Contact
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
 
-from django.contrib.auth import get_user_model
 from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRUserKey
 
 
@@ -98,9 +98,7 @@ class RIRContactFilterForm(NetBoxModelFilterSetForm):
     organization_id = DynamicModelMultipleChoiceField(
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
     )
-    contact_id = DynamicModelMultipleChoiceField(
-        queryset=Contact.objects.all(), required=False, label="Contact"
-    )
+    contact_id = DynamicModelMultipleChoiceField(queryset=Contact.objects.all(), required=False, label="Contact")
 
 
 class RIRNetworkForm(NetBoxModelForm):
@@ -147,9 +145,7 @@ class RIRUserKeyForm(NetBoxModelForm):
 
 class RIRUserKeyFilterForm(NetBoxModelFilterSetForm):
     model = RIRUserKey
-    user = DynamicModelMultipleChoiceField(
-        queryset=get_user_model().objects.all(), required=False, label="User"
-    )
+    user = DynamicModelMultipleChoiceField(queryset=get_user_model().objects.all(), required=False, label="User")
     rir_config_id = DynamicModelMultipleChoiceField(
         queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
     )
