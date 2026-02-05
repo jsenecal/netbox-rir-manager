@@ -1,6 +1,6 @@
 # Sync, Auto-Link, and Model Redesign Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+**Status: COMPLETED** (2026-02-05)
 
 **Goal:** Restructure the data model (RIRAccount → RIRConfig, per-user API keys), complete sync operations (orgs, POCs, networks), add auto-linking of RIR networks to NetBox IPAM objects, and integrate with NetBox's JobRunner for background sync.
 
@@ -11,9 +11,29 @@
 - Sync runs as a background job via NetBox's `JobRunner` framework.
 - Auto-linking is a post_save signal on `RIRNetwork`, controlled by the `auto_link_networks` plugin setting.
 
+**Final Results:**
+- 134 tests passing, 96% code coverage
+- All lint checks clean (ruff check + ruff format)
+- 3 migrations: initial, rename, add user key + contact link
+
+**Commits:**
+| Commit | Description |
+|--------|-------------|
+| `fcf4477` | docs: add sync, auto-link, and model redesign plan |
+| `5d1bf2a` | refactor: rename RIRAccount to RIRConfig and remove api_key field |
+| `9e239d4` | feat: add RIRUserKey model and tenancy.Contact link on RIRContact |
+| `111e9d3` | feat: complete sync operations and add auto-link signal handler |
+| `34323a2` | feat: add JobRunner integration and sync trigger view |
+| `e2a40ed` | chore: final linting and formatting pass |
+
+**Notable implementation details:**
+- Django auto-detect couldn't handle the RIRAccount → RIRConfig rename; migration `0002` was manually written with `RenameModel` and `RenameField` operations.
+- NetBox's `SearchIndex` doesn't support Django ORM lookups (e.g. `user__username`), so `RIRUserKey` was excluded from search indexing.
+- NetBox uses `netaddr.IPNetwork` (not Python's `ipaddress`), so network address attributes are `.network` and `.broadcast` (not `.network_address` / `.broadcast_address`).
+
 ---
 
-## Task 1: Rename RIRAccount → RIRConfig
+## Task 1: Rename RIRAccount → RIRConfig -- COMPLETED (`5d1bf2a`)
 
 **Files:**
 - Modify: `netbox_rir_manager/models/accounts.py`
@@ -145,7 +165,7 @@ git commit -m "refactor: rename RIRAccount to RIRConfig, remove api_key"
 
 ---
 
-## Task 2: Add RIRUserKey Model
+## Task 2: Add RIRUserKey Model -- COMPLETED (`9e239d4`)
 
 **Files:**
 - Create: `netbox_rir_manager/models/credentials.py`
@@ -258,7 +278,7 @@ git commit -m "feat: add RIRUserKey model for per-user API credentials"
 
 ---
 
-## Task 3: Add Contact Link to RIRContact
+## Task 3: Add Contact Link to RIRContact -- COMPLETED (`9e239d4`)
 
 **Files:**
 - Modify: `netbox_rir_manager/models/resources.py`
@@ -316,7 +336,7 @@ git commit -m "feat: add optional tenancy.Contact link to RIRContact"
 
 ---
 
-## Task 4: Complete Sync Operations (POCs and Networks)
+## Task 4: Complete Sync Operations (POCs and Networks) -- COMPLETED (`111e9d3`)
 
 **Files:**
 - Modify: `netbox_rir_manager/jobs.py`
@@ -454,7 +474,7 @@ git commit -m "feat: complete sync operations for POCs and networks"
 
 ---
 
-## Task 5: Auto-Link Signal Handler
+## Task 5: Auto-Link Signal Handler -- COMPLETED (`111e9d3`)
 
 **Files:**
 - Modify: `netbox_rir_manager/signals.py`
@@ -614,7 +634,7 @@ git commit -m "feat: add auto-link signal for RIRNetwork to Aggregate/Prefix"
 
 ---
 
-## Task 6: Background Job Integration (JobRunner)
+## Task 6: Background Job Integration (JobRunner) -- COMPLETED (`34323a2`)
 
 **Files:**
 - Modify: `netbox_rir_manager/jobs.py`
@@ -706,7 +726,7 @@ git commit -m "feat: add JobRunner integration and sync trigger view"
 
 ---
 
-## Task 7: Update CI and Final Cleanup
+## Task 7: Update CI and Final Cleanup -- COMPLETED (`e2a40ed`)
 
 **Files:**
 - Modify: `.github/workflows/ci.yml` (if needed)
