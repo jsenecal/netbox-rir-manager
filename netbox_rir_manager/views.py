@@ -24,7 +24,15 @@ from netbox_rir_manager.forms import (
     RIRUserKeyFilterForm,
     RIRUserKeyForm,
 )
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
+from netbox_rir_manager.models import (
+    RIRConfig,
+    RIRContact,
+    RIRNetwork,
+    RIROrganization,
+    RIRSyncLog,
+    RIRTicket,
+    RIRUserKey,
+)
 from netbox_rir_manager.tables import (
     RIRConfigTable,
     RIRContactTable,
@@ -153,6 +161,19 @@ class RIRUserKeyEditView(generic.ObjectEditView):
 
 class RIRUserKeyDeleteView(generic.ObjectDeleteView):
     queryset = RIRUserKey.objects.all()
+
+
+# --- RIRTicket Views ---
+class RIRTicketListView(generic.ObjectListView):
+    queryset = RIRTicket.objects.all()
+
+
+class RIRTicketView(generic.ObjectView):
+    queryset = RIRTicket.objects.all()
+
+
+class RIRTicketDeleteView(generic.ObjectDeleteView):
+    queryset = RIRTicket.objects.all()
 
 
 # --- Sync Trigger View ---

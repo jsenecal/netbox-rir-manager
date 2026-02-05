@@ -2,7 +2,15 @@ from django.urls import path
 from netbox.views.generic import ObjectChangeLogView
 
 from netbox_rir_manager import views
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSyncLog, RIRUserKey
+from netbox_rir_manager.models import (
+    RIRConfig,
+    RIRContact,
+    RIRNetwork,
+    RIROrganization,
+    RIRSyncLog,
+    RIRTicket,
+    RIRUserKey,
+)
 
 urlpatterns = [
     # RIRConfig
@@ -63,6 +71,16 @@ urlpatterns = [
         ObjectChangeLogView.as_view(),
         name="rirsynclog_changelog",
         kwargs={"model": RIRSyncLog},
+    ),
+    # RIRTicket
+    path("tickets/", views.RIRTicketListView.as_view(), name="rirticket_list"),
+    path("tickets/<int:pk>/", views.RIRTicketView.as_view(), name="rirticket"),
+    path("tickets/<int:pk>/delete/", views.RIRTicketDeleteView.as_view(), name="rirticket_delete"),
+    path(
+        "tickets/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="rirticket_changelog",
+        kwargs={"model": RIRTicket},
     ),
     # RIRUserKey
     path("user-keys/", views.RIRUserKeyListView.as_view(), name="riruserkey_list"),

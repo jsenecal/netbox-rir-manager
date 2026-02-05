@@ -1,4 +1,5 @@
 import pytest
+from django.utils import timezone
 
 
 @pytest.mark.django_db
@@ -377,3 +378,118 @@ class TestRIRUserKey:
 
         admin_user.delete()
         assert not RIRUserKey.objects.filter(pk=rir_user_key.pk).exists()
+
+
+@pytest.mark.django_db
+class TestRIRTicket:
+    def test_create_ticket(self, rir_config, rir_network, rir_user_key):
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-20260205-001",
+            ticket_type="IPV4_SIMPLE_REASSIGN",
+            status="pending_review",
+            network=rir_network,
+            submitted_by=rir_user_key,
+            created_date=timezone.now(),
+        )
+        assert str(ticket) == "Ticket TKT-20260205-001"
+        assert "/plugins/rir-manager/tickets/" in ticket.get_absolute_url()
+
+    def test_ticket_number_unique(self, rir_config):
+        from django.db import IntegrityError
+
+        from netbox_rir_manager.models import RIRTicket
+
+        RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-UNIQUE",
+            ticket_type="NET_DELETE_REQUEST",
+            status="pending_review",
+            created_date=timezone.now(),
+        )
+        with pytest.raises(IntegrityError):
+            RIRTicket.objects.create(
+                rir_config=rir_config,
+                ticket_number="TKT-UNIQUE",
+                ticket_type="NET_DELETE_REQUEST",
+                status="pending_review",
+                created_date=timezone.now(),
+            )
+
+    def test_ticket_optional_fields(self, rir_config):
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-OPTIONAL",
+            ticket_type="IPV4_REALLOCATE",
+            status="approved",
+            created_date=timezone.now(),
+        )
+        assert ticket.network is None
+        assert ticket.submitted_by is None
+        assert ticket.resolved_date is None
+        assert ticket.resolution == ""
+
+    def test_ticket_with_resolution(self, rir_config, rir_network, rir_user_key):
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-RESOLVED",
+            ticket_type="IPV4_DETAILED_REASSIGN",
+            status="resolved",
+            resolution="accepted",
+            network=rir_network,
+            submitted_by=rir_user_key,
+            created_date=timezone.now(),
+            resolved_date=timezone.now(),
+        )
+        assert ticket.resolution == "accepted"
+        assert ticket.resolved_date is not None
+
+    def test_ticket_cascade_on_rir_config_delete(self, rir_config):
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-CASCADE",
+            ticket_type="NET_DELETE_REQUEST",
+            status="pending_review",
+            created_date=timezone.now(),
+        )
+        ticket_pk = ticket.pk
+        rir_config.delete()
+        assert not RIRTicket.objects.filter(pk=ticket_pk).exists()
+
+    def test_ticket_network_set_null(self, rir_config, rir_network):
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-NETNULL",
+            ticket_type="IPV4_SIMPLE_REASSIGN",
+            status="pending_review",
+            network=rir_network,
+            created_date=timezone.now(),
+        )
+        rir_network.delete()
+        ticket.refresh_from_db()
+        assert ticket.network is None
+
+    def test_ticket_submitted_by_set_null(self, rir_config, rir_user_key):
+        from netbox_rir_manager.models import RIRTicket
+
+        ticket = RIRTicket.objects.create(
+            rir_config=rir_config,
+            ticket_number="TKT-USERNULL",
+            ticket_type="IPV4_SIMPLE_REASSIGN",
+            status="pending_review",
+            submitted_by=rir_user_key,
+            created_date=timezone.now(),
+        )
+        rir_user_key.delete()
+        ticket.refresh_from_db()
+        assert ticket.submitted_by is None
