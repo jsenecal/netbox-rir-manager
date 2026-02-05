@@ -9,6 +9,9 @@ class SyncOperationChoices(ChoiceSet):
         ("create", "Create", "green"),
         ("update", "Update", "yellow"),
         ("delete", "Delete", "red"),
+        ("reassign", "Reassign", "purple"),
+        ("reallocate", "Reallocate", "indigo"),
+        ("remove", "Remove", "orange"),
     ]
 
 
