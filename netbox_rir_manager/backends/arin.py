@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from regrws.api.core import Api
 from regrws.models import Error
+from tenacity import RetryError, Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from netbox_rir_manager.backends import register_backend
 from netbox_rir_manager.backends.base import RIRBackend
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from netbox_rir_manager.models import RIRConfig
@@ -32,34 +36,54 @@ class ARINBackend(RIRBackend):
             base_url=rir_config.api_url or None,
         )
 
+    def _call_with_retry(self, func, *args, **kwargs):
+        from django.conf import settings as django_settings
+
+        plugin_config = django_settings.PLUGINS_CONFIG.get("netbox_rir_manager", {})
+        max_attempts = plugin_config.get("api_retry_count", 3)
+        backoff = plugin_config.get("api_retry_backoff", 2)
+
+        try:
+            for attempt in Retrying(
+                stop=stop_after_attempt(max_attempts),
+                wait=wait_exponential(multiplier=1, max=backoff * max_attempts),
+                retry=retry_if_exception_type((ConnectionError, OSError, TimeoutError)),
+            ):
+                with attempt:
+                    return func(*args, **kwargs)
+        except RetryError:
+            return None
+
     def authenticate(self, rir_config: RIRConfig) -> bool:
         if not rir_config.org_handle:
             return False
-        result = self.api.org.from_handle(rir_config.org_handle)
-        return not isinstance(result, Error)
+        result = self._call_with_retry(self.api.org.from_handle, rir_config.org_handle)
+        if result is None or isinstance(result, Error):
+            return False
+        return True
 
     def get_organization(self, handle: str) -> dict[str, Any] | None:
-        result = self.api.org.from_handle(handle)
-        if isinstance(result, Error):
+        result = self._call_with_retry(self.api.org.from_handle, handle)
+        if result is None or isinstance(result, Error):
             return None
         return self._org_to_dict(result)
 
     def get_network(self, handle: str) -> dict[str, Any] | None:
-        result = self.api.net.from_handle(handle)
-        if isinstance(result, Error):
+        result = self._call_with_retry(self.api.net.from_handle, handle)
+        if result is None or isinstance(result, Error):
             return None
         return self._net_to_dict(result)
 
     def get_poc(self, handle: str) -> dict[str, Any] | None:
-        result = self.api.poc.from_handle(handle)
-        if isinstance(result, Error):
+        result = self._call_with_retry(self.api.poc.from_handle, handle)
+        if result is None or isinstance(result, Error):
             return None
         return self._poc_to_dict(result)
 
     def find_net(self, start_address: str, end_address: str) -> dict[str, Any] | None:
         """Find a network by start/end address range."""
-        result = self.api.net.find_net(start_address, end_address)
-        if isinstance(result, Error):
+        result = self._call_with_retry(self.api.net.find_net, start_address, end_address)
+        if result is None or isinstance(result, Error):
             return None
         return self._net_to_dict(result)
 
@@ -114,10 +138,12 @@ class ARINBackend(RIRBackend):
         poc_links = []
         if hasattr(org, "poc_links") and org.poc_links:
             for link in org.poc_links:
-                poc_links.append({
-                    "handle": link.handle,
-                    "function": getattr(link, "function", ""),
-                })
+                poc_links.append(
+                    {
+                        "handle": link.handle,
+                        "function": getattr(link, "function", ""),
+                    }
+                )
         return {
             "handle": org.handle,
             "name": org.org_name or "",

@@ -18,6 +18,8 @@ class NetBoxRIRManagerConfig(PluginConfig):
         "sync_interval_hours": 24,
         "auto_link_networks": True,
         "enabled_backends": ["ARIN"],
+        "api_retry_count": 3,
+        "api_retry_backoff": 2,
     }
 
     def ready(self):
