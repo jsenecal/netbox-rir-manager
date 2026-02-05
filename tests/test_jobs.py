@@ -129,6 +129,31 @@ class TestRIRSyncJob:
         assert str(net.aggregate.prefix) == "192.0.2.0/24"
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_sets_synced_by(self, mock_backend_class, rir_config, rir_user_key):
+        from netbox_rir_manager.jobs import sync_rir_config
+        from netbox_rir_manager.models import RIROrganization
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = {
+            "handle": "SYNCBY-ARIN",
+            "name": "Sync By Org",
+            "street_address": "",
+            "city": "",
+            "state_province": "",
+            "postal_code": "",
+            "country": "",
+            "poc_links": [],
+            "raw_data": {},
+        }
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        sync_rir_config(rir_config, api_key="test-key", user_key=rir_user_key)
+
+        org = RIROrganization.objects.get(handle="SYNCBY-ARIN")
+        assert org.synced_by == rir_user_key
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_job_runner(self, mock_backend_class, rir_config, admin_user):
         from netbox_rir_manager.jobs import SyncRIRConfigJob
         from netbox_rir_manager.models import RIRUserKey

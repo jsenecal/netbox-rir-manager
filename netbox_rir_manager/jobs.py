@@ -10,12 +10,17 @@ from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.models import RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
 
 if TYPE_CHECKING:
-    from netbox_rir_manager.models import RIRConfig
+    from netbox_rir_manager.models import RIRConfig, RIRUserKey
 
 logger = logging.getLogger(__name__)
 
 
-def sync_rir_config(rir_config: RIRConfig, api_key: str, resource_types: list[str] | None = None) -> list[RIRSyncLog]:
+def sync_rir_config(
+    rir_config: RIRConfig,
+    api_key: str,
+    resource_types: list[str] | None = None,
+    user_key: RIRUserKey | None = None,
+) -> list[RIRSyncLog]:
     """
     Sync RIR data for the given config.
     resource_types: list of "organizations", "contacts", "networks". None = all.
@@ -27,15 +32,15 @@ def sync_rir_config(rir_config: RIRConfig, api_key: str, resource_types: list[st
 
     org = None
     if "organizations" in types_to_sync and rir_config.org_handle:
-        org_logs, org = _sync_organization(backend, rir_config)
+        org_logs, org = _sync_organization(backend, rir_config, user_key=user_key)
         logs.extend(org_logs)
 
     if "contacts" in types_to_sync and org:
         poc_links = (org.raw_data or {}).get("poc_links", [])
-        logs.extend(_sync_contacts(backend, rir_config, poc_links, org))
+        logs.extend(_sync_contacts(backend, rir_config, poc_links, org, user_key=user_key))
 
     if "networks" in types_to_sync:
-        logs.extend(_sync_networks(backend, rir_config))
+        logs.extend(_sync_networks(backend, rir_config, user_key=user_key))
 
     rir_config.last_sync = timezone.now()
     rir_config.save(update_fields=["last_sync"])
@@ -43,7 +48,9 @@ def sync_rir_config(rir_config: RIRConfig, api_key: str, resource_types: list[st
     return logs
 
 
-def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> tuple[list[RIRSyncLog], RIROrganization | None]:
+def _sync_organization(
+    backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUserKey | None = None
+) -> tuple[list[RIRSyncLog], RIROrganization | None]:
     """Sync the primary organization for a config."""
     logs: list[RIRSyncLog] = []
 
@@ -72,6 +79,7 @@ def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> tuple[lis
             "country": org_data.get("country", ""),
             "raw_data": org_data,
             "last_synced": timezone.now(),
+            "synced_by": user_key,
         },
     )
 
@@ -89,7 +97,11 @@ def _sync_organization(backend: ARINBackend, rir_config: RIRConfig) -> tuple[lis
 
 
 def _sync_contacts(
-    backend: ARINBackend, rir_config: RIRConfig, poc_links: list[dict], org: RIROrganization
+    backend: ARINBackend,
+    rir_config: RIRConfig,
+    poc_links: list[dict],
+    org: RIROrganization,
+    user_key: RIRUserKey | None = None,
 ) -> list[RIRSyncLog]:
     """Sync POC contacts from org poc_links."""
     logs: list[RIRSyncLog] = []
@@ -125,6 +137,7 @@ def _sync_contacts(
                 "organization": org,
                 "raw_data": poc_data.get("raw_data", {}),
                 "last_synced": timezone.now(),
+                "synced_by": user_key,
             },
         )
 
@@ -141,7 +154,7 @@ def _sync_contacts(
     return logs
 
 
-def _sync_networks(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRSyncLog]:
+def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUserKey | None = None) -> list[RIRSyncLog]:
     """Sync networks by matching NetBox IPAM Aggregates against ARIN."""
     from ipam.models import Aggregate
 
@@ -172,6 +185,7 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig) -> list[RIRSyncL
                 "aggregate": agg,
                 "raw_data": net_data,
                 "last_synced": timezone.now(),
+                "synced_by": user_key,
             },
         )
 
@@ -205,6 +219,6 @@ class SyncRIRConfigJob(JobRunner):
         self.job.data = {"rir_config": rir_config.name}
         self.job.save()
 
-        logs = sync_rir_config(rir_config, api_key=user_key.api_key)
+        logs = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key)
         self.job.data["sync_logs_count"] = len(logs)
         self.job.save()

@@ -47,9 +47,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="rirconfig",
-            constraint=models.UniqueConstraint(
-                fields=("rir", "name"), name="unique_rir_config_name"
-            ),
+            constraint=models.UniqueConstraint(fields=("rir", "name"), name="unique_rir_config_name"),
         ),
         # 5. Update the related_name on the rir FK
         migrations.AlterField(

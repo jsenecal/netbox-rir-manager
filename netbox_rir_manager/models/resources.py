@@ -21,6 +21,14 @@ class RIROrganization(NetBoxModel):
     country = models.CharField(max_length=2, blank=True, default="")
     raw_data = models.JSONField(default=dict, blank=True)
     last_synced = models.DateTimeField(null=True, blank=True)
+    synced_by = models.ForeignKey(
+        "netbox_rir_manager.RIRUserKey",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="synced_%(class)ss",
+        editable=False,
+    )
 
     class Meta:
         ordering = ["handle"]
@@ -63,6 +71,14 @@ class RIRContact(NetBoxModel):
     )
     raw_data = models.JSONField(default=dict, blank=True)
     last_synced = models.DateTimeField(null=True, blank=True)
+    synced_by = models.ForeignKey(
+        "netbox_rir_manager.RIRUserKey",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="synced_%(class)ss",
+        editable=False,
+    )
 
     class Meta:
         ordering = ["handle"]
@@ -107,6 +123,14 @@ class RIRNetwork(NetBoxModel):
     )
     raw_data = models.JSONField(default=dict, blank=True)
     last_synced = models.DateTimeField(null=True, blank=True)
+    synced_by = models.ForeignKey(
+        "netbox_rir_manager.RIRUserKey",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="synced_%(class)ss",
+        editable=False,
+    )
 
     class Meta:
         ordering = ["handle"]

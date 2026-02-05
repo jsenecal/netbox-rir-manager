@@ -288,6 +288,59 @@ class TestRIRSyncLog:
 
 
 @pytest.mark.django_db
+class TestSyncedByTracking:
+    def test_organization_synced_by(self, rir_config, rir_user_key):
+        from netbox_rir_manager.models import RIROrganization
+
+        org = RIROrganization.objects.create(
+            rir_config=rir_config,
+            handle="SYNCTEST-ARIN",
+            name="Sync Test Org",
+            synced_by=rir_user_key,
+        )
+        org.refresh_from_db()
+        assert org.synced_by == rir_user_key
+
+    def test_contact_synced_by(self, rir_config, rir_user_key):
+        from netbox_rir_manager.models import RIRContact
+
+        contact = RIRContact.objects.create(
+            rir_config=rir_config,
+            handle="SYNCPOC-ARIN",
+            contact_type="PERSON",
+            last_name="Test",
+            synced_by=rir_user_key,
+        )
+        contact.refresh_from_db()
+        assert contact.synced_by == rir_user_key
+
+    def test_network_synced_by(self, rir_config, rir_user_key):
+        from netbox_rir_manager.models import RIRNetwork
+
+        net = RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="SYNCNET-1",
+            net_name="SYNC-NET",
+            synced_by=rir_user_key,
+        )
+        net.refresh_from_db()
+        assert net.synced_by == rir_user_key
+
+    def test_synced_by_set_null_on_key_delete(self, rir_config, rir_user_key):
+        from netbox_rir_manager.models import RIROrganization
+
+        org = RIROrganization.objects.create(
+            rir_config=rir_config,
+            handle="NULLTEST-ARIN",
+            name="Null Test Org",
+            synced_by=rir_user_key,
+        )
+        rir_user_key.delete()
+        org.refresh_from_db()
+        assert org.synced_by is None
+
+
+@pytest.mark.django_db
 class TestRIRUserKey:
     def test_create_user_key(self, rir_config, admin_user):
         from netbox_rir_manager.models import RIRUserKey

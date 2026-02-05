@@ -9,35 +9,57 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('extras', '0134_owner'),
-        ('netbox_rir_manager', '0002_rename_riraccount_to_rirconfig'),
-        ('tenancy', '0022_add_comments_to_organizationalmodel'),
+        ("extras", "0134_owner"),
+        ("netbox_rir_manager", "0002_rename_riraccount_to_rirconfig"),
+        ("tenancy", "0022_add_comments_to_organizationalmodel"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='rircontact',
-            name='contact',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='rir_contacts', to='tenancy.contact'),
+            model_name="rircontact",
+            name="contact",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="rir_contacts",
+                to="tenancy.contact",
+            ),
         ),
         migrations.CreateModel(
-            name='RIRUserKey',
+            name="RIRUserKey",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('created', models.DateTimeField(auto_now_add=True, null=True)),
-                ('last_updated', models.DateTimeField(auto_now=True, null=True)),
-                ('custom_field_data', models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder)),
-                ('api_key', models.CharField(max_length=255)),
-                ('rir_config', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='user_keys', to='netbox_rir_manager.rirconfig')),
-                ('tags', taggit.managers.TaggableManager(through='extras.TaggedItem', to='extras.Tag')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='rir_user_keys', to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                ("created", models.DateTimeField(auto_now_add=True, null=True)),
+                ("last_updated", models.DateTimeField(auto_now=True, null=True)),
+                (
+                    "custom_field_data",
+                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                ),
+                ("api_key", models.CharField(max_length=255)),
+                (
+                    "rir_config",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="user_keys",
+                        to="netbox_rir_manager.rirconfig",
+                    ),
+                ),
+                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="rir_user_keys",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['user', 'rir_config'],
-                'constraints': [models.UniqueConstraint(fields=('user', 'rir_config'), name='unique_user_rir_config')],
+                "ordering": ["user", "rir_config"],
+                "constraints": [models.UniqueConstraint(fields=("user", "rir_config"), name="unique_user_rir_config")],
             },
             bases=(netbox.models.deletion.DeleteMixin, models.Model),
         ),
