@@ -5,25 +5,45 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('netbox_rir_manager', '0004_alter_riruserkey_api_key'),
+        ("netbox_rir_manager", "0004_alter_riruserkey_api_key"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='rircontact',
-            name='synced_by',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='synced_%(class)ss', to='netbox_rir_manager.riruserkey'),
+            model_name="rircontact",
+            name="synced_by",
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="synced_%(class)ss",
+                to="netbox_rir_manager.riruserkey",
+            ),
         ),
         migrations.AddField(
-            model_name='rirnetwork',
-            name='synced_by',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='synced_%(class)ss', to='netbox_rir_manager.riruserkey'),
+            model_name="rirnetwork",
+            name="synced_by",
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="synced_%(class)ss",
+                to="netbox_rir_manager.riruserkey",
+            ),
         ),
         migrations.AddField(
-            model_name='rirorganization',
-            name='synced_by',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='synced_%(class)ss', to='netbox_rir_manager.riruserkey'),
+            model_name="rirorganization",
+            name="synced_by",
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="synced_%(class)ss",
+                to="netbox_rir_manager.riruserkey",
+            ),
         ),
     ]

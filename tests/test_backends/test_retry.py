@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from regrws.models import Error
@@ -33,9 +33,7 @@ class TestARINBackendRetry:
         from netbox_rir_manager.backends.arin import ARINBackend
 
         backend = ARINBackend(api_key="test")
-        backend.api.org.from_handle = MagicMock(
-            side_effect=ConnectionError("timeout")
-        )
+        backend.api.org.from_handle = MagicMock(side_effect=ConnectionError("timeout"))
         result = backend.get_organization("TEST-ARIN")
         assert result is None
 
@@ -55,9 +53,7 @@ class TestARINBackendRetry:
         mock_poc.postal_code = ""
         mock_poc.iso3166_1 = None
 
-        backend.api.poc.from_handle = MagicMock(
-            side_effect=[ConnectionError("fail"), mock_poc]
-        )
+        backend.api.poc.from_handle = MagicMock(side_effect=[ConnectionError("fail"), mock_poc])
         result = backend.get_poc("JD1-ARIN")
         assert result is not None
         assert backend.api.poc.from_handle.call_count == 2
@@ -74,9 +70,7 @@ class TestARINBackendRetry:
         mock_net.parent_net_handle = ""
         mock_net.net_blocks = []
 
-        backend.api.net.find_net = MagicMock(
-            side_effect=[ConnectionError("fail"), mock_net]
-        )
+        backend.api.net.find_net = MagicMock(side_effect=[ConnectionError("fail"), mock_net])
         result = backend.find_net("192.0.2.0", "192.0.2.255")
         assert result is not None
         assert backend.api.net.find_net.call_count == 2

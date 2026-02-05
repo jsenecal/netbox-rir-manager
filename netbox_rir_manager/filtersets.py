@@ -36,9 +36,7 @@ class RIRContactFilterSet(NetBoxModelFilterSet):
     organization_id = django_filters.ModelMultipleChoiceFilter(
         queryset=RIROrganization.objects.all(), label="Organization"
     )
-    contact_id = django_filters.ModelMultipleChoiceFilter(
-        queryset=Contact.objects.all(), label="Contact"
-    )
+    contact_id = django_filters.ModelMultipleChoiceFilter(queryset=Contact.objects.all(), label="Contact")
 
     class Meta:
         model = RIRContact

@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from django.utils import timezone
 from core.choices import JobIntervalChoices
+from django.utils import timezone
 from netbox.jobs import JobRunner, system_job
 
 from netbox_rir_manager.backends.arin import ARINBackend
@@ -243,9 +243,9 @@ class ScheduledRIRSyncJob(JobRunner):
             synced_key_ids = set()
             for model_class in (RIROrganization, RIRContact, RIRNetwork):
                 synced_key_ids.update(
-                    model_class.objects.filter(
-                        rir_config=config, synced_by__isnull=False
-                    ).values_list("synced_by_id", flat=True).distinct()
+                    model_class.objects.filter(rir_config=config, synced_by__isnull=False)
+                    .values_list("synced_by_id", flat=True)
+                    .distinct()
                 )
 
             if synced_key_ids:
@@ -259,9 +259,7 @@ class ScheduledRIRSyncJob(JobRunner):
 
             for user_key in user_keys:
                 try:
-                    logs = sync_rir_config(
-                        config, api_key=user_key.api_key, user_key=user_key
-                    )
+                    logs = sync_rir_config(config, api_key=user_key.api_key, user_key=user_key)
                     total_logs += len(logs)
                 except Exception:
                     logger.exception(

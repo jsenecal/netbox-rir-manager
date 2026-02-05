@@ -58,9 +58,7 @@ class ARINBackend(RIRBackend):
         if not rir_config.org_handle:
             return False
         result = self._call_with_retry(self.api.org.from_handle, rir_config.org_handle)
-        if result is None or isinstance(result, Error):
-            return False
-        return True
+        return not (result is None or isinstance(result, Error))
 
     def get_organization(self, handle: str) -> dict[str, Any] | None:
         result = self._call_with_retry(self.api.org.from_handle, handle)

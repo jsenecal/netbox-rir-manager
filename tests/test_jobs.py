@@ -65,9 +65,7 @@ class TestScheduledSyncJob:
         mock_backend_class.from_rir_config.assert_not_called()
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
-    def test_scheduled_sync_groups_by_synced_by_key(
-        self, mock_backend_class, rir_config, admin_user, rir_user_key
-    ):
+    def test_scheduled_sync_groups_by_synced_by_key(self, mock_backend_class, rir_config, admin_user, rir_user_key):
         """Objects with synced_by set should be refreshed using the same key."""
         from netbox_rir_manager.jobs import ScheduledRIRSyncJob
         from netbox_rir_manager.models import RIROrganization
@@ -103,9 +101,7 @@ class TestScheduledSyncJob:
         runner.run()
 
         # Verify the backend was created with the correct key
-        mock_backend_class.from_rir_config.assert_called_once_with(
-            rir_config, api_key=rir_user_key.api_key
-        )
+        mock_backend_class.from_rir_config.assert_called_once_with(rir_config, api_key=rir_user_key.api_key)
 
 
 @pytest.mark.django_db

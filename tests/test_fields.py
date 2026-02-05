@@ -6,9 +6,7 @@ class TestEncryptedCharField:
     def test_encrypts_on_save_and_decrypts_on_read(self, rir_config, admin_user):
         from netbox_rir_manager.models import RIRUserKey
 
-        key = RIRUserKey.objects.create(
-            user=admin_user, rir_config=rir_config, api_key="my-secret-key"
-        )
+        key = RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="my-secret-key")
         key.refresh_from_db()
         # Python attribute returns plaintext
         assert key.api_key == "my-secret-key"
@@ -18,9 +16,7 @@ class TestEncryptedCharField:
 
         from netbox_rir_manager.models import RIRUserKey
 
-        key = RIRUserKey.objects.create(
-            user=admin_user, rir_config=rir_config, api_key="my-secret-key"
-        )
+        key = RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="my-secret-key")
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT api_key FROM netbox_rir_manager_riruserkey WHERE id = %s",
@@ -33,9 +29,7 @@ class TestEncryptedCharField:
     def test_handles_empty_string(self, rir_config, admin_user):
         from netbox_rir_manager.models import RIRUserKey
 
-        key = RIRUserKey.objects.create(
-            user=admin_user, rir_config=rir_config, api_key=""
-        )
+        key = RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="")
         key.refresh_from_db()
         assert key.api_key == ""
 
@@ -51,9 +45,7 @@ class TestEncryptedCharField:
         """Saving twice doesn't double-encrypt."""
         from netbox_rir_manager.models import RIRUserKey
 
-        key = RIRUserKey.objects.create(
-            user=admin_user, rir_config=rir_config, api_key="idempotent-key"
-        )
+        key = RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="idempotent-key")
         key.save()  # second save
         key.refresh_from_db()
         assert key.api_key == "idempotent-key"
@@ -64,9 +56,7 @@ class TestEncryptedCharField:
 
         from netbox_rir_manager.models import RIRUserKey
 
-        key = RIRUserKey.objects.create(
-            user=admin_user, rir_config=rir_config, api_key="will-be-forced-plain"
-        )
+        key = RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="will-be-forced-plain")
         # Simulate a pre-migration plaintext value
         with connection.cursor() as cursor:
             cursor.execute(
