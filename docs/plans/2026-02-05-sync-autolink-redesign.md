@@ -777,9 +777,13 @@ git commit -m "chore: final linting and cleanup"
 
 ## Deferred (still future)
 
-- Scheduled/periodic sync (`@system_job` decorator)
 - Write operations (create/update POCs, reassignments)
 - Discrepancy reports
-- API key encryption
-- Rate limiting / retry logic
+- Sync dashboard view
 - Additional RIR backends
+
+Items completed in phase 3 (`2026-02-05-core-reliability.md`):
+- ~~Scheduled/periodic sync~~ → `ScheduledRIRSyncJob` with `@system_job(INTERVAL_DAILY)`
+- ~~API key encryption~~ → `EncryptedCharField` using Fernet + HKDF-SHA256
+- ~~Rate limiting / retry logic~~ → tenacity exponential backoff on all ARIN API calls
+- Added `synced_by` FK tracking on resource models for credential continuity

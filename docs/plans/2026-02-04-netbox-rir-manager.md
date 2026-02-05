@@ -3059,16 +3059,18 @@ netbox-rir-manager/
 
 ## Deferred for Future Iterations
 
-These items are intentionally deferred:
+These items are still deferred:
 
 1. **Write Operations** (create/update POCs, submit reassignments) - requires careful ARIN OTE testing
 2. **Sync Dashboard View** - custom view with progress feedback
-3. **Scheduled/Periodic Sync** - `@system_job` decorator for automated recurring sync
-4. **Discrepancy Reports** - requires both local and RIR data to compare
-5. **API key encryption** - django-encrypted-model-fields integration
-6. **Rate limiting / retry logic** - add when hitting real API
-7. **Additional RIR backends** (RIPE, APNIC, etc.) - backend interface is ready for them
+3. **Discrepancy Reports** - requires both local and RIR data to compare
+4. **Additional RIR backends** (RIPE, APNIC, etc.) - backend interface is ready for them
 
-Items completed in phase 2 (originally deferred):
+Items completed in phase 2 (`2026-02-05-sync-autolink-redesign.md`):
 - ~~Scheduled Background Sync~~ → JobRunner integration added (`SyncRIRConfigJob`)
 - ~~Auto-linking networks to Aggregates/Prefixes~~ → `post_save` signal handler implemented
+
+Items completed in phase 3 (`2026-02-05-core-reliability.md`):
+- ~~Scheduled/Periodic Sync~~ → `ScheduledRIRSyncJob` with `@system_job(INTERVAL_DAILY)`
+- ~~API key encryption~~ → `EncryptedCharField` using Fernet + HKDF-SHA256
+- ~~Rate limiting / retry logic~~ → tenacity exponential backoff on all ARIN API calls
