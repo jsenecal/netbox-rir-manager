@@ -15,16 +15,22 @@ description = "NetBox plugin for managing RIR (ARIN, RIPE, etc.) resources"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "Jonathan Senecal", email = "jonathan@jonathansenecal.com"},
+    {name = "Jonathan Senecal", email = "contact@jonathansenecal.com"},
 ]
+keywords = ["netbox", "netbox-plugin", "rir", "arin", "ripe", "ipam", "network-automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Django",
     "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking",
+    "Topic :: System :: Systems Administration",
 ]
 requires-python = ">=3.12"
 dependencies = [

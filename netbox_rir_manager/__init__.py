@@ -9,7 +9,7 @@ class NetBoxRIRManagerConfig(PluginConfig):
     description = "Manage RIR (ARIN, RIPE, etc.) resources directly from NetBox"
     version = __version__
     author = "Jonathan Senecal"
-    author_email = "jonathan@jonathansenecal.com"
+    author_email = "contact@jonathansenecal.com"
     base_url = "rir-manager"
     min_version = "4.5.0"
     required_settings = []
