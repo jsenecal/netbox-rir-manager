@@ -5,6 +5,7 @@ import base64
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from django import forms
 from django.conf import settings
 from django.core.validators import URLValidator
 from django.db import models
@@ -74,10 +75,19 @@ class LenientURLValidator(URLValidator):
         )
 
 
+class LenientURLFormField(forms.URLField):
+    """Form URLField that accepts hostnames without a TLD."""
+
+    default_validators = [LenientURLValidator()]
+
+
 class LenientURLField(models.URLField):
     """URLField that accepts hostnames without a TLD."""
 
     default_validators = [LenientURLValidator()]
+
+    def formfield(self, **kwargs):
+        return super().formfield(**{"form_class": LenientURLFormField, **kwargs})
 
 
 class EncryptedCharField(models.CharField):
