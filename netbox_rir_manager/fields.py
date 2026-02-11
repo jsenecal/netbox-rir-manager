@@ -6,6 +6,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from django.conf import settings
+from django.core.validators import URLValidator
 from django.db import models
 
 _FERNET_PREFIX = "$FERNET$"
@@ -46,6 +47,37 @@ def _decrypt(value: str) -> str:
         return _get_fernet().decrypt(token.encode()).decode()
     except InvalidToken:
         return value
+
+
+class LenientURLValidator(URLValidator):
+    """URLValidator that allows hostnames without a TLD (e.g. http://myhost:8000/)."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Replace the host pattern to allow single-label hostnames
+        import re
+
+        # Rebuild the regex to accept hostnames without dots/TLDs
+        self.regex = re.compile(
+            r"^(?:[a-z0-9.+-]*)://"  # scheme
+            r"(?:[^\s:@/]+(?::[^\s:@/]*)?@)?"  # user:pass@
+            r"(?:"
+            r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)*[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)"  # hostname
+            r"|localhost"
+            r"|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"  # ipv4
+            r"|\[?[A-F0-9]*:[A-F0-9:]+\]?"  # ipv6
+            r")"
+            r"(?::\d{1,5})?"  # port
+            r"(?:[/?#][^\s]*)?"  # path/query/fragment
+            r"\Z",
+            re.IGNORECASE,
+        )
+
+
+class LenientURLField(models.URLField):
+    """URLField that accepts hostnames without a TLD."""
+
+    default_validators = [LenientURLValidator()]
 
 
 class EncryptedCharField(models.CharField):

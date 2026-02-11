@@ -129,7 +129,6 @@ class TestRIRContact:
         assert f"/plugins/rir-manager/contacts/{rir_contact.pk}/" == url
 
     def test_rir_contact_organization_set_null(self, rir_contact, rir_organization):
-
         assert rir_contact.organization == rir_organization
         rir_organization.delete()
         rir_contact.refresh_from_db()
@@ -218,7 +217,6 @@ class TestRIRNetwork:
         assert f"/plugins/rir-manager/networks/{rir_network.pk}/" == url
 
     def test_rir_network_organization_set_null(self, rir_network, rir_organization):
-
         assert rir_network.organization == rir_organization
         rir_organization.delete()
         rir_network.refresh_from_db()

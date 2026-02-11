@@ -3,13 +3,15 @@ from django.urls import reverse
 from ipam.models import RIR
 from netbox.models import NetBoxModel
 
+from netbox_rir_manager.fields import LenientURLField
+
 
 class RIRConfig(NetBoxModel):
     """Organization-level configuration for RIR API access."""
 
     rir = models.ForeignKey(RIR, on_delete=models.CASCADE, related_name="rir_configs")
     name = models.CharField(max_length=100)
-    api_url = models.URLField(blank=True, default="")
+    api_url = LenientURLField(blank=True, default="")
     org_handle = models.CharField(max_length=50, blank=True, default="")
     is_active = models.BooleanField(default=True)
     last_sync = models.DateTimeField(null=True, blank=True)

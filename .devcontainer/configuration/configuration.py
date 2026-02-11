@@ -7,12 +7,10 @@ from os.path import abspath, dirname, join
 # Read secret from file
 def _read_secret(secret_name, default=None):
     try:
-        f = open(f"/run/secrets/{secret_name}", encoding="utf-8")
+        with open(f"/run/secrets/{secret_name}", encoding="utf-8") as f:
+            return f.readline().strip()
     except OSError:
         return default
-    else:
-        with f:
-            return f.readline().strip()
 
 
 _BASE_DIR = dirname(dirname(abspath(__file__)))
@@ -74,8 +72,7 @@ REDIS = {
             environ.get("REDIS_CACHE_PASSWORD", environ.get("REDIS_PASSWORD", "")),
         ),
         "DATABASE": int(environ.get("REDIS_CACHE_DATABASE", 1)),
-        "SSL": environ.get("REDIS_CACHE_SSL", environ.get("REDIS_SSL", "False")).lower()
-        == "true",
+        "SSL": environ.get("REDIS_CACHE_SSL", environ.get("REDIS_SSL", "False")).lower() == "true",
         "INSECURE_SKIP_TLS_VERIFY": environ.get(
             "REDIS_CACHE_INSECURE_SKIP_TLS_VERIFY",
             environ.get("REDIS_INSECURE_SKIP_TLS_VERIFY", "False"),
@@ -252,9 +249,7 @@ REMOTE_AUTH_BACKEND = environ.get(
     "netbox.authentication.RemoteUserBackend",
 )
 REMOTE_AUTH_HEADER = environ.get("REMOTE_AUTH_HEADER", "HTTP_REMOTE_USER")
-REMOTE_AUTH_AUTO_CREATE_USER = (
-    environ.get("REMOTE_AUTH_AUTO_CREATE_USER", "True").lower() == "true"
-)
+REMOTE_AUTH_AUTO_CREATE_USER = environ.get("REMOTE_AUTH_AUTO_CREATE_USER", "True").lower() == "true"
 REMOTE_AUTH_DEFAULT_GROUPS = list(
     filter(None, environ.get("REMOTE_AUTH_DEFAULT_GROUPS", "").split(" ")),
 )
