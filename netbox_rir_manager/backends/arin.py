@@ -266,9 +266,14 @@ class ARINBackend(RIRBackend):
 
     @staticmethod
     def _safe_serialize(obj: Any) -> dict:
+        import json
+
         try:
             if hasattr(obj, "dict"):
-                return obj.dict()
-            return {}
+                data = obj.dict()
+            else:
+                return {}
+            # Round-trip through JSON to coerce non-serializable types (e.g. IPv4Address) to strings
+            return json.loads(json.dumps(data, default=str))
         except Exception:
             return {}
