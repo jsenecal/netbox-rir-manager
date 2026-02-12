@@ -2,11 +2,12 @@ from django.db import models
 from django.urls import reverse
 from ipam.models import RIR
 from netbox.models import NetBoxModel
+from netbox.models.features import JobsMixin
 
 from netbox_rir_manager.fields import LenientURLField
 
 
-class RIRConfig(NetBoxModel):
+class RIRConfig(JobsMixin, NetBoxModel):
     """Organization-level configuration for RIR API access."""
 
     rir = models.ForeignKey(RIR, on_delete=models.CASCADE, related_name="rir_configs")
