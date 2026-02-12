@@ -1,5 +1,5 @@
 from django.urls import path
-from netbox.views.generic import ObjectChangeLogView
+from netbox.views.generic import ObjectChangeLogView, ObjectJobsView
 
 from netbox_rir_manager import views
 from netbox_rir_manager.models import (
@@ -24,6 +24,12 @@ urlpatterns = [
         "configs/<int:pk>/changelog/",
         ObjectChangeLogView.as_view(),
         name="rirconfig_changelog",
+        kwargs={"model": RIRConfig},
+    ),
+    path(
+        "configs/<int:pk>/jobs/",
+        ObjectJobsView.as_view(),
+        name="rirconfig_jobs",
         kwargs={"model": RIRConfig},
     ),
     # RIROrganization
