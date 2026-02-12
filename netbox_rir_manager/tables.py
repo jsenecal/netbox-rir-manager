@@ -97,6 +97,7 @@ class RIRSyncLogTable(NetBoxTable):
     object_handle = tables.Column()
     status = tables.Column()
     message = tables.Column()
+    actions = columns.ActionsColumn(actions=("delete", "changelog"))
 
     class Meta(NetBoxTable.Meta):
         model = RIRSyncLog
