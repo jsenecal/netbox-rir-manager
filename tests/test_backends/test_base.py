@@ -51,6 +51,9 @@ def test_backend_subclass_works():
         def create_customer(self, parent_net_handle, data):
             return {}
 
+        def get_customer(self, handle):
+            return {}
+
     backend = TestBackend()
     assert backend.name == "TEST"
     assert backend.authenticate(None) is True

@@ -704,3 +704,78 @@ class TestRemoveNetworkJob:
 
         log = RIRSyncLog.objects.get(object_handle="NET-RMFAIL-1", operation="remove")
         assert log.status == "error"
+
+
+@pytest.mark.django_db
+class TestChangelogEntries:
+    """Verify that sync operations create ObjectChange changelog entries."""
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_creates_changelog_for_org(self, mock_backend_class, rir_config, admin_user, rir_user_key):
+        """SyncRIRConfigJob creates ObjectChange entries when a real user is present."""
+        from core.models import ObjectChange
+
+        from netbox_rir_manager.jobs import SyncRIRConfigJob
+        from netbox_rir_manager.models import RIROrganization
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = {
+            "handle": "CHANGELOG-ARIN",
+            "name": "Changelog Org",
+            "street_address": "",
+            "city": "",
+            "state_province": "",
+            "postal_code": "",
+            "country": "",
+            "poc_links": [],
+            "raw_data": {},
+        }
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        runner = make_runner(SyncRIRConfigJob)
+        runner.job.object_id = rir_config.pk
+        runner.job.user = admin_user
+
+        runner.run(user_id=admin_user.pk)
+
+        assert RIROrganization.objects.filter(handle="CHANGELOG-ARIN").exists()
+        org = RIROrganization.objects.get(handle="CHANGELOG-ARIN")
+        changes = ObjectChange.objects.filter(
+            changed_object_id=org.pk,
+            changed_object_type__model="rirorganization",
+        )
+        assert changes.exists()
+        assert changes.first().user == admin_user
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_no_changelog_without_user(self, mock_backend_class, rir_config, rir_user_key):
+        """When job.user is a MagicMock (no real user), no ObjectChange is created."""
+        from core.models import ObjectChange
+
+        from netbox_rir_manager.jobs import SyncRIRConfigJob
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = {
+            "handle": "NOLOG-ARIN",
+            "name": "No Log Org",
+            "street_address": "",
+            "city": "",
+            "state_province": "",
+            "postal_code": "",
+            "country": "",
+            "poc_links": [],
+            "raw_data": {},
+        }
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        runner = make_runner(SyncRIRConfigJob)
+        runner.job.object_id = rir_config.pk
+        # runner.job.user is MagicMock (default from make_runner)
+
+        initial_count = ObjectChange.objects.count()
+        runner.run(user_id=rir_user_key.user_id)
+
+        # No ObjectChange should be created since user is not a real User
+        assert ObjectChange.objects.count() == initial_count
