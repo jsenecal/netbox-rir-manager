@@ -491,3 +491,170 @@ class TestRIRTicket:
         rir_user_key.delete()
         ticket.refresh_from_db()
         assert ticket.submitted_by is None
+
+
+@pytest.mark.django_db
+class TestRIRNetworkSyncFromArin:
+    def test_creates_new_network(self, rir_config):
+        from netbox_rir_manager.models import RIRNetwork
+
+        net_data = {
+            "handle": "NET-NEW-1",
+            "net_name": "NEW-NET",
+            "net_type": "DS",
+            "org_handle": "",
+        }
+        net, created = RIRNetwork.sync_from_arin(net_data, rir_config)
+        assert created is True
+        assert net.handle == "NET-NEW-1"
+        assert net.net_name == "NEW-NET"
+        assert net.net_type == "DS"
+        assert net.rir_config == rir_config
+        assert net.last_synced is not None
+
+    def test_updates_existing_network(self, rir_config):
+        from netbox_rir_manager.models import RIRNetwork
+
+        RIRNetwork.objects.create(
+            rir_config=rir_config, handle="NET-EXIST-1", net_name="OLD-NAME"
+        )
+        net_data = {
+            "handle": "NET-EXIST-1",
+            "net_name": "NEW-NAME",
+            "net_type": "RS",
+        }
+        net, created = RIRNetwork.sync_from_arin(net_data, rir_config)
+        assert created is False
+        assert net.net_name == "NEW-NAME"
+        assert net.net_type == "RS"
+
+    def test_links_aggregate(self, rir_config, rir):
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="198.51.100.0/24", rir=rir)
+        net_data = {"handle": "NET-AGG-1", "net_name": "AGG-NET"}
+        net, _ = RIRNetwork.sync_from_arin(net_data, rir_config, aggregate=agg)
+        assert net.aggregate == agg
+
+    def test_links_prefix(self, rir_config):
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        pfx = Prefix.objects.create(prefix="10.1.0.0/24")
+        net_data = {"handle": "NET-PFX-1", "net_name": "PFX-NET"}
+        net, _ = RIRNetwork.sync_from_arin(net_data, rir_config, prefix=pfx)
+        assert net.prefix == pfx
+
+    def test_resolves_org_handle(self, rir_config, rir_organization):
+        from netbox_rir_manager.models import RIRNetwork
+
+        net_data = {
+            "handle": "NET-ORG-1",
+            "net_name": "ORG-NET",
+            "org_handle": rir_organization.handle,
+        }
+        net, _ = RIRNetwork.sync_from_arin(net_data, rir_config)
+        assert net.organization == rir_organization
+
+    def test_unknown_org_handle_sets_none(self, rir_config):
+        from netbox_rir_manager.models import RIRNetwork
+
+        net_data = {
+            "handle": "NET-NOORG-1",
+            "net_name": "NO-ORG-NET",
+            "org_handle": "NONEXISTENT-ARIN",
+        }
+        net, _ = RIRNetwork.sync_from_arin(net_data, rir_config)
+        assert net.organization is None
+
+    def test_sets_synced_by(self, rir_config, rir_user_key):
+        from netbox_rir_manager.models import RIRNetwork
+
+        net_data = {"handle": "NET-SYNC-1", "net_name": "SYNC-NET"}
+        net, _ = RIRNetwork.sync_from_arin(net_data, rir_config, user_key=rir_user_key)
+        assert net.synced_by == rir_user_key
+
+    def test_does_not_overwrite_aggregate_when_not_provided(self, rir_config, rir):
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="203.0.113.0/24", rir=rir)
+        RIRNetwork.objects.create(
+            rir_config=rir_config, handle="NET-KEEP-AGG-1", net_name="KEEP", aggregate=agg
+        )
+        net_data = {"handle": "NET-KEEP-AGG-1", "net_name": "UPDATED"}
+        net, created = RIRNetwork.sync_from_arin(net_data, rir_config)
+        assert created is False
+        net.refresh_from_db()
+        assert net.aggregate == agg  # preserved since aggregate=None not passed
+
+
+@pytest.mark.django_db
+class TestRIRNetworkFindForPrefix:
+    def test_finds_parent_network(self, rir_config, rir):
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/8", rir=rir)
+        parent = RIRNetwork.objects.create(
+            rir_config=rir_config, handle="NET-PARENT-1", net_name="PARENT", aggregate=agg
+        )
+        pfx = Prefix.objects.create(prefix="10.1.0.0/24")
+        network, found_agg = RIRNetwork.find_for_prefix(pfx)
+        assert network == parent
+        assert found_agg == agg
+
+    def test_returns_none_when_no_aggregate(self, rir_config):
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        pfx = Prefix.objects.create(prefix="172.16.0.0/24")
+        network, agg = RIRNetwork.find_for_prefix(pfx)
+        assert network is None
+        assert agg is None
+
+    def test_returns_none_network_when_no_rir_network(self, rir, rir_config):
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        Aggregate.objects.create(prefix="192.168.0.0/16", rir=rir)
+        pfx = Prefix.objects.create(prefix="192.168.1.0/24")
+        network, agg = RIRNetwork.find_for_prefix(pfx)
+        assert network is None
+        assert agg is not None
+
+
+@pytest.mark.django_db
+class TestRIRNetworkEnqueueRemoval:
+    @pytest.fixture
+    def child_network(self, rir_config):
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        pfx = Prefix.objects.create(prefix="10.2.0.0/24")
+        return RIRNetwork.objects.create(
+            rir_config=rir_config, handle="NET-CHILD-RM-1", net_name="CHILD-RM", prefix=pfx
+        )
+
+    def test_enqueues_job_when_key_exists(self, child_network, rir_user_key):
+        from unittest.mock import patch
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
+            result = child_network.enqueue_removal()
+        assert result is True
+        mock_job.enqueue.assert_called_once()
+        call_kwargs = mock_job.enqueue.call_args[1]
+        assert call_kwargs["network_id"] == child_network.pk
+        assert call_kwargs["user_key_id"] == rir_user_key.pk
+
+    def test_returns_false_when_no_key(self, child_network):
+        result = child_network.enqueue_removal()
+        assert result is False

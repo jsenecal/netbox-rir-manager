@@ -1,5 +1,6 @@
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 from ipam.models import Aggregate, Prefix
 from netbox.models import NetBoxModel
 
@@ -167,3 +168,64 @@ class RIRNetwork(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_rir_manager:rirnetwork", args=[self.pk])
+
+    @classmethod
+    def sync_from_arin(cls, net_data, rir_config, aggregate=None, prefix=None, user_key=None):
+        """Create or update an RIRNetwork from ARIN net_data dict.
+
+        Returns (network, created) tuple.
+        """
+        org = None
+        org_handle = net_data.get("org_handle")
+        if org_handle:
+            org = RIROrganization.objects.filter(handle=org_handle).first()
+
+        defaults = {
+            "rir_config": rir_config,
+            "net_name": net_data.get("net_name") or "",
+            "net_type": net_data.get("net_type") or "",
+            "organization": org,
+            "raw_data": net_data,
+            "last_synced": timezone.now(),
+            "synced_by": user_key,
+        }
+        if aggregate is not None:
+            defaults["aggregate"] = aggregate
+        if prefix is not None:
+            defaults["prefix"] = prefix
+
+        return cls.objects.update_or_create(
+            handle=net_data["handle"],
+            defaults=defaults,
+        )
+
+    @classmethod
+    def find_for_prefix(cls, prefix):
+        """Find the parent RIRNetwork for a prefix via its containing Aggregate."""
+        agg = Aggregate.objects.filter(
+            prefix__net_contains_or_equals=prefix.prefix
+        ).first()
+        if not agg:
+            return None, None
+        network = cls.objects.filter(aggregate=agg).first()
+        return network, agg
+
+    def enqueue_removal(self):
+        """Queue a background job to remove this network at ARIN.
+
+        Returns True if job was enqueued, False if no API key available.
+        """
+        from netbox_rir_manager.jobs import RemoveNetworkJob
+        from netbox_rir_manager.models import RIRUserKey
+
+        user_key = RIRUserKey.objects.filter(rir_config=self.rir_config).first()
+        if not user_key:
+            return False
+
+        RemoveNetworkJob.enqueue(
+            instance=self.rir_config,
+            user=user_key.user,
+            network_id=self.pk,
+            user_key_id=user_key.pk,
+        )
+        return True

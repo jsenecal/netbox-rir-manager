@@ -2,7 +2,7 @@ import ipaddress
 import logging
 
 from django.conf import settings
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
@@ -130,3 +130,22 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
         prefix_id=instance.pk,
         user_key_id=user_key.pk,
     )
+
+
+@receiver(pre_delete, sender="ipam.Prefix")
+def remove_rir_network_on_prefix_delete(sender, instance, **kwargs):
+    """Remove ARIN reassignment when a prefix is deleted.
+
+    Uses pre_delete because after deletion SET_NULL clears the FK link.
+    Only removes child reassignments (prefix-only, no aggregate).
+    """
+    from netbox_rir_manager.models import RIRNetwork
+
+    rir_networks = RIRNetwork.objects.filter(prefix=instance, aggregate__isnull=True)
+    for network in rir_networks:
+        if not network.enqueue_removal():
+            logger.warning(
+                "Cannot remove ARIN network %s on prefix delete: no API key for config %s",
+                network.handle,
+                network.rir_config.name,
+            )

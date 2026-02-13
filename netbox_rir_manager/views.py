@@ -573,24 +573,8 @@ class AggregateSyncView(LoginRequiredMixin, View):
             )
             return redirect(aggregate.get_absolute_url())
 
-        # Try to find the org
-        org = None
-        org_handle = net_data.get("org_handle")
-        if org_handle:
-            org = RIROrganization.objects.filter(handle=org_handle).first()
-
-        net, created = RIRNetwork.objects.update_or_create(
-            handle=net_data["handle"],
-            defaults={
-                "rir_config": rir_config,
-                "net_name": net_data.get("net_name", ""),
-                "net_type": net_data.get("net_type", ""),
-                "organization": org,
-                "aggregate": aggregate,
-                "raw_data": net_data,
-                "last_synced": timezone.now(),
-                "synced_by": user_key,
-            },
+        net, created = RIRNetwork.sync_from_arin(
+            net_data, rir_config, aggregate=aggregate, user_key=user_key,
         )
 
         RIRSyncLog.objects.create(
@@ -656,26 +640,14 @@ class PrefixSyncView(LoginRequiredMixin, View):
         # Check if this is actually a child net (not the parent aggregate's net)
         parent_network = RIRNetwork.objects.filter(aggregate=agg).first()
         if parent_network and net_data["handle"] == parent_network.handle:
-            messages.info(request, "No separate reassignment found at ARIN -- this prefix is covered by the parent allocation.")
+            messages.info(
+                request,
+                "No separate reassignment found at ARIN -- this prefix is covered by the parent allocation.",
+            )
             return redirect(prefix.get_absolute_url())
 
-        org = None
-        org_handle = net_data.get("org_handle")
-        if org_handle:
-            org = RIROrganization.objects.filter(handle=org_handle).first()
-
-        net, created = RIRNetwork.objects.update_or_create(
-            handle=net_data["handle"],
-            defaults={
-                "rir_config": rir_config,
-                "net_name": net_data.get("net_name") or "",
-                "net_type": net_data.get("net_type") or "",
-                "organization": org,
-                "prefix": prefix,
-                "raw_data": net_data,
-                "last_synced": timezone.now(),
-                "synced_by": user_key,
-            },
+        net, created = RIRNetwork.sync_from_arin(
+            net_data, rir_config, prefix=prefix, user_key=user_key,
         )
 
         RIRSyncLog.objects.create(

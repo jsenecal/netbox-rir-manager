@@ -278,3 +278,189 @@ class TestRIRSyncJob:
 
         # Verify the job data was updated
         assert "rir_config" in job.data
+
+
+@pytest.mark.django_db
+class TestReassignJobPreFlight:
+    """Tests for the pre-flight check in ReassignJob that detects existing ARIN reassignments."""
+
+    @pytest.fixture
+    def reassign_setup(self, rir_config, rir_user_key, rir, rir_organization):
+        """Set up common objects for reassign tests.
+
+        Creates a parent aggregate/network and a child prefix with a tenant
+        linked to an RIROrganization (for the detailed reassignment path).
+        """
+        from ipam.models import Aggregate, Prefix
+        from tenancy.models import Tenant
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/20", rir=rir)
+        parent = RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-PARENT-20",
+            net_name="PARENT-NET",
+            aggregate=agg,
+            auto_reassign=True,
+        )
+        tenant = Tenant.objects.create(name="Test Tenant", slug="test-tenant")
+        rir_organization.tenant = tenant
+        rir_organization.save()
+        pfx = Prefix.objects.create(prefix="10.0.1.0/29", tenant=tenant)
+        return {"agg": agg, "parent": parent, "prefix": pfx}
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_preflight_syncs_existing_reassignment(
+        self, mock_backend_class, reassign_setup, rir_config, rir_user_key
+    ):
+        """When ARIN returns a different net than parent, job syncs and returns early."""
+        from netbox_rir_manager.jobs import ReassignJob
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+
+        mock_backend = MagicMock()
+        mock_backend.find_net.return_value = {
+            "handle": "NET-INTERMEDIATE-24",
+            "net_name": "INTERMEDIATE-NET",
+            "net_type": "RS",
+            "org_handle": "",
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        job = MagicMock()
+        job.data = {}
+        runner = ReassignJob.__new__(ReassignJob)
+        runner.job = job
+
+        runner.run(
+            prefix_id=reassign_setup["prefix"].pk,
+            user_key_id=rir_user_key.pk,
+        )
+
+        # Should have synced the intermediate net, not called reassign
+        assert job.data["status"] == "synced"
+        assert "NET-INTERMEDIATE-24" in job.data["message"]
+        mock_backend.reassign_network.assert_not_called()
+
+        # RIRNetwork should be created for the intermediate net
+        assert RIRNetwork.objects.filter(handle="NET-INTERMEDIATE-24").exists()
+        net = RIRNetwork.objects.get(handle="NET-INTERMEDIATE-24")
+        assert net.prefix == reassign_setup["prefix"]
+
+        # Sync log should record skipped
+        log = RIRSyncLog.objects.filter(
+            object_handle="NET-INTERMEDIATE-24", status="skipped"
+        ).first()
+        assert log is not None
+        assert "already reassigned" in log.message
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_preflight_proceeds_when_arin_returns_parent(
+        self, mock_backend_class, reassign_setup, rir_config, rir_user_key
+    ):
+        """When ARIN returns the parent handle, pre-flight passes and reassignment proceeds."""
+        from netbox_rir_manager.jobs import ReassignJob
+
+        mock_backend = MagicMock()
+        # find_net returns parent handle -- no intermediate reassignment
+        mock_backend.find_net.return_value = {
+            "handle": "NET-PARENT-20",
+            "net_name": "PARENT-NET",
+        }
+        # Reassignment itself fails (we just need to verify it was attempted)
+        mock_backend.reassign_network.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        job = MagicMock()
+        job.data = {}
+        runner = ReassignJob.__new__(ReassignJob)
+        runner.job = job
+
+        runner.run(
+            prefix_id=reassign_setup["prefix"].pk,
+            user_key_id=rir_user_key.pk,
+        )
+
+        # Pre-flight should NOT have short-circuited -- reassign was attempted
+        mock_backend.reassign_network.assert_called_once()
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_preflight_proceeds_when_arin_returns_none(
+        self, mock_backend_class, reassign_setup, rir_config, rir_user_key
+    ):
+        """When ARIN returns None for find_net, pre-flight passes and reassignment proceeds."""
+        from netbox_rir_manager.jobs import ReassignJob
+
+        mock_backend = MagicMock()
+        mock_backend.find_net.return_value = None
+        mock_backend.reassign_network.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        job = MagicMock()
+        job.data = {}
+        runner = ReassignJob.__new__(ReassignJob)
+        runner.job = job
+
+        runner.run(
+            prefix_id=reassign_setup["prefix"].pk,
+            user_key_id=rir_user_key.pk,
+        )
+
+        # Pre-flight should NOT have short-circuited
+        mock_backend.reassign_network.assert_called_once()
+
+
+@pytest.mark.django_db
+class TestRemoveNetworkJob:
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_remove_success(self, mock_backend_class, rir_config, rir_user_key):
+        from netbox_rir_manager.jobs import RemoveNetworkJob
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+
+        net = RIRNetwork.objects.create(
+            rir_config=rir_config, handle="NET-REMOVE-1", net_name="REMOVE-NET"
+        )
+
+        mock_backend = MagicMock()
+        mock_backend.remove_network.return_value = True
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        job = MagicMock()
+        job.data = {}
+        runner = RemoveNetworkJob.__new__(RemoveNetworkJob)
+        runner.job = job
+
+        runner.run(network_id=net.pk, user_key_id=rir_user_key.pk)
+
+        mock_backend.remove_network.assert_called_once_with("NET-REMOVE-1")
+        assert job.data["status"] == "success"
+
+        log = RIRSyncLog.objects.get(object_handle="NET-REMOVE-1", operation="remove")
+        assert log.status == "success"
+        assert "Removed" in log.message
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_remove_failure(self, mock_backend_class, rir_config, rir_user_key):
+        from netbox_rir_manager.jobs import RemoveNetworkJob
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+
+        net = RIRNetwork.objects.create(
+            rir_config=rir_config, handle="NET-RMFAIL-1", net_name="FAIL-NET"
+        )
+
+        mock_backend = MagicMock()
+        mock_backend.remove_network.return_value = False
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        job = MagicMock()
+        job.data = {}
+        runner = RemoveNetworkJob.__new__(RemoveNetworkJob)
+        runner.job = job
+
+        runner.run(network_id=net.pk, user_key_id=rir_user_key.pk)
+
+        assert job.data["status"] == "error"
+        assert job.data["message"] == "ARIN removal failed"
+
+        log = RIRSyncLog.objects.get(object_handle="NET-RMFAIL-1", operation="remove")
+        assert log.status == "error"

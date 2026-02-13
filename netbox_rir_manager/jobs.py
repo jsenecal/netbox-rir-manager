@@ -176,24 +176,8 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUse
         if net_data is None:
             continue
 
-        # Try to find the org
-        org = None
-        org_handle = net_data.get("org_handle")
-        if org_handle:
-            org = RIROrganization.objects.filter(handle=org_handle).first()
-
-        parent_net, created = RIRNetwork.objects.update_or_create(
-            handle=net_data["handle"],
-            defaults={
-                "rir_config": rir_config,
-                "net_name": net_data.get("net_name") or "",
-                "net_type": net_data.get("net_type") or "",
-                "organization": org,
-                "aggregate": agg,
-                "raw_data": net_data,
-                "last_synced": timezone.now(),
-                "synced_by": user_key,
-            },
+        parent_net, created = RIRNetwork.sync_from_arin(
+            net_data, rir_config, aggregate=agg, user_key=user_key,
         )
 
         log = RIRSyncLog.objects.create(
@@ -221,23 +205,8 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUse
             if pfx_net_data["handle"] == parent_net.handle:
                 continue
 
-            pfx_org = None
-            pfx_org_handle = pfx_net_data.get("org_handle")
-            if pfx_org_handle:
-                pfx_org = RIROrganization.objects.filter(handle=pfx_org_handle).first()
-
-            _net, pfx_created = RIRNetwork.objects.update_or_create(
-                handle=pfx_net_data["handle"],
-                defaults={
-                    "rir_config": rir_config,
-                    "net_name": pfx_net_data.get("net_name") or "",
-                    "net_type": pfx_net_data.get("net_type") or "",
-                    "organization": pfx_org,
-                    "prefix": pfx,
-                    "raw_data": pfx_net_data,
-                    "last_synced": timezone.now(),
-                    "synced_by": user_key,
-                },
+            _net, pfx_created = RIRNetwork.sync_from_arin(
+                pfx_net_data, rir_config, prefix=pfx, user_key=user_key,
             )
 
             pfx_log = RIRSyncLog.objects.create(
@@ -246,7 +215,10 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUse
                 object_type="network",
                 object_handle=pfx_net_data["handle"],
                 status="success",
-                message=f"{'Created' if pfx_created else 'Updated'} network {pfx_net_data['handle']} for prefix {pfx.prefix}",
+                message=(
+                    f"{'Created' if pfx_created else 'Updated'} network "
+                    f"{pfx_net_data['handle']} for prefix {pfx.prefix}"
+                ),
             )
             logs.append(pfx_log)
 
@@ -332,6 +304,36 @@ class ReassignJob(JobRunner):
         network = ipaddress.ip_network(str(prefix.prefix), strict=False)
         start_address = str(network.network_address)
         end_address = str(network.broadcast_address)
+
+        # Pre-flight: check what ARIN actually has for this range
+        actual_net = backend.find_net(start_address, end_address)
+        if actual_net is not None:
+            actual_handle = actual_net.get("handle")
+
+            # Already reassigned at ARIN (different net than parent) -- just sync it
+            if actual_handle and actual_handle != parent_network.handle:
+                RIRNetwork.sync_from_arin(
+                    actual_net, rir_config, prefix=prefix, user_key=user_key,
+                )
+                self.job.data["status"] = "synced"
+                self.job.data["message"] = (
+                    f"Prefix already has ARIN network {actual_handle} "
+                    f"(expected parent {parent_network.handle}). Synced locally."
+                )
+                self.job.save()
+
+                RIRSyncLog.objects.create(
+                    rir_config=rir_config,
+                    operation="reassign",
+                    object_type="network",
+                    object_handle=actual_handle,
+                    status="skipped",
+                    message=(
+                        f"Prefix {prefix.prefix} already reassigned at ARIN as "
+                        f"{actual_handle}. Synced instead of re-reassigning."
+                    ),
+                )
+                return
 
         if rir_org:
             # Detailed reassignment - tenant has a known RIR org
@@ -440,18 +442,8 @@ class ReassignJob(JobRunner):
         # Create child RIRNetwork if net data was returned
         net_result = result.get("net")
         if net_result and net_result.get("handle"):
-            RIRNetwork.objects.update_or_create(
-                handle=net_result["handle"],
-                defaults={
-                    "rir_config": rir_config,
-                    "net_name": net_result.get("net_name", ""),
-                    "net_type": net_result.get("net_type", ""),
-                    "organization": rir_org,
-                    "prefix": prefix,
-                    "raw_data": net_result,
-                    "last_synced": timezone.now(),
-                    "synced_by": user_key,
-                },
+            RIRNetwork.sync_from_arin(
+                net_result, rir_config, prefix=prefix, user_key=user_key,
             )
 
         RIRSyncLog.objects.create(
@@ -465,6 +457,51 @@ class ReassignJob(JobRunner):
 
         self.job.data["status"] = "success"
         self.job.data["ticket_number"] = ticket.ticket_number
+        self.job.save()
+
+
+class RemoveNetworkJob(JobRunner):
+    """Background job for removing a reassigned network at ARIN."""
+
+    class Meta:
+        name = "ARIN Remove"
+
+    def run(self, *args, **kwargs):
+        from netbox_rir_manager.models import RIRUserKey
+
+        network_id = kwargs.get("network_id")
+        user_key_id = kwargs.get("user_key_id")
+
+        network = RIRNetwork.objects.get(pk=network_id)
+        user_key = RIRUserKey.objects.get(pk=user_key_id)
+
+        self.job.data = {"network_handle": network.handle, "status": "starting"}
+        self.job.save()
+
+        rir_config = network.rir_config
+        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+
+        success = backend.remove_network(network.handle)
+
+        status = "success" if success else "error"
+        message = (
+            f"Removed network {network.handle} from ARIN"
+            if success
+            else f"Failed to remove network {network.handle} from ARIN"
+        )
+
+        RIRSyncLog.objects.create(
+            rir_config=rir_config,
+            operation="remove",
+            object_type="network",
+            object_handle=network.handle,
+            status=status,
+            message=message,
+        )
+
+        self.job.data["status"] = status
+        if not success:
+            self.job.data["message"] = "ARIN removal failed"
         self.job.save()
 
 
