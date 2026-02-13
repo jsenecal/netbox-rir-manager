@@ -12,6 +12,7 @@ class RIRSyncLog(NetBoxModel):
         "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="sync_logs",
+        verbose_name="RIR config",
     )
     operation = models.CharField(max_length=50, choices=SyncOperationChoices)
     object_type = models.CharField(max_length=50)
@@ -21,6 +22,8 @@ class RIRSyncLog(NetBoxModel):
 
     class Meta:
         ordering = ["-created"]
+        verbose_name = "RIR sync log"
+        verbose_name_plural = "RIR sync logs"
 
     def __str__(self):
         return f"{self.operation} {self.object_handle} ({self.status})"

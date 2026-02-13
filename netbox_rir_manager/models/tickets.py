@@ -12,6 +12,7 @@ class RIRTicket(NetBoxModel):
         "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="tickets",
+        verbose_name="RIR config",
     )
     ticket_number = models.CharField(max_length=50, unique=True)
     ticket_type = models.CharField(max_length=50, choices=TicketTypeChoices)
@@ -37,6 +38,8 @@ class RIRTicket(NetBoxModel):
 
     class Meta:
         ordering = ["-created_date"]
+        verbose_name = "RIR ticket"
+        verbose_name_plural = "RIR tickets"
 
     def __str__(self):
         return f"Ticket {self.ticket_number}"

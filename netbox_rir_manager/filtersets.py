@@ -59,10 +59,11 @@ class RIRNetworkFilterSet(NetBoxModelFilterSet):
     organization_id = django_filters.ModelMultipleChoiceFilter(
         queryset=RIROrganization.objects.all(), label="Organization"
     )
+    net_type = django_filters.CharFilter()
 
     class Meta:
         model = RIRNetwork
-        fields = ("id", "handle", "net_name", "rir_config_id", "organization_id")
+        fields = ("id", "handle", "net_name", "net_type", "rir_config_id", "organization_id")
 
     def search(self, queryset, name, value):
         return queryset.filter(handle__icontains=value) | queryset.filter(net_name__icontains=value)

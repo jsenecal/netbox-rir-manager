@@ -182,6 +182,7 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUse
             defaults={
                 "rir_config": rir_config,
                 "net_name": net_data.get("net_name", ""),
+                "net_type": net_data.get("net_type", ""),
                 "organization": org,
                 "aggregate": agg,
                 "raw_data": net_data,

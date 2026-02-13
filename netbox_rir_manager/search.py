@@ -38,6 +38,7 @@ class RIRNetworkIndex(SearchIndex):
     fields = (
         ("handle", 100),
         ("net_name", 200),
+        ("net_type", 300),
     )
 
 

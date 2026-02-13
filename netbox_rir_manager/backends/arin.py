@@ -230,9 +230,17 @@ class ARINBackend(RIRBackend):
                         "type": getattr(block, "type", ""),
                     }
                 )
+        # Extract net_type from the first net block's description (e.g. "Direct Allocation")
+        net_type = ""
+        if net_blocks:
+            raw_blocks = (self._safe_serialize(net) or {}).get("net_blocks", [])
+            if raw_blocks:
+                net_type = raw_blocks[0].get("description", "")
+
         return {
             "handle": net.handle,
             "net_name": net.net_name or "",
+            "net_type": net_type,
             "version": getattr(net, "version", None),
             "org_handle": getattr(net, "org_handle", "") or "",
             "parent_net_handle": getattr(net, "parent_net_handle", "") or "",

@@ -106,14 +106,14 @@ class RIRNetworkForm(NetBoxModelForm):
     organization = DynamicModelChoiceField(queryset=RIROrganization.objects.all(), required=False)
 
     fieldsets = (
-        FieldSet("rir_config", "handle", "net_name", "organization", name="Network"),
+        FieldSet("rir_config", "handle", "net_name", "net_type", "organization", name="Network"),
         FieldSet("aggregate", "prefix", name="NetBox Links"),
         FieldSet("tags", name="Tags"),
     )
 
     class Meta:
         model = RIRNetwork
-        fields = ("rir_config", "handle", "net_name", "organization", "aggregate", "prefix", "tags")
+        fields = ("rir_config", "handle", "net_name", "net_type", "organization", "aggregate", "prefix", "tags")
 
 
 class RIRNetworkFilterForm(NetBoxModelFilterSetForm):

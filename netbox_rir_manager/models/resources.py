@@ -11,6 +11,7 @@ class RIROrganization(NetBoxModel):
         "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="organizations",
+        verbose_name="RIR config",
     )
     handle = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=255)
@@ -32,6 +33,8 @@ class RIROrganization(NetBoxModel):
 
     class Meta:
         ordering = ["handle"]
+        verbose_name = "RIR organization"
+        verbose_name_plural = "RIR organizations"
 
     def __str__(self):
         return self.handle
@@ -47,6 +50,7 @@ class RIRContact(NetBoxModel):
         "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="contacts",
+        verbose_name="RIR config",
     )
     handle = models.CharField(max_length=50, unique=True)
     contact_type = models.CharField(max_length=20)
@@ -82,6 +86,8 @@ class RIRContact(NetBoxModel):
 
     class Meta:
         ordering = ["handle"]
+        verbose_name = "RIR contact"
+        verbose_name_plural = "RIR contacts"
 
     def __str__(self):
         return self.handle
@@ -97,9 +103,11 @@ class RIRNetwork(NetBoxModel):
         "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="networks",
+        verbose_name="RIR config",
     )
     handle = models.CharField(max_length=50, unique=True)
     net_name = models.CharField(max_length=100)
+    net_type = models.CharField(max_length=50, blank=True, default="")
     organization = models.ForeignKey(
         RIROrganization,
         on_delete=models.SET_NULL,
@@ -134,6 +142,8 @@ class RIRNetwork(NetBoxModel):
 
     class Meta:
         ordering = ["handle"]
+        verbose_name = "RIR network"
+        verbose_name_plural = "RIR networks"
 
     def __str__(self):
         return self.handle

@@ -70,6 +70,7 @@ class RIRContactTable(NetBoxTable):
 class RIRNetworkTable(NetBoxTable):
     handle = tables.Column(linkify=True)
     net_name = tables.Column()
+    net_type = tables.Column()
     organization = tables.Column(linkify=True)
     aggregate = tables.Column(linkify=True)
     prefix = tables.Column(linkify=True)
@@ -82,12 +83,13 @@ class RIRNetworkTable(NetBoxTable):
             "id",
             "handle",
             "net_name",
+            "net_type",
             "organization",
             "aggregate",
             "prefix",
             "last_synced",
         )
-        default_columns = ("handle", "net_name", "organization", "aggregate", "prefix", "last_synced")
+        default_columns = ("handle", "net_name", "net_type", "organization", "aggregate", "prefix", "last_synced")
 
 
 class RIRSyncLogTable(NetBoxTable):

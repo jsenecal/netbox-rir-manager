@@ -18,11 +18,14 @@ class RIRUserKey(NetBoxModel):
         "netbox_rir_manager.RIRConfig",
         on_delete=models.CASCADE,
         related_name="user_keys",
+        verbose_name="RIR config",
     )
-    api_key = EncryptedCharField(max_length=512)
+    api_key = EncryptedCharField(max_length=512, verbose_name="API key")
 
     class Meta:
         ordering = ["user", "rir_config"]
+        verbose_name = "RIR user key"
+        verbose_name_plural = "RIR user keys"
         constraints = [
             models.UniqueConstraint(fields=["user", "rir_config"], name="unique_user_rir_config"),
         ]
