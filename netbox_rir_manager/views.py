@@ -324,7 +324,8 @@ class RIRConfigSyncView(LoginRequiredMixin, View):
             user_id=request.user.pk,
         )
         messages.success(request, f"Sync job queued for {rir_config.name}.")
-        return redirect(rir_config.get_absolute_url())
+        return_url = request.GET.get("return_url") or request.POST.get("return_url")
+        return redirect(return_url or rir_config.get_absolute_url())
 
 
 class RIRTicketRefreshView(LoginRequiredMixin, View):

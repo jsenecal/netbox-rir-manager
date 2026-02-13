@@ -13,6 +13,14 @@ from netbox_rir_manager.models import (
     RIRUserKey,
 )
 
+RIRCONFIG_SYNC_BUTTON = """
+{% load helpers %}
+<button class="btn btn-sm btn-info" type="submit" title="Sync" formmethod="post"
+  formaction="{% url 'plugins:netbox_rir_manager:rirconfig_sync' record.pk %}?return_url={{ request.get_full_path|urlencode }}">
+    <i class="mdi mdi-sync"></i>
+</button>
+"""  # noqa: E501
+
 
 class RIRConfigTable(NetBoxTable):
     name = tables.Column(linkify=True)
@@ -21,14 +29,7 @@ class RIRConfigTable(NetBoxTable):
     last_sync = columns.DateTimeColumn()
     actions = columns.ActionsColumn(
         actions=("edit", "delete", "changelog"),
-        extra_buttons=(
-            '<form method="post"'
-            ' action="{% url \'plugins:netbox_rir_manager:rirconfig_sync\' record.pk %}"'
-            ' class="d-inline">'
-            "{% csrf_token %}"
-            '<button type="submit" class="btn btn-sm btn-info" title="Sync">'
-            '<i class="mdi mdi-sync"></i></button></form>'
-        ),
+        extra_buttons=RIRCONFIG_SYNC_BUTTON,
     )
 
     class Meta(NetBoxTable.Meta):

@@ -1,7 +1,7 @@
 {% if has_rir_config %}
 <form method="post" action="{% url 'plugins:netbox_rir_manager:aggregate_sync' object.pk %}" class="d-inline">
     {% csrf_token %}
-    <button type="submit" class="btn btn-sm btn-primary" title="Sync this aggregate from ARIN">
+    <button type="submit" class="btn btn-sm btn-info" title="Sync this aggregate from ARIN">
         <i class="mdi mdi-sync"></i> Sync from ARIN
     </button>
 </form>
