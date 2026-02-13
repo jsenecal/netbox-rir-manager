@@ -159,118 +159,92 @@ class ARINBackend(RIRBackend):
     # Internal helpers to normalise pyregrws models to plain dicts
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Internal helpers to normalise pyregrws models to plain dicts
+    #
+    # Each method starts from _safe_serialize (the full pydantic .dict()
+    # round-tripped through JSON) and then flattens/normalises nested
+    # structures.  This means new fields added to pyregrws are
+    # automatically present in the dict without manual mapping.
+    # ------------------------------------------------------------------
+
     @staticmethod
-    def _country_code(iso3166_1: Any) -> str:
-        """Extract two-letter country code from an Iso31661 object."""
-        if iso3166_1 is None:
+    def _flatten_street(lines: list | None) -> str:
+        if not lines:
             return ""
-        return getattr(iso3166_1, "code2", "") or ""
+        return "\n".join(entry.get("line", "") for entry in lines if entry.get("line"))
+
+    @staticmethod
+    def _flatten_phone(phones: list | None) -> str:
+        if not phones:
+            return ""
+        p = phones[0]
+        if isinstance(p, str):
+            return p
+        number = p.get("number", "") or ""
+        extension = p.get("extension") or ""
+        return f"{number}x{extension}" if extension else number
+
+    @staticmethod
+    def _flatten_email(emails: list | None) -> str:
+        if not emails:
+            return ""
+        return str(emails[0])
+
+    @staticmethod
+    def _flatten_country(iso3166_1: dict | None) -> str:
+        if not iso3166_1:
+            return ""
+        return iso3166_1.get("code2", "") or ""
 
     def _poc_to_dict(self, poc: Any) -> dict[str, Any]:
-        email = ""
-        if hasattr(poc, "emails") and poc.emails:
-            email = poc.emails[0] if isinstance(poc.emails[0], str) else getattr(poc.emails[0], "email", "")
-        phone = ""
-        if hasattr(poc, "phones") and poc.phones:
-            phone_obj = poc.phones[0]
-            if isinstance(phone_obj, str):
-                phone = phone_obj
-            else:
-                number = getattr(phone_obj, "number", "") or ""
-                extension = getattr(phone_obj, "extension", "") or ""
-                phone = f"{number}x{extension}" if extension else number
-        return {
-            "handle": poc.handle,
-            "contact_type": poc.contact_type,
-            "first_name": getattr(poc, "first_name", "") or "",
-            "last_name": poc.last_name or "",
-            "company_name": getattr(poc, "company_name", "") or "",
-            "email": email,
-            "phone": phone,
-            "city": getattr(poc, "city", "") or "",
-            "postal_code": getattr(poc, "postal_code", "") or "",
-            "country": self._country_code(getattr(poc, "iso3166_1", None)),
-            "raw_data": self._safe_serialize(poc),
-        }
+        data = self._safe_serialize(poc)
+        data["email"] = self._flatten_email(data.get("emails"))
+        data["phone"] = self._flatten_phone(data.get("phones"))
+        data["street_address"] = self._flatten_street(data.get("street_address"))
+        data["state_province"] = data.get("iso3166_2", "") or ""
+        data["country"] = self._flatten_country(data.get("iso3166_1"))
+        data["raw_data"] = data.copy()
+        return data
 
     def _org_to_dict(self, org: Any) -> dict[str, Any]:
-        street = ""
-        if hasattr(org, "street_address") and org.street_address:
-            street = "\n".join(line.line for line in org.street_address if hasattr(line, "line") and line.line)
-        poc_links = []
-        if hasattr(org, "poc_links") and org.poc_links:
-            for link in org.poc_links:
-                poc_links.append(
-                    {
-                        "handle": link.handle,
-                        "function": getattr(link, "function", ""),
-                    }
-                )
-        return {
-            "handle": org.handle,
-            "name": org.org_name or "",
-            "street_address": street,
-            "city": getattr(org, "city", "") or "",
-            "state_province": getattr(org, "iso3166_2", "") or "",
-            "postal_code": getattr(org, "postal_code", "") or "",
-            "country": self._country_code(getattr(org, "iso3166_1", None)),
-            "poc_links": poc_links,
-            "raw_data": self._safe_serialize(org),
-        }
+        data = self._safe_serialize(org)
+        data["name"] = data.get("org_name", "") or ""
+        data["street_address"] = self._flatten_street(data.get("street_address"))
+        data["state_province"] = data.get("iso3166_2", "") or ""
+        data["country"] = self._flatten_country(data.get("iso3166_1"))
+        data["raw_data"] = data.copy()
+        return data
 
     def _net_to_dict(self, net: Any) -> dict[str, Any]:
-        net_blocks: list[dict[str, Any]] = []
-        if hasattr(net, "net_blocks") and net.net_blocks:
-            for block in net.net_blocks:
-                net_blocks.append(
-                    {
-                        "start_address": str(getattr(block, "start_address", "")),
-                        "end_address": str(getattr(block, "end_address", "")),
-                        "cidr_length": getattr(block, "cidr_length", None),
-                        "type": getattr(block, "type", ""),
-                    }
-                )
-        # Extract net_type from the first net block's description (e.g. "Direct Allocation")
-        net_type = ""
-        if net_blocks:
-            raw_blocks = (self._safe_serialize(net) or {}).get("net_blocks", [])
-            if raw_blocks:
-                net_type = raw_blocks[0].get("description", "")
-
-        return {
-            "handle": net.handle,
-            "net_name": net.net_name or "",
-            "net_type": net_type,
-            "version": getattr(net, "version", None),
-            "org_handle": getattr(net, "org_handle", "") or "",
-            "parent_net_handle": getattr(net, "parent_net_handle", "") or "",
-            "net_blocks": net_blocks,
-            "raw_data": self._safe_serialize(net),
-        }
+        data = self._safe_serialize(net)
+        # Extract net_type from the first net block's description
+        net_blocks = data.get("net_blocks") or []
+        data["net_type"] = net_blocks[0].get("description", "") if net_blocks else ""
+        data["raw_data"] = data.copy()
+        return data
 
     def _ticket_request_to_dict(self, ticket_request: Any) -> dict[str, Any]:
         result: dict[str, Any] = {}
         ticket = getattr(ticket_request, "ticket", None)
         if ticket:
-            result["ticket_number"] = getattr(ticket, "ticket_no", "")
-            result["ticket_status"] = getattr(ticket, "web_ticket_status", "")
-            result["ticket_type"] = getattr(ticket, "web_ticket_type", "")
-            result["ticket_resolution"] = getattr(ticket, "web_ticket_resolution", "")
-            result["created_date"] = getattr(ticket, "created_date", "")
-            result["resolved_date"] = getattr(ticket, "resolved_date", "")
-            result["raw_data"] = self._safe_serialize(ticket)
+            ticket_data = self._safe_serialize(ticket)
+            result["ticket_number"] = ticket_data.get("ticket_no", "")
+            result["ticket_status"] = ticket_data.get("web_ticket_status", "")
+            result["ticket_type"] = ticket_data.get("web_ticket_type", "")
+            result["ticket_resolution"] = ticket_data.get("web_ticket_resolution", "")
+            result["created_date"] = ticket_data.get("created_date", "")
+            result["resolved_date"] = ticket_data.get("resolved_date", "")
+            result["raw_data"] = ticket_data
         net = getattr(ticket_request, "net", None)
         if net:
             result["net"] = self._net_to_dict(net)
         return result
 
     def _customer_to_dict(self, customer: Any) -> dict[str, Any]:
-        return {
-            "handle": getattr(customer, "handle", ""),
-            "customer_name": getattr(customer, "customer_name", ""),
-            "parent_org_handle": getattr(customer, "parent_org_handle", ""),
-            "raw_data": self._safe_serialize(customer),
-        }
+        data = self._safe_serialize(customer)
+        data["raw_data"] = data.copy()
+        return data
 
     @staticmethod
     def _safe_serialize(obj: Any) -> dict:

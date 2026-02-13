@@ -40,6 +40,36 @@
                     <th scope="row">Phone</th>
                     <td>{{ object.phone|placeholder }}</td>
                 </tr>
+            </table>
+        </div>
+        <div class="card">
+            <h5 class="card-header">Address</h5>
+            <table class="table table-hover attr-table">
+                <tr>
+                    <th scope="row">Street Address</th>
+                    <td>{{ object.street_address|linebreaksbr|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">City</th>
+                    <td>{{ object.city|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">State/Province</th>
+                    <td>{{ object.state_province|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Postal Code</th>
+                    <td>{{ object.postal_code|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Country</th>
+                    <td>{{ object.country|placeholder }}</td>
+                </tr>
+            </table>
+        </div>
+        <div class="card">
+            <h5 class="card-header">Links</h5>
+            <table class="table table-hover attr-table">
                 <tr>
                     <th scope="row">Organization</th>
                     <td>{{ object.organization|linkify|placeholder }}</td>

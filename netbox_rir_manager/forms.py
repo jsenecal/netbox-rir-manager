@@ -68,6 +68,7 @@ class RIRContactForm(NetBoxModelForm):
     fieldsets = (
         FieldSet("rir_config", "handle", "contact_type", name="Contact"),
         FieldSet("first_name", "last_name", "company_name", "email", "phone", name="Details"),
+        FieldSet("street_address", "city", "state_province", "postal_code", "country", name="Address"),
         FieldSet("organization", "contact", name="Links"),
         FieldSet("tags", name="Tags"),
     )
@@ -83,6 +84,11 @@ class RIRContactForm(NetBoxModelForm):
             "company_name",
             "email",
             "phone",
+            "street_address",
+            "city",
+            "state_province",
+            "postal_code",
+            "country",
             "organization",
             "contact",
             "tags",

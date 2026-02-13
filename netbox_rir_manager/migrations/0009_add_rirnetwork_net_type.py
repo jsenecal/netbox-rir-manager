@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('netbox_rir_manager', '0008_update_rirconfig_objecttype_features'),
+        ("netbox_rir_manager", "0008_update_rirconfig_objecttype_features"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='rirnetwork',
-            name='net_type',
-            field=models.CharField(blank=True, default='', max_length=50),
+            model_name="rirnetwork",
+            name="net_type",
+            field=models.CharField(blank=True, default="", max_length=50),
         ),
     ]

@@ -34,7 +34,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "pyregrws>=0.2.0",
+    "pyregrws>=0.2.7",
     "tenacity>=8.0",
 ]
 

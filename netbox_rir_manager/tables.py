@@ -45,6 +45,9 @@ class RIRContactTable(NetBoxTable):
     contact_type = tables.Column()
     company_name = tables.Column()
     email = tables.Column()
+    phone = tables.Column()
+    city = tables.Column()
+    country = tables.Column()
     organization = tables.Column(linkify=True)
     contact = tables.Column(linkify=True)
     last_synced = columns.DateTimeColumn()
@@ -60,11 +63,14 @@ class RIRContactTable(NetBoxTable):
             "last_name",
             "company_name",
             "email",
+            "phone",
+            "city",
+            "country",
             "organization",
             "contact",
             "last_synced",
         )
-        default_columns = ("handle", "contact_type", "first_name", "last_name", "email", "organization", "contact")
+        default_columns = ("handle", "contact_type", "first_name", "last_name", "company_name", "organization")
 
 
 class RIRNetworkTable(NetBoxTable):

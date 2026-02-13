@@ -28,6 +28,7 @@ class RIRContactIndex(SearchIndex):
         ("handle", 100),
         ("last_name", 200),
         ("first_name", 200),
+        ("company_name", 300),
         ("email", 300),
     )
 
