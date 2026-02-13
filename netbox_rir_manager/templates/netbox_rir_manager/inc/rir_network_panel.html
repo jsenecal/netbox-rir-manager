@@ -10,6 +10,13 @@
                 <i class="mdi mdi-sync"></i> Sync from ARIN
             </button>
         </form>
+        {% elif show_sync_button and prefix_pk %}
+        <form method="post" action="{% url 'plugins:netbox_rir_manager:prefix_sync' prefix_pk %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-primary" title="Sync this prefix from ARIN">
+                <i class="mdi mdi-sync"></i> Sync from ARIN
+            </button>
+        </form>
         {% endif %}
     </h5>
     {% if rir_networks %}

@@ -31,10 +31,27 @@ class RIRPrefixExtension(PluginTemplateExtension):
 
     def right_page(self):
         obj = self.context["object"]
+        from ipam.models import Aggregate
+        from netbox_rir_manager.models import RIRConfig
+
         rir_networks = RIRNetwork.objects.filter(prefix=obj)
+
+        # Determine if sync button should be shown:
+        # Parent aggregate must have an active RIR config
+        show_sync_button = False
+        agg = Aggregate.objects.filter(
+            prefix__net_contains_or_equals=obj.prefix
+        ).first()
+        if agg and RIRConfig.objects.filter(rir=agg.rir, is_active=True).exists():
+            show_sync_button = True
+
         return self.render(
             "netbox_rir_manager/inc/rir_network_panel.html",
-            extra_context={"rir_networks": rir_networks},
+            extra_context={
+                "rir_networks": rir_networks,
+                "show_sync_button": show_sync_button,
+                "prefix_pk": obj.pk,
+            },
         )
 
     def buttons(self):

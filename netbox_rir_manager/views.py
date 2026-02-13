@@ -607,6 +607,91 @@ class AggregateSyncView(LoginRequiredMixin, View):
         return redirect(aggregate.get_absolute_url())
 
 
+# --- Prefix Sync View (from Prefix detail page) ---
+class PrefixSyncView(LoginRequiredMixin, View):
+    """Sync a single prefix from ARIN using mostSpecificNet."""
+
+    def post(self, request, pk):
+        from ipam.models import Aggregate, Prefix
+
+        prefix = get_object_or_404(Prefix, pk=pk)
+
+        # Find parent aggregate to determine RIR config
+        agg = Aggregate.objects.filter(
+            prefix__net_contains_or_equals=prefix.prefix
+        ).first()
+        if not agg:
+            messages.error(request, "No parent aggregate found for this prefix.")
+            return redirect(prefix.get_absolute_url())
+
+        rir_config = RIRConfig.objects.filter(rir=agg.rir, is_active=True).first()
+        if not rir_config:
+            messages.error(request, "No active RIR config found for this prefix's RIR.")
+            return redirect(prefix.get_absolute_url())
+
+        user_key = RIRUserKey.objects.filter(user=request.user, rir_config=rir_config).first()
+        if not user_key:
+            messages.error(request, "No API key configured for this RIR config.")
+            return redirect(prefix.get_absolute_url())
+
+        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+
+        network = ipaddress.ip_network(str(prefix.prefix), strict=False)
+        start_address = str(network.network_address)
+        end_address = str(network.broadcast_address)
+
+        net_data = backend.find_net(start_address, end_address)
+        if net_data is None:
+            messages.warning(request, "No matching network found at ARIN for this prefix.")
+            RIRSyncLog.objects.create(
+                rir_config=rir_config,
+                operation="sync",
+                object_type="network",
+                object_handle=str(prefix.prefix),
+                status="skipped",
+                message=f"No ARIN network found for {prefix.prefix}",
+            )
+            return redirect(prefix.get_absolute_url())
+
+        # Check if this is actually a child net (not the parent aggregate's net)
+        parent_network = RIRNetwork.objects.filter(aggregate=agg).first()
+        if parent_network and net_data["handle"] == parent_network.handle:
+            messages.info(request, "No separate reassignment found at ARIN -- this prefix is covered by the parent allocation.")
+            return redirect(prefix.get_absolute_url())
+
+        org = None
+        org_handle = net_data.get("org_handle")
+        if org_handle:
+            org = RIROrganization.objects.filter(handle=org_handle).first()
+
+        net, created = RIRNetwork.objects.update_or_create(
+            handle=net_data["handle"],
+            defaults={
+                "rir_config": rir_config,
+                "net_name": net_data.get("net_name") or "",
+                "net_type": net_data.get("net_type") or "",
+                "organization": org,
+                "prefix": prefix,
+                "raw_data": net_data,
+                "last_synced": timezone.now(),
+                "synced_by": user_key,
+            },
+        )
+
+        RIRSyncLog.objects.create(
+            rir_config=rir_config,
+            operation="sync",
+            object_type="network",
+            object_handle=net_data["handle"],
+            status="success",
+            message=f"{'Created' if created else 'Updated'} network {net_data['handle']} for prefix {prefix.prefix}",
+        )
+
+        action = "Created" if created else "Updated"
+        messages.success(request, f"{action} RIR network {net.handle} from ARIN.")
+        return redirect(prefix.get_absolute_url())
+
+
 # --- Prefix Reassign View (from Prefix detail page) ---
 class PrefixReassignView(LoginRequiredMixin, View):
     """Reassign a prefix at ARIN from the Prefix detail page."""

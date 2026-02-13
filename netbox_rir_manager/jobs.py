@@ -161,8 +161,8 @@ def _sync_contacts(
 
 
 def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUserKey | None = None) -> list[RIRSyncLog]:
-    """Sync networks by matching NetBox IPAM Aggregates against ARIN."""
-    from ipam.models import Aggregate
+    """Sync networks by matching NetBox Aggregates and their child Prefixes against ARIN."""
+    from ipam.models import Aggregate, Prefix
 
     logs: list[RIRSyncLog] = []
 
@@ -182,12 +182,12 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUse
         if org_handle:
             org = RIROrganization.objects.filter(handle=org_handle).first()
 
-        net, created = RIRNetwork.objects.update_or_create(
+        parent_net, created = RIRNetwork.objects.update_or_create(
             handle=net_data["handle"],
             defaults={
                 "rir_config": rir_config,
-                "net_name": net_data.get("net_name", ""),
-                "net_type": net_data.get("net_type", ""),
+                "net_name": net_data.get("net_name") or "",
+                "net_type": net_data.get("net_type") or "",
                 "organization": org,
                 "aggregate": agg,
                 "raw_data": net_data,
@@ -205,6 +205,50 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUse
             message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
         )
         logs.append(log)
+
+        # Sync child prefixes: query ARIN for each prefix under this aggregate
+        prefixes = Prefix.objects.filter(prefix__net_contained=agg.prefix)
+        for pfx in prefixes:
+            pfx_network = pfx.prefix
+            pfx_start = str(pfx_network.network)
+            pfx_end = str(pfx_network.broadcast)
+
+            pfx_net_data = backend.find_net(pfx_start, pfx_end)
+            if pfx_net_data is None:
+                continue
+
+            # Skip if ARIN returned the parent net (no separate reassignment)
+            if pfx_net_data["handle"] == parent_net.handle:
+                continue
+
+            pfx_org = None
+            pfx_org_handle = pfx_net_data.get("org_handle")
+            if pfx_org_handle:
+                pfx_org = RIROrganization.objects.filter(handle=pfx_org_handle).first()
+
+            _net, pfx_created = RIRNetwork.objects.update_or_create(
+                handle=pfx_net_data["handle"],
+                defaults={
+                    "rir_config": rir_config,
+                    "net_name": pfx_net_data.get("net_name") or "",
+                    "net_type": pfx_net_data.get("net_type") or "",
+                    "organization": pfx_org,
+                    "prefix": pfx,
+                    "raw_data": pfx_net_data,
+                    "last_synced": timezone.now(),
+                    "synced_by": user_key,
+                },
+            )
+
+            pfx_log = RIRSyncLog.objects.create(
+                rir_config=rir_config,
+                operation="sync",
+                object_type="network",
+                object_handle=pfx_net_data["handle"],
+                status="success",
+                message=f"{'Created' if pfx_created else 'Updated'} network {pfx_net_data['handle']} for prefix {pfx.prefix}",
+            )
+            logs.append(pfx_log)
 
     return logs
 

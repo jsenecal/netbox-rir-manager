@@ -121,6 +121,7 @@ urlpatterns = [
     ),
     # Aggregate/Prefix action views (used from NetBox detail pages)
     path("aggregates/<int:pk>/sync/", views.AggregateSyncView.as_view(), name="aggregate_sync"),
+    path("prefixes/<int:pk>/sync/", views.PrefixSyncView.as_view(), name="prefix_sync"),
     path("prefixes/<int:pk>/reassign/", views.PrefixReassignView.as_view(), name="prefix_reassign"),
     # Site address resolve
     path("sites/<int:pk>/resolve-address/", views.SiteAddressResolveView.as_view(), name="site_resolve_address"),
