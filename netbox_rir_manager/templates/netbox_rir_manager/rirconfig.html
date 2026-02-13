@@ -2,6 +2,15 @@
 {% load helpers %}
 {% load plugins %}
 
+{% block extra_controls %}
+<form method="post" action="{% url 'plugins:netbox_rir_manager:rirconfig_sync' object.pk %}" class="d-inline">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary">
+        <i class="mdi mdi-sync" aria-hidden="true"></i> Sync Now
+    </button>
+</form>
+{% endblock extra_controls %}
+
 {% block content %}
 <div class="row mb-3">
     <div class="col col-md-6">
@@ -38,20 +47,6 @@
     </div>
     <div class="col col-md-6">
         {% include 'inc/panels/tags.html' %}
-        <div class="card">
-            <h5 class="card-header">Sync</h5>
-            <div class="card-body">
-                <form method="post" action="{% url 'plugins:netbox_rir_manager:rirconfig_sync' object.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-primary">
-                        <i class="mdi mdi-sync"></i> Sync Now
-                    </button>
-                </form>
-                {% if object.last_sync %}
-                <p class="mt-2 text-muted">Last sync: {{ object.last_sync }}</p>
-                {% endif %}
-            </div>
-        </div>
         {% plugin_right_page object %}
     </div>
 </div>

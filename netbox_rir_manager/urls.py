@@ -7,6 +7,7 @@ from netbox_rir_manager.models import (
     RIRContact,
     RIRNetwork,
     RIROrganization,
+    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -73,6 +74,18 @@ urlpatterns = [
     path("networks/<int:pk>/reallocate/", views.RIRNetworkReallocateView.as_view(), name="rirnetwork_reallocate"),
     path("networks/<int:pk>/remove/", views.RIRNetworkRemoveView.as_view(), name="rirnetwork_remove"),
     path("networks/<int:pk>/delete-arin/", views.RIRNetworkDeleteARINView.as_view(), name="rirnetwork_delete_arin"),
+    # RIRSiteAddress
+    path("site-addresses/", views.RIRSiteAddressListView.as_view(), name="rirsiteaddress_list"),
+    path("site-addresses/add/", views.RIRSiteAddressEditView.as_view(), name="rirsiteaddress_add"),
+    path("site-addresses/<int:pk>/", views.RIRSiteAddressView.as_view(), name="rirsiteaddress"),
+    path("site-addresses/<int:pk>/edit/", views.RIRSiteAddressEditView.as_view(), name="rirsiteaddress_edit"),
+    path("site-addresses/<int:pk>/delete/", views.RIRSiteAddressDeleteView.as_view(), name="rirsiteaddress_delete"),
+    path(
+        "site-addresses/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="rirsiteaddress_changelog",
+        kwargs={"model": RIRSiteAddress},
+    ),
     # RIRSyncLog
     path("sync-logs/", views.RIRSyncLogListView.as_view(), name="rirsynclog_list"),
     path("sync-logs/<int:pk>/", views.RIRSyncLogView.as_view(), name="rirsynclog"),
@@ -106,4 +119,9 @@ urlpatterns = [
         name="riruserkey_changelog",
         kwargs={"model": RIRUserKey},
     ),
+    # Aggregate/Prefix action views (used from NetBox detail pages)
+    path("aggregates/<int:pk>/sync/", views.AggregateSyncView.as_view(), name="aggregate_sync"),
+    path("prefixes/<int:pk>/reassign/", views.PrefixReassignView.as_view(), name="prefix_reassign"),
+    # Site address resolve
+    path("sites/<int:pk>/resolve-address/", views.SiteAddressResolveView.as_view(), name="site_resolve_address"),
 ]

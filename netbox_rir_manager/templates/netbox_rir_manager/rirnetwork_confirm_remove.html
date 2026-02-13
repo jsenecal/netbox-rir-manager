@@ -1,0 +1,25 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block title %}Remove Network {{ object.handle }} from ARIN{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col col-md-6">
+        <div class="card border-warning">
+            <h5 class="card-header bg-warning text-dark">Confirm Remove</h5>
+            <div class="card-body">
+                <p>Are you sure you want to remove network <strong>{{ object.handle }}</strong> ({{ object.net_name }}) from ARIN?</p>
+                <p class="text-muted">This will remove the network reassignment/reallocation at ARIN. The record will remain in NetBox.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="text-end">
+                        <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-warning">Remove from ARIN</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

@@ -1,0 +1,5 @@
+{% if can_reassign %}
+<a href="{% url 'plugins:netbox_rir_manager:prefix_reassign' object.pk %}" class="btn btn-primary" title="Reassign this prefix at ARIN">
+    <i class="mdi mdi-swap-horizontal"></i> Reassign at ARIN
+</a>
+{% endif %}

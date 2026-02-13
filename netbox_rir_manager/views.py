@@ -1,3 +1,5 @@
+import ipaddress
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,6 +14,7 @@ from netbox_rir_manager.filtersets import (
     RIRContactFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
+    RIRSiteAddressFilterSet,
     RIRSyncLogFilterSet,
     RIRTicketFilterSet,
     RIRUserKeyFilterSet,
@@ -27,6 +30,7 @@ from netbox_rir_manager.forms import (
     RIRNetworkReassignForm,
     RIROrganizationFilterForm,
     RIROrganizationForm,
+    RIRSiteAddressForm,
     RIRTicketFilterForm,
     RIRUserKeyFilterForm,
     RIRUserKeyForm,
@@ -36,6 +40,7 @@ from netbox_rir_manager.models import (
     RIRContact,
     RIRNetwork,
     RIROrganization,
+    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -45,6 +50,7 @@ from netbox_rir_manager.tables import (
     RIRContactTable,
     RIRNetworkTable,
     RIROrganizationTable,
+    RIRSiteAddressTable,
     RIRSyncLogTable,
     RIRTicketTable,
     RIRUserKeyTable,
@@ -133,6 +139,26 @@ class RIRNetworkEditView(generic.ObjectEditView):
 
 class RIRNetworkDeleteView(generic.ObjectDeleteView):
     queryset = RIRNetwork.objects.all()
+
+
+# --- RIRSiteAddress Views ---
+class RIRSiteAddressListView(generic.ObjectListView):
+    queryset = RIRSiteAddress.objects.all()
+    table = RIRSiteAddressTable
+    filterset = RIRSiteAddressFilterSet
+
+
+class RIRSiteAddressView(generic.ObjectView):
+    queryset = RIRSiteAddress.objects.all()
+
+
+class RIRSiteAddressEditView(generic.ObjectEditView):
+    queryset = RIRSiteAddress.objects.all()
+    form = RIRSiteAddressForm
+
+
+class RIRSiteAddressDeleteView(generic.ObjectDeleteView):
+    queryset = RIRSiteAddress.objects.all()
 
 
 # --- RIRSyncLog Views ---
@@ -404,7 +430,15 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
 
 
 class RIRNetworkRemoveView(LoginRequiredMixin, View):
-    """Remove a reassigned/reallocated network from ARIN."""
+    """Remove a reassigned/reallocated network from ARIN (with confirmation page)."""
+
+    def get(self, request, pk):
+        network = get_object_or_404(RIRNetwork, pk=pk)
+        return render(
+            request,
+            "netbox_rir_manager/rirnetwork_confirm_remove.html",
+            {"object": network},
+        )
 
     def post(self, request, pk):
         network = get_object_or_404(RIRNetwork, pk=pk)
@@ -442,7 +476,15 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
 
 
 class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
-    """Delete a network at ARIN (creates a ticket)."""
+    """Delete a network at ARIN (creates a ticket, with confirmation page)."""
+
+    def get(self, request, pk):
+        network = get_object_or_404(RIRNetwork, pk=pk)
+        return render(
+            request,
+            "netbox_rir_manager/rirnetwork_confirm_delete_arin.html",
+            {"object": network},
+        )
 
     def post(self, request, pk):
         network = get_object_or_404(RIRNetwork, pk=pk)
@@ -488,3 +530,221 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
         )
         messages.success(request, f"Delete request submitted. Ticket: {ticket.ticket_number}")
         return redirect(ticket.get_absolute_url())
+
+
+# --- Aggregate Sync View (from Aggregate detail page) ---
+class AggregateSyncView(LoginRequiredMixin, View):
+    """Sync a single aggregate from ARIN."""
+
+    def post(self, request, pk):
+        from ipam.models import Aggregate
+
+        aggregate = get_object_or_404(Aggregate, pk=pk)
+
+        # Find the RIR config for this aggregate's RIR
+        rir_config = RIRConfig.objects.filter(rir=aggregate.rir, is_active=True).first()
+        if not rir_config:
+            messages.error(request, "No active RIR config found for this aggregate's RIR.")
+            return redirect(aggregate.get_absolute_url())
+
+        # Get user's API key
+        user_key = RIRUserKey.objects.filter(user=request.user, rir_config=rir_config).first()
+        if not user_key:
+            messages.error(request, "No API key configured for this RIR config.")
+            return redirect(aggregate.get_absolute_url())
+
+        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+
+        # Sync this specific aggregate
+        network = aggregate.prefix
+        start_address = str(network.network)
+        end_address = str(network.broadcast)
+
+        net_data = backend.find_net(start_address, end_address)
+        if net_data is None:
+            messages.warning(request, "No matching network found at ARIN for this aggregate.")
+            RIRSyncLog.objects.create(
+                rir_config=rir_config,
+                operation="sync",
+                object_type="network",
+                object_handle=str(aggregate.prefix),
+                status="skipped",
+                message=f"No ARIN network found for {aggregate.prefix}",
+            )
+            return redirect(aggregate.get_absolute_url())
+
+        # Try to find the org
+        org = None
+        org_handle = net_data.get("org_handle")
+        if org_handle:
+            org = RIROrganization.objects.filter(handle=org_handle).first()
+
+        net, created = RIRNetwork.objects.update_or_create(
+            handle=net_data["handle"],
+            defaults={
+                "rir_config": rir_config,
+                "net_name": net_data.get("net_name", ""),
+                "net_type": net_data.get("net_type", ""),
+                "organization": org,
+                "aggregate": aggregate,
+                "raw_data": net_data,
+                "last_synced": timezone.now(),
+                "synced_by": user_key,
+            },
+        )
+
+        RIRSyncLog.objects.create(
+            rir_config=rir_config,
+            operation="sync",
+            object_type="network",
+            object_handle=net_data["handle"],
+            status="success",
+            message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
+        )
+
+        action = "Created" if created else "Updated"
+        messages.success(request, f"{action} RIR network {net.handle} from ARIN.")
+        return redirect(aggregate.get_absolute_url())
+
+
+# --- Prefix Reassign View (from Prefix detail page) ---
+class PrefixReassignView(LoginRequiredMixin, View):
+    """Reassign a prefix at ARIN from the Prefix detail page."""
+
+    def get(self, request, pk):
+        from ipam.models import Aggregate, Prefix
+
+        prefix = get_object_or_404(Prefix, pk=pk)
+
+        # Find parent RIRNetwork
+        agg = Aggregate.objects.filter(
+            prefix__net_contains_or_equals=prefix.prefix
+        ).first()
+        parent_network = RIRNetwork.objects.filter(aggregate=agg).first() if agg else None
+
+        # Pre-fill form
+        network = ipaddress.ip_network(str(prefix.prefix), strict=False)
+        initial = {
+            "start_address": str(network.network_address),
+            "end_address": str(network.broadcast_address),
+        }
+
+        # Pre-fill from tenant
+        if prefix.tenant:
+            initial["customer_name"] = prefix.tenant.name
+
+            # Check if tenant has a linked RIROrganization
+            rir_org = RIROrganization.objects.filter(tenant=prefix.tenant).first()
+            if rir_org:
+                initial["reassignment_type"] = "detailed"
+                initial["org_handle"] = rir_org.handle
+
+        # Pre-fill from site address
+        site = getattr(prefix, "_site", None) or getattr(prefix, "site", None)
+        if site is None:
+            from dcim.models import Site
+
+            scope = getattr(prefix, "scope", None)
+            if isinstance(scope, Site):
+                site = scope
+
+        if site:
+            try:
+                site_address = site.rir_address
+                initial["street_address"] = site_address.street_address
+                initial["city"] = site_address.city
+                initial["state_province"] = site_address.state_province
+                initial["postal_code"] = site_address.postal_code
+                initial["country"] = site_address.country
+            except RIRSiteAddress.DoesNotExist:
+                pass
+
+        # Generate net_name from tenant + prefix
+        if prefix.tenant:
+            initial["net_name"] = f"{prefix.tenant.name}-{prefix.prefix}"
+
+        form = RIRNetworkReassignForm(initial=initial)
+
+        return render(
+            request,
+            "netbox_rir_manager/prefix_reassign.html",
+            {
+                "object": prefix,
+                "form": form,
+                "parent_network": parent_network,
+            },
+        )
+
+    def post(self, request, pk):
+        from ipam.models import Aggregate, Prefix
+
+        prefix = get_object_or_404(Prefix, pk=pk)
+        form = RIRNetworkReassignForm(request.POST)
+
+        # Find parent RIRNetwork
+        agg = Aggregate.objects.filter(
+            prefix__net_contains_or_equals=prefix.prefix
+        ).first()
+        parent_network = RIRNetwork.objects.filter(aggregate=agg).first() if agg else None
+
+        if not form.is_valid():
+            return render(
+                request,
+                "netbox_rir_manager/prefix_reassign.html",
+                {
+                    "object": prefix,
+                    "form": form,
+                    "parent_network": parent_network,
+                },
+            )
+
+        if not parent_network:
+            messages.error(request, "No parent RIR network found for this prefix.")
+            return redirect(prefix.get_absolute_url())
+
+        user_key = RIRUserKey.objects.filter(
+            user=request.user,
+            rir_config=parent_network.rir_config,
+        ).first()
+        if not user_key:
+            messages.error(request, "No API key configured for this RIR config.")
+            return redirect(prefix.get_absolute_url())
+
+        # Enqueue as background job
+        from netbox_rir_manager.jobs import ReassignJob
+
+        ReassignJob.enqueue(
+            instance=parent_network.rir_config,
+            user=request.user,
+            prefix_id=prefix.pk,
+            user_key_id=user_key.pk,
+        )
+
+        messages.success(request, f"Reassignment job queued for prefix {prefix.prefix}.")
+        return redirect(prefix.get_absolute_url())
+
+
+# --- Site Address Resolve View ---
+class SiteAddressResolveView(LoginRequiredMixin, View):
+    """Resolve a Site's address via geocoding."""
+
+    def post(self, request, pk):
+        from dcim.models import Site
+
+        from netbox_rir_manager.services.geocoding import resolve_site_address
+
+        site = get_object_or_404(Site, pk=pk)
+
+        # Delete existing address if any (force re-resolve)
+        RIRSiteAddress.objects.filter(site=site).delete()
+
+        address = resolve_site_address(site)
+        if address:
+            messages.success(
+                request,
+                f"Address resolved: {address.city}, {address.state_province}, {address.country}",
+            )
+        else:
+            messages.warning(request, "Could not resolve address for this site. Add coordinates or a physical address.")
+
+        return redirect(site.get_absolute_url())

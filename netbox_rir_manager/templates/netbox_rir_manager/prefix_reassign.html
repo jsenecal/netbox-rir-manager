@@ -1,0 +1,31 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load form_helpers %}
+
+{% block title %}Reassign Prefix {{ object.prefix }} at ARIN{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col col-md-8">
+        <div class="card">
+            <h5 class="card-header">Reassign Prefix {{ object.prefix }}</h5>
+            <div class="card-body">
+                {% if parent_network %}
+                <p class="text-muted">
+                    Parent network: <a href="{{ parent_network.get_absolute_url }}">{{ parent_network.handle }}</a>
+                    ({{ parent_network.net_name }})
+                </p>
+                {% endif %}
+                <form method="post">
+                    {% csrf_token %}
+                    {% render_form form %}
+                    <div class="text-end">
+                        <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Submit Reassignment</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

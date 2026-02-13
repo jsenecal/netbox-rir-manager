@@ -1,0 +1,25 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block title %}Delete Network {{ object.handle }} at ARIN{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col col-md-6">
+        <div class="card border-danger">
+            <h5 class="card-header bg-danger text-white">Confirm Delete at ARIN</h5>
+            <div class="card-body">
+                <p>Are you sure you want to submit a delete request for network <strong>{{ object.handle }}</strong> ({{ object.net_name }}) at ARIN?</p>
+                <p class="text-muted">This will create a ticket at ARIN to delete this network. This action may not be immediately reversible.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="text-end">
+                        <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-danger">Delete at ARIN</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

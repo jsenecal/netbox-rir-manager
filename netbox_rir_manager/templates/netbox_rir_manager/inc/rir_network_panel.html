@@ -1,8 +1,18 @@
 {% load helpers %}
 
-{% if rir_networks %}
 <div class="card">
-    <h5 class="card-header">RIR Networks</h5>
+    <h5 class="card-header d-flex justify-content-between align-items-center">
+        RIR Networks
+        {% if show_sync_button and aggregate_pk %}
+        <form method="post" action="{% url 'plugins:netbox_rir_manager:aggregate_sync' aggregate_pk %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-primary" title="Sync this aggregate from ARIN">
+                <i class="mdi mdi-sync"></i> Sync from ARIN
+            </button>
+        </form>
+        {% endif %}
+    </h5>
+    {% if rir_networks %}
     <table class="table table-hover attr-table">
         <thead>
             <tr>
@@ -29,5 +39,9 @@
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div class="card-body text-muted">
+        No RIR networks linked.{% if show_sync_button %} Click "Sync from ARIN" to fetch.{% endif %}
+    </div>
+    {% endif %}
 </div>
-{% endif %}

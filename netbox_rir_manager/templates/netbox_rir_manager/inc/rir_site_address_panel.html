@@ -1,0 +1,62 @@
+{% load helpers %}
+
+<div class="card">
+    <h5 class="card-header d-flex justify-content-between align-items-center">
+        RIR Address
+        <span>
+            {% if site_address %}
+                <a href="{{ site_address.get_absolute_url }}edit/" class="btn btn-sm btn-outline-secondary" title="Edit address">
+                    <i class="mdi mdi-pencil"></i>
+                </a>
+            {% endif %}
+            <form method="post" action="{% url 'plugins:netbox_rir_manager:site_resolve_address' object.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-primary" title="Resolve address via geocoding">
+                    <i class="mdi mdi-map-marker"></i> Resolve
+                </button>
+            </form>
+        </span>
+    </h5>
+    {% if site_address %}
+    <table class="table table-hover attr-table">
+        <tr>
+            <th scope="row">Street Address</th>
+            <td>{{ site_address.street_address|placeholder }}</td>
+        </tr>
+        <tr>
+            <th scope="row">City</th>
+            <td>{{ site_address.city|placeholder }}</td>
+        </tr>
+        <tr>
+            <th scope="row">State/Province</th>
+            <td>{{ site_address.state_province|placeholder }}</td>
+        </tr>
+        <tr>
+            <th scope="row">Postal Code</th>
+            <td>{{ site_address.postal_code|placeholder }}</td>
+        </tr>
+        <tr>
+            <th scope="row">Country</th>
+            <td>{{ site_address.country|placeholder }}</td>
+        </tr>
+        <tr>
+            <th scope="row">Auto Resolved</th>
+            <td>
+                {% if site_address.auto_resolved %}
+                    <span class="badge text-bg-info">Geocoded</span>
+                {% else %}
+                    <span class="badge text-bg-secondary">Manual</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">Last Resolved</th>
+            <td>{{ site_address.last_resolved|placeholder }}</td>
+        </tr>
+    </table>
+    {% else %}
+    <div class="card-body text-muted">
+        No structured address resolved. Click "Resolve" to geocode from site coordinates or physical address.
+    </div>
+    {% endif %}
+</div>
