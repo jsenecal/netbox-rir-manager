@@ -63,7 +63,7 @@ class RIRContact(NetBoxModel):
     handle = models.CharField(max_length=50, unique=True)
     contact_type = models.CharField(max_length=20)
     first_name = models.CharField(max_length=100, blank=True, default="")
-    last_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100, blank=True, default="")
     company_name = models.CharField(max_length=255, blank=True, default="")
     email = models.EmailField(blank=True, default="")
     phone = models.CharField(max_length=50, blank=True, default="")
