@@ -9,6 +9,7 @@ from netbox_rir_manager.api.serializers import (
     NetworkReassignSerializer,
     RIRConfigSerializer,
     RIRContactSerializer,
+    RIRCustomerSerializer,
     RIRNetworkSerializer,
     RIROrganizationSerializer,
     RIRSiteAddressSerializer,
@@ -21,6 +22,7 @@ from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
     RIRConfigFilterSet,
     RIRContactFilterSet,
+    RIRCustomerFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
     RIRSiteAddressFilterSet,
@@ -31,6 +33,7 @@ from netbox_rir_manager.filtersets import (
 from netbox_rir_manager.models import (
     RIRConfig,
     RIRContact,
+    RIRCustomer,
     RIRNetwork,
     RIROrganization,
     RIRSiteAddress,
@@ -56,6 +59,12 @@ class RIRContactViewSet(NetBoxModelViewSet):
     queryset = RIRContact.objects.prefetch_related("tags")
     serializer_class = RIRContactSerializer
     filterset_class = RIRContactFilterSet
+
+
+class RIRCustomerViewSet(NetBoxModelViewSet):
+    queryset = RIRCustomer.objects.prefetch_related("tags")
+    serializer_class = RIRCustomerSerializer
+    filterset_class = RIRCustomerFilterSet
 
 
 class RIRNetworkViewSet(NetBoxModelViewSet):

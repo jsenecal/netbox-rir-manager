@@ -8,7 +8,7 @@ from django.utils import timezone
 from netbox.jobs import JobRunner, system_job
 
 from netbox_rir_manager.backends.arin import ARINBackend
-from netbox_rir_manager.models import RIRContact, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRContact, RIRCustomer, RIRNetwork, RIROrganization, RIRSyncLog
 
 if TYPE_CHECKING:
     from netbox_rir_manager.models import RIRConfig, RIRUserKey
@@ -486,6 +486,21 @@ class ReassignJob(JobRunner):
                 self.job.data["message"] = "Failed to create customer at ARIN"
                 self.job.save()
                 return
+
+            RIRCustomer.objects.create(
+                rir_config=rir_config,
+                handle=customer_result["handle"],
+                customer_name=tenant.name,
+                street_address=site_address.street_address,
+                city=site_address.city,
+                state_province=site_address.state_province,
+                postal_code=site_address.postal_code,
+                country=site_address.country,
+                network=parent_network,
+                tenant=tenant,
+                raw_data=customer_result,
+                created_date=timezone.now(),
+            )
 
             net_data = {
                 "customer_handle": customer_result["handle"],

@@ -12,6 +12,7 @@ from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
     RIRConfigFilterSet,
     RIRContactFilterSet,
+    RIRCustomerFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
     RIRSiteAddressFilterSet,
@@ -26,6 +27,7 @@ from netbox_rir_manager.forms import (
     RIRConfigImportForm,
     RIRContactFilterForm,
     RIRContactForm,
+    RIRCustomerFilterForm,
     RIRNetworkFilterForm,
     RIRNetworkForm,
     RIRNetworkReallocateForm,
@@ -40,6 +42,7 @@ from netbox_rir_manager.forms import (
 from netbox_rir_manager.models import (
     RIRConfig,
     RIRContact,
+    RIRCustomer,
     RIRNetwork,
     RIROrganization,
     RIRSiteAddress,
@@ -50,6 +53,7 @@ from netbox_rir_manager.models import (
 from netbox_rir_manager.tables import (
     RIRConfigTable,
     RIRContactTable,
+    RIRCustomerTable,
     RIRNetworkTable,
     RIROrganizationTable,
     RIRSiteAddressTable,
@@ -138,6 +142,22 @@ class RIRContactEditView(generic.ObjectEditView):
 
 class RIRContactDeleteView(generic.ObjectDeleteView):
     queryset = RIRContact.objects.all()
+
+
+# --- RIRCustomer Views ---
+class RIRCustomerListView(generic.ObjectListView):
+    queryset = RIRCustomer.objects.all()
+    table = RIRCustomerTable
+    filterset = RIRCustomerFilterSet
+    filterset_form = RIRCustomerFilterForm
+
+
+class RIRCustomerView(generic.ObjectView):
+    queryset = RIRCustomer.objects.all()
+
+
+class RIRCustomerDeleteView(generic.ObjectDeleteView):
+    queryset = RIRCustomer.objects.all()
 
 
 # --- RIRNetwork Views ---
@@ -325,6 +345,20 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
                     message="Failed to create customer",
                 )
                 return redirect(network.get_absolute_url())
+
+            RIRCustomer.objects.create(
+                rir_config=network.rir_config,
+                handle=customer_result["handle"],
+                customer_name=customer_data["customer_name"],
+                street_address=customer_data.get("street_address", ""),
+                city=customer_data.get("city", ""),
+                state_province=customer_data.get("state_province", ""),
+                postal_code=customer_data.get("postal_code", ""),
+                country=customer_data.get("country", ""),
+                network=network,
+                raw_data=customer_result,
+                created_date=timezone.now(),
+            )
 
         net_data = {
             "net_name": form.cleaned_data.get("net_name", ""),

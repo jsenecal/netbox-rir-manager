@@ -1,6 +1,14 @@
 from netbox.search import SearchIndex, register_search
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSiteAddress, RIRTicket
+from netbox_rir_manager.models import (
+    RIRConfig,
+    RIRContact,
+    RIRCustomer,
+    RIRNetwork,
+    RIROrganization,
+    RIRSiteAddress,
+    RIRTicket,
+)
 
 
 @register_search
@@ -18,6 +26,15 @@ class RIROrganizationIndex(SearchIndex):
     fields = (
         ("handle", 100),
         ("name", 200),
+    )
+
+
+@register_search
+class RIRCustomerIndex(SearchIndex):
+    model = RIRCustomer
+    fields = (
+        ("handle", 100),
+        ("customer_name", 200),
     )
 
 

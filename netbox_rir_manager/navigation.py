@@ -76,6 +76,11 @@ menu = PluginMenu(
                         ),
                     ),
                 ),
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:rircustomer_list",
+                    link_text="Customers",
+                    permissions=["netbox_rir_manager.view_rircustomer"],
+                ),
             ),
         ),
         (

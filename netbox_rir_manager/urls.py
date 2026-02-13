@@ -5,6 +5,7 @@ from netbox_rir_manager import views
 from netbox_rir_manager.models import (
     RIRConfig,
     RIRContact,
+    RIRCustomer,
     RIRNetwork,
     RIROrganization,
     RIRSiteAddress,
@@ -59,6 +60,16 @@ urlpatterns = [
         ObjectChangeLogView.as_view(),
         name="rircontact_changelog",
         kwargs={"model": RIRContact},
+    ),
+    # RIRCustomer
+    path("customers/", views.RIRCustomerListView.as_view(), name="rircustomer_list"),
+    path("customers/<int:pk>/", views.RIRCustomerView.as_view(), name="rircustomer"),
+    path("customers/<int:pk>/delete/", views.RIRCustomerDeleteView.as_view(), name="rircustomer_delete"),
+    path(
+        "customers/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="rircustomer_changelog",
+        kwargs={"model": RIRCustomer},
     ),
     # RIRNetwork
     path("networks/", views.RIRNetworkListView.as_view(), name="rirnetwork_list"),

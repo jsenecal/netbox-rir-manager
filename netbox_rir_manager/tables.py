@@ -4,6 +4,7 @@ from netbox.tables import NetBoxTable, columns
 from netbox_rir_manager.models import (
     RIRConfig,
     RIRContact,
+    RIRCustomer,
     RIRNetwork,
     RIROrganization,
     RIRSiteAddress,
@@ -73,6 +74,34 @@ class RIRContactTable(NetBoxTable):
             "last_synced",
         )
         default_columns = ("handle", "contact_type", "first_name", "last_name", "company_name", "organization")
+
+
+class RIRCustomerTable(NetBoxTable):
+    handle = tables.Column(linkify=True)
+    customer_name = tables.Column()
+    rir_config = tables.Column(linkify=True)
+    network = tables.Column(linkify=True)
+    tenant = tables.Column(linkify=True)
+    city = tables.Column()
+    country = tables.Column()
+    created_date = columns.DateTimeColumn()
+    actions = columns.ActionsColumn(actions=("delete", "changelog"))
+
+    class Meta(NetBoxTable.Meta):
+        model = RIRCustomer
+        fields = (
+            "pk",
+            "id",
+            "handle",
+            "customer_name",
+            "rir_config",
+            "network",
+            "tenant",
+            "city",
+            "country",
+            "created_date",
+        )
+        default_columns = ("handle", "customer_name", "network", "tenant", "city", "country", "created_date")
 
 
 class RIRNetworkTable(NetBoxTable):

@@ -1,5 +1,6 @@
 import django_filters
 from django.contrib.auth import get_user_model
+from django.db import models
 from ipam.models import RIR
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Contact, Tenant
@@ -7,6 +8,7 @@ from tenancy.models import Contact, Tenant
 from netbox_rir_manager.models import (
     RIRConfig,
     RIRContact,
+    RIRCustomer,
     RIRNetwork,
     RIROrganization,
     RIRSiteAddress,
@@ -38,6 +40,21 @@ class RIROrganizationFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(handle__icontains=value) | queryset.filter(name__icontains=value)
+
+
+class RIRCustomerFilterSet(NetBoxModelFilterSet):
+    rir_config_id = django_filters.ModelMultipleChoiceFilter(queryset=RIRConfig.objects.all(), label="RIR Config")
+    network_id = django_filters.ModelMultipleChoiceFilter(queryset=RIRNetwork.objects.all(), label="Network")
+    tenant_id = django_filters.ModelMultipleChoiceFilter(queryset=Tenant.objects.all(), label="Tenant")
+
+    class Meta:
+        model = RIRCustomer
+        fields = ("id", "handle", "customer_name", "rir_config_id", "network_id", "tenant_id")
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            models.Q(handle__icontains=value) | models.Q(customer_name__icontains=value)
+        )
 
 
 class RIRContactFilterSet(NetBoxModelFilterSet):

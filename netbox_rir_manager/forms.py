@@ -10,6 +10,7 @@ from utilities.forms.widgets import BulkEditNullBooleanSelect
 from netbox_rir_manager.models import (
     RIRConfig,
     RIRContact,
+    RIRCustomer,
     RIRNetwork,
     RIROrganization,
     RIRSiteAddress,
@@ -136,6 +137,15 @@ class RIRContactFilterForm(NetBoxModelFilterSetForm):
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
     )
     contact_id = DynamicModelMultipleChoiceField(queryset=Contact.objects.all(), required=False, label="Contact")
+
+
+class RIRCustomerFilterForm(NetBoxModelFilterSetForm):
+    model = RIRCustomer
+    rir_config_id = DynamicModelMultipleChoiceField(
+        queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
+    )
+    network_id = DynamicModelMultipleChoiceField(queryset=RIRNetwork.objects.all(), required=False, label="Network")
+    tenant_id = DynamicModelMultipleChoiceField(queryset=Tenant.objects.all(), required=False, label="Tenant")
 
 
 class RIRNetworkForm(NetBoxModelForm):
