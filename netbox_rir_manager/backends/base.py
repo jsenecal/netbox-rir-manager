@@ -68,6 +68,11 @@ class RIRBackend(ABC):
         ...
 
     @abstractmethod
+    def get_customer(self, handle: str) -> dict[str, Any] | None:
+        """Retrieve customer details by handle."""
+        ...
+
+    @abstractmethod
     def create_customer(self, parent_net_handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
         """Create a customer under a parent NET for simple reassignment. Returns customer dict or None."""
         ...

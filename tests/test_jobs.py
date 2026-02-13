@@ -307,6 +307,78 @@ class TestRIRSyncJob:
         assert returned_net.handle == "NET-10-0-0-0-1"
 
 
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_network_with_customer_handle(self, mock_backend_class, rir_config, rir):
+        """When a network has a customer_handle, the customer is fetched and persisted."""
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.jobs import sync_rir_config
+        from netbox_rir_manager.models import RIRCustomer, RIRNetwork
+
+        Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = None
+        mock_backend.find_net.return_value = {
+            "handle": "NET-192-0-2-0-1",
+            "net_name": "CUSTOMER-NET",
+            "version": 4,
+            "customer_handle": "C07654321",
+            "org_handle": None,
+            "parent_net_handle": "",
+            "net_blocks": [],
+            "raw_data": {},
+        }
+        mock_backend.get_customer.return_value = {
+            "handle": "C07654321",
+            "customer_name": "Acme Corp",
+            "street_address": "123 Main St",
+            "city": "Anytown",
+            "state_province": "VA",
+            "postal_code": "12345",
+            "country": "US",
+            "registration_date": "2024-01-15",
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+
+        mock_backend.get_customer.assert_called_once_with("C07654321")
+        assert RIRCustomer.objects.filter(handle="C07654321").exists()
+        customer = RIRCustomer.objects.get(handle="C07654321")
+        assert customer.customer_name == "Acme Corp"
+        assert customer.city == "Anytown"
+        net = RIRNetwork.objects.get(handle="NET-192-0-2-0-1")
+        assert customer.network == net
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_network_without_customer_skips(self, mock_backend_class, rir_config, rir):
+        """Networks with org_handle (no customer_handle) should not attempt customer fetch."""
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.jobs import sync_rir_config
+
+        Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = None
+        mock_backend.find_net.return_value = {
+            "handle": "NET-192-0-2-0-1",
+            "net_name": "ORG-NET",
+            "version": 4,
+            "org_handle": "TESTORG-ARIN",
+            "parent_net_handle": "",
+            "net_blocks": [],
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+
+        mock_backend.get_customer.assert_not_called()
+
+
 @pytest.mark.django_db
 class TestSyncPrefixesJob:
     @patch("netbox_rir_manager.jobs.ARINBackend")
@@ -373,6 +445,60 @@ class TestSyncPrefixesJob:
         assert RIRNetwork.objects.filter(handle="NET-PARENT-20").count() == 1
         # Sync log for the child
         assert RIRSyncLog.objects.filter(object_handle="NET-CHILD-1").exists()
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_discovers_customer_for_child_prefix(self, mock_backend_class, rir_config, rir_user_key, rir):
+        """SyncPrefixesJob fetches and persists customers for child networks with customer_handle."""
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.jobs import SyncPrefixesJob
+        from netbox_rir_manager.models import RIRCustomer, RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/20", rir=rir)
+        parent_net = RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-PARENT-20",
+            net_name="PARENT-NET",
+            aggregate=agg,
+        )
+        Prefix.objects.create(prefix="10.0.1.0/24")
+
+        mock_backend = MagicMock()
+        mock_backend.find_net.return_value = {
+            "handle": "NET-CHILD-1",
+            "net_name": "CHILD-NET-1",
+            "version": 4,
+            "customer_handle": "C09999999",
+            "org_handle": None,
+            "parent_net_handle": "NET-PARENT-20",
+            "net_blocks": [],
+            "raw_data": {},
+        }
+        mock_backend.get_customer.return_value = {
+            "handle": "C09999999",
+            "customer_name": "Child Customer",
+            "street_address": "",
+            "city": "Springfield",
+            "state_province": "IL",
+            "postal_code": "62701",
+            "country": "US",
+            "registration_date": "2024-06-01",
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        runner = make_runner(SyncPrefixesJob)
+        runner.run(
+            aggregate_id=agg.pk,
+            parent_handle=parent_net.handle,
+            user_key_id=rir_user_key.pk,
+        )
+
+        mock_backend.get_customer.assert_called_once_with("C09999999")
+        assert RIRCustomer.objects.filter(handle="C09999999").exists()
+        customer = RIRCustomer.objects.get(handle="C09999999")
+        assert customer.customer_name == "Child Customer"
+        assert customer.network == RIRNetwork.objects.get(handle="NET-CHILD-1")
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_logs_progress(self, mock_backend_class, rir_config, rir_user_key, rir):

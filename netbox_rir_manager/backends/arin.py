@@ -146,6 +146,12 @@ class ARINBackend(RIRBackend):
             return None
         return self._ticket_request_to_dict(result)
 
+    def get_customer(self, handle: str) -> dict[str, Any] | None:
+        result = self._call_with_retry(self.api.customer.from_handle, handle)
+        if result is None or isinstance(result, Error):
+            return None
+        return self._customer_to_dict(result)
+
     def create_customer(self, parent_net_handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
         parent = self._call_with_retry(self.api.net.from_handle, parent_net_handle)
         if parent is None or isinstance(parent, Error):
@@ -243,6 +249,9 @@ class ARINBackend(RIRBackend):
 
     def _customer_to_dict(self, customer: Any) -> dict[str, Any]:
         data = self._safe_serialize(customer)
+        data["street_address"] = self._flatten_street(data.get("street_address"))
+        data["state_province"] = data.get("iso3166_2", "") or ""
+        data["country"] = self._flatten_country(data.get("iso3166_1"))
         data["raw_data"] = data.copy()
         return data
 

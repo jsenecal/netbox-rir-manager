@@ -859,6 +859,69 @@ def test_delete_network_none_on_delete(mock_api_class):
 
 
 # ------------------------------------------------------------------
+# get_customer tests
+# ------------------------------------------------------------------
+
+
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_get_customer_success(mock_api_class):
+    """get_customer should return a flattened customer dict."""
+    mock_api = MagicMock()
+    mock_api_class.return_value = mock_api
+
+    mock_customer = MagicMock()
+    mock_customer.dict.return_value = {
+        "handle": "C07654321",
+        "customer_name": "Acme Corp",
+        "street_address": [{"line": "123 Main St"}, {"line": "Suite 200"}],
+        "city": "Anytown",
+        "iso3166_2": "VA",
+        "postal_code": "12345",
+        "iso3166_1": {"code2": "US"},
+        "registration_date": "2024-01-15",
+    }
+    mock_api.customer.from_handle.return_value = mock_customer
+
+    backend = ARINBackend(api_key="test-key")
+    result = backend.get_customer("C07654321")
+
+    mock_api.customer.from_handle.assert_called_once_with("C07654321")
+    assert result is not None
+    assert result["handle"] == "C07654321"
+    assert result["customer_name"] == "Acme Corp"
+    assert result["street_address"] == "123 Main St\nSuite 200"
+    assert result["state_province"] == "VA"
+    assert result["country"] == "US"
+    assert "raw_data" in result
+
+
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_get_customer_error_returns_none(mock_api_class):
+    """get_customer should return None when the API returns an Error."""
+    mock_api = MagicMock()
+    mock_api_class.return_value = mock_api
+    mock_api.customer.from_handle.return_value = _make_mock_error()
+
+    backend = ARINBackend(api_key="test-key")
+    result = backend.get_customer("C-NONEXISTENT")
+
+    assert result is None
+
+
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_get_customer_none_returns_none(mock_api_class):
+    """get_customer should return None when the API returns None."""
+    mock_api = MagicMock()
+    mock_api_class.return_value = mock_api
+    mock_api.customer.from_handle.return_value = None
+
+    backend = ARINBackend(api_key="test-key")
+    result = backend.get_customer("C-NONEXISTENT")
+
+    assert result is None
+
+
+# ------------------------------------------------------------------
 # create_customer tests
 # ------------------------------------------------------------------
 

@@ -181,6 +181,70 @@ def _sync_contacts(
     return logs
 
 
+def _sync_customer_for_net(
+    backend: ARINBackend,
+    rir_config: RIRConfig,
+    net_data: dict,
+    network: RIRNetwork,
+    user_key: RIRUserKey | None = None,
+    log: logging.Logger = logger,
+) -> RIRSyncLog | None:
+    """If net_data has a customer_handle, fetch and persist the customer."""
+    customer_handle = net_data.get("customer_handle")
+    if not customer_handle:
+        return None
+
+    log.debug(f"Fetching customer {customer_handle}")
+    cust_data = backend.get_customer(customer_handle)
+    if cust_data is None:
+        log.warning(f"Failed to retrieve customer {customer_handle}")
+        return RIRSyncLog.objects.create(
+            rir_config=rir_config,
+            operation="sync",
+            object_type="customer",
+            object_handle=customer_handle,
+            status="error",
+            message=f"Failed to retrieve customer {customer_handle}",
+        )
+
+    reg_date = cust_data.get("registration_date")
+    if reg_date:
+        import datetime as dt
+
+        try:
+            created_date = dt.datetime.fromisoformat(reg_date).replace(tzinfo=dt.timezone.utc)
+        except (ValueError, TypeError):
+            created_date = timezone.now()
+    else:
+        created_date = timezone.now()
+
+    _customer, created = RIRCustomer.objects.update_or_create(
+        handle=cust_data["handle"],
+        defaults={
+            "rir_config": rir_config,
+            "customer_name": cust_data.get("customer_name", ""),
+            "street_address": cust_data.get("street_address", ""),
+            "city": cust_data.get("city", ""),
+            "state_province": cust_data.get("state_province", ""),
+            "postal_code": cust_data.get("postal_code", ""),
+            "country": cust_data.get("country", ""),
+            "network": network,
+            "raw_data": cust_data,
+            "created_date": created_date,
+        },
+    )
+
+    log.info(f"{'Created' if created else 'Updated'} customer {cust_data['handle']}")
+    return RIRSyncLog.objects.create(
+        rir_config=rir_config,
+        operation="sync",
+        object_type="customer",
+        object_handle=cust_data["handle"],
+        status="success",
+        message=f"{'Created' if created else 'Updated'} customer {cust_data['handle']}",
+    )
+
+
 def _sync_aggregate_nets(
     backend: ARINBackend,
     rir_config: RIRConfig,
@@ -222,6 +286,10 @@ def _sync_aggregate_nets(
         )
         logs.append(sync_log)
         agg_nets.append((agg, parent_net))
+
+        cust_log = _sync_customer_for_net(backend, rir_config, net_data, parent_net, user_key=user_key, log=log)
+        if cust_log:
+            logs.append(cust_log)
 
     return logs, agg_nets
 
@@ -317,6 +385,10 @@ class SyncPrefixesJob(JobRunner):
                     f"{'Created' if created else 'Updated'} network "
                     f"{pfx_net_data['handle']} for prefix {pfx.prefix}"
                 ),
+            )
+
+            _sync_customer_for_net(
+                backend, rir_config, pfx_net_data, _net, user_key=user_key, log=self.logger,
             )
 
 
