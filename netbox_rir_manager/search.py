@@ -1,6 +1,6 @@
 from netbox.search import SearchIndex, register_search
 
-from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRTicket
+from netbox_rir_manager.models import RIRConfig, RIRContact, RIRNetwork, RIROrganization, RIRSiteAddress, RIRTicket
 
 
 @register_search
@@ -40,6 +40,15 @@ class RIRNetworkIndex(SearchIndex):
         ("handle", 100),
         ("net_name", 200),
         ("net_type", 300),
+    )
+
+
+@register_search
+class RIRSiteAddressIndex(SearchIndex):
+    model = RIRSiteAddress
+    fields = (
+        ("city", 100),
+        ("country", 200),
     )
 
 

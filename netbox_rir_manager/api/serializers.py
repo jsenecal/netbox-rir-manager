@@ -6,6 +6,7 @@ from netbox_rir_manager.models import (
     RIRContact,
     RIRNetwork,
     RIROrganization,
+    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -45,6 +46,7 @@ class RIROrganizationSerializer(NetBoxModelSerializer):
             "rir_config",
             "handle",
             "name",
+            "tenant",
             "street_address",
             "city",
             "state_province",
@@ -97,7 +99,9 @@ class RIRNetworkSerializer(NetBoxModelSerializer):
             "rir_config",
             "handle",
             "net_name",
+            "net_type",
             "organization",
+            "auto_reassign",
             "aggregate",
             "prefix",
             "raw_data",
@@ -167,6 +171,30 @@ class RIRUserKeySerializer(NetBoxModelSerializer):
             "user",
             "rir_config",
             "api_key",
+            "tags",
+            "created",
+            "last_updated",
+        )
+
+
+class RIRSiteAddressSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:rirsiteaddress-detail")
+
+    class Meta:
+        model = RIRSiteAddress
+        fields = (
+            "id",
+            "url",
+            "display",
+            "site",
+            "street_address",
+            "city",
+            "state_province",
+            "postal_code",
+            "country",
+            "raw_geocode",
+            "auto_resolved",
+            "last_resolved",
             "tags",
             "created",
             "last_updated",

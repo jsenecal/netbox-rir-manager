@@ -6,6 +6,7 @@ from netbox_rir_manager.models import (
     RIRContact,
     RIRNetwork,
     RIROrganization,
+    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -28,14 +29,15 @@ class RIROrganizationTable(NetBoxTable):
     handle = tables.Column(linkify=True)
     name = tables.Column()
     rir_config = tables.Column(linkify=True)
+    tenant = tables.Column(linkify=True)
     city = tables.Column()
     country = tables.Column()
     last_synced = columns.DateTimeColumn()
 
     class Meta(NetBoxTable.Meta):
         model = RIROrganization
-        fields = ("pk", "id", "handle", "name", "rir_config", "city", "country", "last_synced")
-        default_columns = ("handle", "name", "rir_config", "city", "country", "last_synced")
+        fields = ("pk", "id", "handle", "name", "rir_config", "tenant", "city", "country", "last_synced")
+        default_columns = ("handle", "name", "rir_config", "tenant", "city", "country", "last_synced")
 
 
 class RIRContactTable(NetBoxTable):
@@ -78,6 +80,7 @@ class RIRNetworkTable(NetBoxTable):
     net_name = tables.Column()
     net_type = tables.Column()
     organization = tables.Column(linkify=True)
+    auto_reassign = columns.BooleanColumn()
     aggregate = tables.Column(linkify=True)
     prefix = tables.Column(linkify=True)
     last_synced = columns.DateTimeColumn()
@@ -91,11 +94,35 @@ class RIRNetworkTable(NetBoxTable):
             "net_name",
             "net_type",
             "organization",
+            "auto_reassign",
             "aggregate",
             "prefix",
             "last_synced",
         )
-        default_columns = ("handle", "net_name", "net_type", "organization", "aggregate", "prefix", "last_synced")
+        default_columns = (
+            "handle",
+            "net_name",
+            "net_type",
+            "organization",
+            "auto_reassign",
+            "aggregate",
+            "prefix",
+            "last_synced",
+        )
+
+
+class RIRSiteAddressTable(NetBoxTable):
+    site = tables.Column(linkify=True)
+    city = tables.Column()
+    state_province = tables.Column()
+    country = tables.Column()
+    auto_resolved = columns.BooleanColumn()
+    last_resolved = columns.DateTimeColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = RIRSiteAddress
+        fields = ("pk", "id", "site", "city", "state_province", "country", "auto_resolved", "last_resolved")
+        default_columns = ("site", "city", "state_province", "country", "auto_resolved", "last_resolved")
 
 
 class RIRSyncLogTable(NetBoxTable):

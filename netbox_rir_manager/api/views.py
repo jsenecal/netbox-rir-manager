@@ -11,6 +11,7 @@ from netbox_rir_manager.api.serializers import (
     RIRContactSerializer,
     RIRNetworkSerializer,
     RIROrganizationSerializer,
+    RIRSiteAddressSerializer,
     RIRSyncLogSerializer,
     RIRTicketSerializer,
     RIRUserKeySerializer,
@@ -22,6 +23,7 @@ from netbox_rir_manager.filtersets import (
     RIRContactFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
+    RIRSiteAddressFilterSet,
     RIRSyncLogFilterSet,
     RIRTicketFilterSet,
     RIRUserKeyFilterSet,
@@ -31,6 +33,7 @@ from netbox_rir_manager.models import (
     RIRContact,
     RIRNetwork,
     RIROrganization,
+    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -302,6 +305,12 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             RIRTicketSerializer(ticket, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class RIRSiteAddressViewSet(NetBoxModelViewSet):
+    queryset = RIRSiteAddress.objects.prefetch_related("tags")
+    serializer_class = RIRSiteAddressSerializer
+    filterset_class = RIRSiteAddressFilterSet
 
 
 class RIRSyncLogViewSet(NetBoxModelViewSet):

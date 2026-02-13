@@ -2,13 +2,14 @@ import django_filters
 from django.contrib.auth import get_user_model
 from ipam.models import RIR
 from netbox.filtersets import NetBoxModelFilterSet
-from tenancy.models import Contact
+from tenancy.models import Contact, Tenant
 
 from netbox_rir_manager.models import (
     RIRConfig,
     RIRContact,
     RIRNetwork,
     RIROrganization,
+    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -29,10 +30,11 @@ class RIRConfigFilterSet(NetBoxModelFilterSet):
 
 class RIROrganizationFilterSet(NetBoxModelFilterSet):
     rir_config_id = django_filters.ModelMultipleChoiceFilter(queryset=RIRConfig.objects.all(), label="RIR Config")
+    tenant_id = django_filters.ModelMultipleChoiceFilter(queryset=Tenant.objects.all(), label="Tenant")
 
     class Meta:
         model = RIROrganization
-        fields = ("id", "handle", "name", "rir_config_id", "country")
+        fields = ("id", "handle", "name", "rir_config_id", "tenant_id", "country")
 
     def search(self, queryset, name, value):
         return queryset.filter(handle__icontains=value) | queryset.filter(name__icontains=value)
@@ -60,13 +62,27 @@ class RIRNetworkFilterSet(NetBoxModelFilterSet):
         queryset=RIROrganization.objects.all(), label="Organization"
     )
     net_type = django_filters.CharFilter()
+    auto_reassign = django_filters.BooleanFilter()
 
     class Meta:
         model = RIRNetwork
-        fields = ("id", "handle", "net_name", "net_type", "rir_config_id", "organization_id")
+        fields = ("id", "handle", "net_name", "net_type", "rir_config_id", "organization_id", "auto_reassign")
 
     def search(self, queryset, name, value):
         return queryset.filter(handle__icontains=value) | queryset.filter(net_name__icontains=value)
+
+
+class RIRSiteAddressFilterSet(NetBoxModelFilterSet):
+    site_id = django_filters.NumberFilter(field_name="site__id")
+    country = django_filters.CharFilter()
+    auto_resolved = django_filters.BooleanFilter()
+
+    class Meta:
+        model = RIRSiteAddress
+        fields = ("id", "site_id", "country", "auto_resolved")
+
+    def search(self, queryset, name, value):
+        return queryset.filter(site__name__icontains=value) | queryset.filter(city__icontains=value)
 
 
 class RIRSyncLogFilterSet(NetBoxModelFilterSet):

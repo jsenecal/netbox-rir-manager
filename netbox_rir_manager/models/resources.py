@@ -20,6 +20,14 @@ class RIROrganization(NetBoxModel):
     state_province = models.CharField(max_length=100, blank=True, default="")
     postal_code = models.CharField(max_length=20, blank=True, default="")
     country = models.CharField(max_length=2, blank=True, default="")
+    tenant = models.ForeignKey(
+        "tenancy.Tenant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rir_organizations",
+        help_text="Link to a NetBox Tenant for automatic detailed reassignment",
+    )
     raw_data = models.JSONField(default=dict, blank=True)
     last_synced = models.DateTimeField(null=True, blank=True)
     synced_by = models.ForeignKey(
@@ -133,6 +141,10 @@ class RIRNetwork(NetBoxModel):
         null=True,
         blank=True,
         related_name="rir_networks",
+    )
+    auto_reassign = models.BooleanField(
+        default=False,
+        help_text="Automatically reassign child prefixes at ARIN when they get a Site and Tenant",
     )
     raw_data = models.JSONField(default=dict, blank=True)
     last_synced = models.DateTimeField(null=True, blank=True)
