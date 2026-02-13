@@ -3,8 +3,10 @@ import ipaddress
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
+from netbox.object_actions import AddObject, BulkDelete, BulkEdit, BulkExport, BulkImport, ObjectAction
 from netbox.views import generic
 
 from netbox_rir_manager.backends.arin import ARINBackend
@@ -64,11 +66,20 @@ from netbox_rir_manager.tables import (
 
 
 # --- RIRConfig Views ---
+class BulkSync(ObjectAction):
+    name = "bulk_sync"
+    label = "Sync Selected"
+    multi = True
+    permissions_required = {"change"}
+    template_name = "netbox_rir_manager/buttons/bulk_sync.html"
+
+
 class RIRConfigListView(generic.ObjectListView):
     queryset = RIRConfig.objects.all()
     table = RIRConfigTable
     filterset = RIRConfigFilterSet
     filterset_form = RIRConfigFilterForm
+    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkSync, BulkDelete)
 
 
 class RIRConfigView(generic.ObjectView):
@@ -100,6 +111,46 @@ class RIRConfigBulkDeleteView(generic.BulkDeleteView):
     queryset = RIRConfig.objects.all()
     filterset = RIRConfigFilterSet
     table = RIRConfigTable
+
+
+class RIRConfigBulkSyncView(LoginRequiredMixin, View):
+    """Trigger sync jobs for multiple RIR configs at once."""
+
+    def post(self, request):
+        from netbox_rir_manager.jobs import SyncRIRConfigJob
+
+        pk_list = [int(pk) for pk in request.POST.getlist("pk")]
+
+        if "_confirm" in request.POST:
+            configs = RIRConfig.objects.filter(pk__in=pk_list)
+            synced = []
+            skipped = []
+            for config in configs:
+                user_key = RIRUserKey.objects.filter(user=request.user, rir_config=config).first()
+                if not user_key:
+                    skipped.append(config.name)
+                    continue
+                SyncRIRConfigJob.enqueue(instance=config, user=request.user, user_id=request.user.pk)
+                synced.append(config.name)
+
+            if synced:
+                messages.success(request, f"Sync jobs queued for: {', '.join(synced)}")
+            if skipped:
+                messages.warning(request, f"Skipped (no API key): {', '.join(skipped)}")
+
+            return redirect(reverse("plugins:netbox_rir_manager:rirconfig_list"))
+
+        configs = RIRConfig.objects.filter(pk__in=pk_list)
+        table = RIRConfigTable(configs, orderable=False)
+        if not table.rows:
+            messages.warning(request, "No configs were selected.")
+            return redirect(reverse("plugins:netbox_rir_manager:rirconfig_list"))
+
+        return render(request, "netbox_rir_manager/rirconfig_bulk_sync.html", {
+            "table": table,
+            "pk_list": pk_list,
+            "return_url": reverse("plugins:netbox_rir_manager:rirconfig_list"),
+        })
 
 
 # --- RIROrganization Views ---

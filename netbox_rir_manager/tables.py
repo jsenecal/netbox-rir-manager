@@ -19,6 +19,17 @@ class RIRConfigTable(NetBoxTable):
     rir = tables.Column(linkify=True)
     is_active = columns.BooleanColumn()
     last_sync = columns.DateTimeColumn()
+    actions = columns.ActionsColumn(
+        actions=("edit", "delete", "changelog"),
+        extra_buttons=(
+            '<form method="post"'
+            ' action="{% url \'plugins:netbox_rir_manager:rirconfig_sync\' record.pk %}"'
+            ' class="d-inline">'
+            "{% csrf_token %}"
+            '<button type="submit" class="btn btn-sm btn-info" title="Sync">'
+            '<i class="mdi mdi-sync"></i></button></form>'
+        ),
+    )
 
     class Meta(NetBoxTable.Meta):
         model = RIRConfig

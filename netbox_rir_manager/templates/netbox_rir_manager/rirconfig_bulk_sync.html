@@ -1,0 +1,49 @@
+{% extends 'generic/_base.html' %}
+{% load helpers %}
+{% load i18n %}
+{% load render_table from django_tables2 %}
+
+{% block title %}Sync {{ table.rows|length }} RIR Configs?{% endblock %}
+
+{% block tabs %}
+  <ul class="nav nav-tabs">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="sync-form-tab" data-bs-toggle="tab" data-bs-target="#sync-form"
+              type="button" role="tab">Bulk Sync</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="object-list-tab" data-bs-toggle="tab" data-bs-target="#object-list"
+              type="button" role="tab">Selected Objects {% badge table.rows|length %}</button>
+    </li>
+  </ul>
+{% endblock %}
+
+{% block content %}
+  <div class="tab-pane show active" id="sync-form" role="tabpanel">
+    <div class="alert alert-info" role="alert">
+      <h4 class="alert-title">Confirm Bulk Sync</h4>
+      <p>This will enqueue sync jobs for <strong>{{ table.rows|length }}</strong> RIR config(s).
+         Configs for which you have no API key will be skipped.</p>
+    </div>
+    <form method="post" action="">
+      {% csrf_token %}
+      {% for pk in pk_list %}
+        <input type="hidden" name="pk" value="{{ pk }}">
+      {% endfor %}
+      <div class="text-end">
+        <a href="{{ return_url }}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" name="_confirm" class="btn btn-primary">
+          <i class="mdi mdi-sync"></i> Sync {{ table.rows|length }} configs
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="tab-pane" id="object-list" role="tabpanel">
+    <div class="card">
+      <div class="table-responsive">
+        {% render_table table 'inc/table.html' %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
