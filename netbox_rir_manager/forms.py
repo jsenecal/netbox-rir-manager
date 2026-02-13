@@ -1,10 +1,11 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from ipam.models import RIR
-from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
+from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Contact, Tenant
-from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
+from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
+from utilities.forms.widgets import BulkEditNullBooleanSelect
 
 from netbox_rir_manager.models import (
     RIRConfig,
@@ -34,6 +35,25 @@ class RIRConfigFilterForm(NetBoxModelFilterSetForm):
     model = RIRConfig
     rir_id = DynamicModelMultipleChoiceField(queryset=RIR.objects.all(), required=False, label="RIR")
     is_active = forms.NullBooleanField(required=False)
+
+
+class RIRConfigBulkEditForm(NetBoxModelBulkEditForm):
+    rir = DynamicModelChoiceField(queryset=RIR.objects.all(), required=False)
+    api_url = forms.URLField(required=False)
+    org_handle = forms.CharField(max_length=50, required=False)
+    is_active = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect)
+
+    model = RIRConfig
+    fieldsets = (FieldSet("rir", "api_url", "org_handle", "is_active"),)
+    nullable_fields = ("api_url", "org_handle")
+
+
+class RIRConfigImportForm(NetBoxModelImportForm):
+    rir = CSVModelChoiceField(queryset=RIR.objects.all(), to_field_name="name", help_text="RIR name")
+
+    class Meta:
+        model = RIRConfig
+        fields = ("rir", "name", "api_url", "org_handle", "is_active")
 
 
 class RIROrganizationForm(NetBoxModelForm):

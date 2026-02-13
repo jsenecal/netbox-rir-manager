@@ -20,8 +20,10 @@ from netbox_rir_manager.filtersets import (
     RIRUserKeyFilterSet,
 )
 from netbox_rir_manager.forms import (
+    RIRConfigBulkEditForm,
     RIRConfigFilterForm,
     RIRConfigForm,
+    RIRConfigImportForm,
     RIRContactFilterForm,
     RIRContactForm,
     RIRNetworkFilterForm,
@@ -76,6 +78,24 @@ class RIRConfigEditView(generic.ObjectEditView):
 
 class RIRConfigDeleteView(generic.ObjectDeleteView):
     queryset = RIRConfig.objects.all()
+
+
+class RIRConfigBulkImportView(generic.BulkImportView):
+    queryset = RIRConfig.objects.all()
+    model_form = RIRConfigImportForm
+
+
+class RIRConfigBulkEditView(generic.BulkEditView):
+    queryset = RIRConfig.objects.all()
+    filterset = RIRConfigFilterSet
+    table = RIRConfigTable
+    form = RIRConfigBulkEditForm
+
+
+class RIRConfigBulkDeleteView(generic.BulkDeleteView):
+    queryset = RIRConfig.objects.all()
+    filterset = RIRConfigFilterSet
+    table = RIRConfigTable
 
 
 # --- RIROrganization Views ---

@@ -17,6 +17,9 @@ urlpatterns = [
     # RIRConfig
     path("configs/", views.RIRConfigListView.as_view(), name="rirconfig_list"),
     path("configs/add/", views.RIRConfigEditView.as_view(), name="rirconfig_add"),
+    path("configs/import/", views.RIRConfigBulkImportView.as_view(), name="rirconfig_import"),
+    path("configs/edit/", views.RIRConfigBulkEditView.as_view(), name="rirconfig_bulk_edit"),
+    path("configs/delete/", views.RIRConfigBulkDeleteView.as_view(), name="rirconfig_bulk_delete"),
     path("configs/<int:pk>/", views.RIRConfigView.as_view(), name="rirconfig"),
     path("configs/<int:pk>/edit/", views.RIRConfigEditView.as_view(), name="rirconfig_edit"),
     path("configs/<int:pk>/delete/", views.RIRConfigDeleteView.as_view(), name="rirconfig_delete"),
