@@ -21,43 +21,57 @@ def sync_rir_config(
     api_key: str,
     resource_types: list[str] | None = None,
     user_key: RIRUserKey | None = None,
-) -> list[RIRSyncLog]:
+    log: logging.Logger = logger,
+) -> tuple[list[RIRSyncLog], list[tuple]]:
     """
     Sync RIR data for the given config.
     resource_types: list of "organizations", "contacts", "networks". None = all.
+    Returns (sync_logs, agg_nets) where agg_nets is a list of (Aggregate, RIRNetwork) tuples.
     """
     logs: list[RIRSyncLog] = []
+    agg_nets: list[tuple] = []
     backend = ARINBackend.from_rir_config(rir_config, api_key=api_key)
 
     types_to_sync = resource_types or ["organizations", "contacts", "networks"]
+    log.info(f"Starting sync for {rir_config.name} (types: {', '.join(types_to_sync)})")
 
     org = None
     if "organizations" in types_to_sync and rir_config.org_handle:
-        org_logs, org = _sync_organization(backend, rir_config, user_key=user_key)
+        log.info(f"Syncing organization {rir_config.org_handle}")
+        org_logs, org = _sync_organization(backend, rir_config, user_key=user_key, log=log)
         logs.extend(org_logs)
 
     if "contacts" in types_to_sync and org:
         poc_links = (org.raw_data or {}).get("poc_links", [])
-        logs.extend(_sync_contacts(backend, rir_config, poc_links, org, user_key=user_key))
+        log.info(f"Syncing {len(poc_links)} contacts")
+        logs.extend(_sync_contacts(backend, rir_config, poc_links, org, user_key=user_key, log=log))
 
     if "networks" in types_to_sync:
-        logs.extend(_sync_networks(backend, rir_config, user_key=user_key))
+        log.info("Syncing aggregate-level networks")
+        net_logs, agg_nets = _sync_aggregate_nets(backend, rir_config, user_key=user_key, log=log)
+        logs.extend(net_logs)
 
     rir_config.last_sync = timezone.now()
     rir_config.save(update_fields=["last_sync"])
 
-    return logs
+    log.info(f"Sync complete: {len(logs)} log entries, {len(agg_nets)} aggregates with networks")
+    return logs, agg_nets
 
 
 def _sync_organization(
-    backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUserKey | None = None
+    backend: ARINBackend,
+    rir_config: RIRConfig,
+    user_key: RIRUserKey | None = None,
+    log: logging.Logger = logger,
 ) -> tuple[list[RIRSyncLog], RIROrganization | None]:
     """Sync the primary organization for a config."""
     logs: list[RIRSyncLog] = []
 
+    log.info(f"Fetching organization {rir_config.org_handle} from ARIN")
     org_data = backend.get_organization(rir_config.org_handle)
     if org_data is None:
-        log = RIRSyncLog.objects.create(
+        log.warning(f"Failed to retrieve organization {rir_config.org_handle} from ARIN")
+        sync_log = RIRSyncLog.objects.create(
             rir_config=rir_config,
             operation="sync",
             object_type="organization",
@@ -65,7 +79,7 @@ def _sync_organization(
             status="error",
             message=f"Failed to retrieve organization {rir_config.org_handle}",
         )
-        logs.append(log)
+        logs.append(sync_log)
         return logs, None
 
     org, created = RIROrganization.objects.update_or_create(
@@ -84,7 +98,9 @@ def _sync_organization(
         },
     )
 
-    log = RIRSyncLog.objects.create(
+    log.info(f"{'Created' if created else 'Updated'} organization {org_data['handle']}")
+
+    sync_log = RIRSyncLog.objects.create(
         rir_config=rir_config,
         operation="sync",
         object_type="organization",
@@ -92,7 +108,7 @@ def _sync_organization(
         status="success",
         message=f"{'Created' if created else 'Updated'} organization {org_data['handle']}",
     )
-    logs.append(log)
+    logs.append(sync_log)
 
     return logs, org
 
@@ -103,18 +119,22 @@ def _sync_contacts(
     poc_links: list[dict],
     org: RIROrganization,
     user_key: RIRUserKey | None = None,
+    log: logging.Logger = logger,
 ) -> list[RIRSyncLog]:
     """Sync POC contacts from org poc_links."""
     logs: list[RIRSyncLog] = []
+    log.info(f"Syncing {len(poc_links)} POC contacts for {org.handle}")
 
     for link in poc_links:
         handle = link.get("handle")
         if not handle:
             continue
 
+        log.debug(f"Fetching POC {handle}")
         poc_data = backend.get_poc(handle)
         if poc_data is None:
-            log = RIRSyncLog.objects.create(
+            log.warning(f"Failed to retrieve POC {handle}")
+            sync_log = RIRSyncLog.objects.create(
                 rir_config=rir_config,
                 operation="sync",
                 object_type="contact",
@@ -122,7 +142,7 @@ def _sync_contacts(
                 status="error",
                 message=f"Failed to retrieve POC {handle}",
             )
-            logs.append(log)
+            logs.append(sync_log)
             continue
 
         contact, created = RIRContact.objects.update_or_create(
@@ -147,7 +167,8 @@ def _sync_contacts(
             },
         )
 
-        log = RIRSyncLog.objects.create(
+        log.info(f"{'Created' if created else 'Updated'} contact {poc_data['handle']}")
+        sync_log = RIRSyncLog.objects.create(
             rir_config=rir_config,
             operation="sync",
             object_type="contact",
@@ -155,32 +176,43 @@ def _sync_contacts(
             status="success",
             message=f"{'Created' if created else 'Updated'} contact {poc_data['handle']}",
         )
-        logs.append(log)
+        logs.append(sync_log)
 
     return logs
 
 
-def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUserKey | None = None) -> list[RIRSyncLog]:
-    """Sync networks by matching NetBox Aggregates and their child Prefixes against ARIN."""
-    from ipam.models import Aggregate, Prefix
+def _sync_aggregate_nets(
+    backend: ARINBackend,
+    rir_config: RIRConfig,
+    user_key: RIRUserKey | None = None,
+    log: logging.Logger = logger,
+) -> tuple[list[RIRSyncLog], list[tuple]]:
+    """Sync aggregate-level networks. Returns (logs, agg_nets) for prefix fan-out."""
+    from ipam.models import Aggregate
 
     logs: list[RIRSyncLog] = []
+    agg_nets: list[tuple] = []
 
     aggregates = Aggregate.objects.filter(rir=rir_config.rir)
+    log.info(f"Found {aggregates.count()} aggregates to sync")
+
     for agg in aggregates:
         network = agg.prefix
         start_address = str(network.network)
         end_address = str(network.broadcast)
 
+        log.debug(f"Querying ARIN for aggregate {agg.prefix}")
         net_data = backend.find_net(start_address, end_address)
         if net_data is None:
+            log.warning(f"No ARIN network found for aggregate {agg.prefix}")
             continue
 
         parent_net, created = RIRNetwork.sync_from_arin(
             net_data, rir_config, aggregate=agg, user_key=user_key,
         )
+        log.info(f"{'Created' if created else 'Updated'} network {net_data['handle']} for aggregate {agg.prefix}")
 
-        log = RIRSyncLog.objects.create(
+        sync_log = RIRSyncLog.objects.create(
             rir_config=rir_config,
             operation="sync",
             object_type="network",
@@ -188,41 +220,10 @@ def _sync_networks(backend: ARINBackend, rir_config: RIRConfig, user_key: RIRUse
             status="success",
             message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
         )
-        logs.append(log)
+        logs.append(sync_log)
+        agg_nets.append((agg, parent_net))
 
-        # Sync child prefixes: query ARIN for each prefix under this aggregate
-        prefixes = Prefix.objects.filter(prefix__net_contained=agg.prefix)
-        for pfx in prefixes:
-            pfx_network = pfx.prefix
-            pfx_start = str(pfx_network.network)
-            pfx_end = str(pfx_network.broadcast)
-
-            pfx_net_data = backend.find_net(pfx_start, pfx_end)
-            if pfx_net_data is None:
-                continue
-
-            # Skip if ARIN returned the parent net (no separate reassignment)
-            if pfx_net_data["handle"] == parent_net.handle:
-                continue
-
-            _net, pfx_created = RIRNetwork.sync_from_arin(
-                pfx_net_data, rir_config, prefix=pfx, user_key=user_key,
-            )
-
-            pfx_log = RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="sync",
-                object_type="network",
-                object_handle=pfx_net_data["handle"],
-                status="success",
-                message=(
-                    f"{'Created' if pfx_created else 'Updated'} network "
-                    f"{pfx_net_data['handle']} for prefix {pfx.prefix}"
-                ),
-            )
-            logs.append(pfx_log)
-
-    return logs
+    return logs, agg_nets
 
 
 class SyncRIRConfigJob(JobRunner):
@@ -242,9 +243,81 @@ class SyncRIRConfigJob(JobRunner):
         self.job.data = {"rir_config": rir_config.name}
         self.job.save()
 
-        logs = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key)
+        self.logger.info(f"Starting RIR sync for {rir_config.name}")
+        logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=self.logger)
+
+        # Enqueue per-aggregate prefix discovery sub-jobs
+        for agg, parent_net in agg_nets:
+            SyncPrefixesJob.enqueue(
+                instance=rir_config,
+                user=user_key.user,
+                aggregate_id=agg.pk,
+                parent_handle=parent_net.handle,
+                user_key_id=user_key.pk,
+            )
+            self.logger.info(f"Enqueued prefix sync for aggregate {agg.prefix}")
+
         self.job.data["sync_logs_count"] = len(logs)
         self.job.save()
+        self.logger.info(f"Sync complete: {len(logs)} log entries")
+
+
+class SyncPrefixesJob(JobRunner):
+    """Discover and sync child prefix reassignments for a single aggregate."""
+
+    class Meta:
+        name = "ARIN Prefix Sync"
+
+    def run(self, *args, **kwargs):
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.models import RIRUserKey
+
+        aggregate_id = kwargs["aggregate_id"]
+        parent_handle = kwargs["parent_handle"]
+        user_key_id = kwargs["user_key_id"]
+
+        agg = Aggregate.objects.get(pk=aggregate_id)
+        user_key = RIRUserKey.objects.get(pk=user_key_id)
+        parent_net = RIRNetwork.objects.get(handle=parent_handle)
+        rir_config = parent_net.rir_config
+        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+
+        prefixes = Prefix.objects.filter(prefix__net_contained=agg.prefix)
+        self.logger.info(f"Scanning {prefixes.count()} prefixes under {agg.prefix}")
+
+        for pfx in prefixes:
+            pfx_network = pfx.prefix
+            pfx_start = str(pfx_network.network)
+            pfx_end = str(pfx_network.broadcast)
+
+            self.logger.debug(f"Querying ARIN for prefix {pfx.prefix}")
+            pfx_net_data = backend.find_net(pfx_start, pfx_end)
+            if pfx_net_data is None:
+                continue
+
+            if pfx_net_data["handle"] == parent_handle:
+                self.logger.debug(f"Prefix {pfx.prefix} returns parent net, skipping")
+                continue
+
+            _net, created = RIRNetwork.sync_from_arin(
+                pfx_net_data, rir_config, prefix=pfx, user_key=user_key,
+            )
+            self.logger.info(
+                f"{'Created' if created else 'Updated'} network {pfx_net_data['handle']} for prefix {pfx.prefix}"
+            )
+
+            RIRSyncLog.objects.create(
+                rir_config=rir_config,
+                operation="sync",
+                object_type="network",
+                object_handle=pfx_net_data["handle"],
+                status="success",
+                message=(
+                    f"{'Created' if created else 'Updated'} network "
+                    f"{pfx_net_data['handle']} for prefix {pfx.prefix}"
+                ),
+            )
 
 
 class ReassignJob(JobRunner):
@@ -273,12 +346,14 @@ class ReassignJob(JobRunner):
 
         self.job.data = {"prefix": str(prefix.prefix), "status": "starting"}
         self.job.save()
+        self.logger.info(f"Starting reassignment for prefix {prefix.prefix}")
 
         # Find the parent RIRNetwork via Aggregate
         agg = Aggregate.objects.filter(
             prefix__net_contains_or_equals=prefix.prefix
         ).first()
         if not agg:
+            self.logger.error(f"No matching Aggregate found for prefix {prefix.prefix}")
             self.job.data["status"] = "error"
             self.job.data["message"] = "No matching Aggregate found"
             self.job.save()
@@ -286,11 +361,13 @@ class ReassignJob(JobRunner):
 
         parent_network = RIRNetwork.objects.filter(aggregate=agg, auto_reassign=True).first()
         if not parent_network:
+            self.logger.error(f"No parent RIRNetwork with auto_reassign=True for aggregate {agg.prefix}")
             self.job.data["status"] = "error"
             self.job.data["message"] = "No parent RIRNetwork with auto_reassign=True"
             self.job.save()
             return
 
+        self.logger.info(f"Found parent network {parent_network.handle} (aggregate {agg.prefix})")
         rir_config = parent_network.rir_config
         backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
 
@@ -306,12 +383,14 @@ class ReassignJob(JobRunner):
         end_address = str(network.broadcast_address)
 
         # Pre-flight: check what ARIN actually has for this range
+        self.logger.info(f"Pre-flight: querying ARIN for existing net at {start_address}-{end_address}")
         actual_net = backend.find_net(start_address, end_address)
         if actual_net is not None:
             actual_handle = actual_net.get("handle")
 
             # Already reassigned at ARIN (different net than parent) -- just sync it
             if actual_handle and actual_handle != parent_network.handle:
+                self.logger.warning(f"Pre-flight: prefix already reassigned as {actual_handle}, syncing instead")
                 RIRNetwork.sync_from_arin(
                     actual_net, rir_config, prefix=prefix, user_key=user_key,
                 )
@@ -334,6 +413,10 @@ class ReassignJob(JobRunner):
                     ),
                 )
                 return
+
+        self.logger.info("Pre-flight passed")
+
+        self.logger.info(f"Reassignment type: {'detailed' if rir_org else 'simple'}")
 
         if rir_org:
             # Detailed reassignment - tenant has a known RIR org
@@ -412,8 +495,10 @@ class ReassignJob(JobRunner):
             }
 
         # Perform the reassignment
+        self.logger.info(f"Submitting reassignment to ARIN for {prefix.prefix}")
         result = backend.reassign_network(parent_network.handle, net_data)
         if result is None:
+            self.logger.error(f"Reassignment failed at ARIN for prefix {prefix.prefix}")
             RIRSyncLog.objects.create(
                 rir_config=rir_config,
                 operation="reassign",
@@ -455,6 +540,7 @@ class ReassignJob(JobRunner):
             message=f"Reassignment submitted for {prefix.prefix}, ticket {ticket.ticket_number}",
         )
 
+        self.logger.info(f"Reassignment submitted, ticket {ticket.ticket_number}")
         self.job.data["status"] = "success"
         self.job.data["ticket_number"] = ticket.ticket_number
         self.job.save()
@@ -478,10 +564,16 @@ class RemoveNetworkJob(JobRunner):
         self.job.data = {"network_handle": network.handle, "status": "starting"}
         self.job.save()
 
+        self.logger.info(f"Removing network {network.handle} from ARIN")
         rir_config = network.rir_config
         backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
 
         success = backend.remove_network(network.handle)
+
+        if success:
+            self.logger.info(f"Successfully removed network {network.handle}")
+        else:
+            self.logger.error(f"Failed to remove network {network.handle}")
 
         status = "success" if success else "error"
         message = (
@@ -517,8 +609,11 @@ class ScheduledRIRSyncJob(JobRunner):
 
         configs = RIRConfig.objects.filter(is_active=True)
         total_logs = 0
+        self.logger.info(f"Starting scheduled sync for {configs.count()} active configs")
 
         for config in configs:
+            self.logger.info(f"Syncing config: {config.name}")
+
             # Collect distinct keys that have synced objects for this config
             synced_key_ids = set()
             for model_class in (RIROrganization, RIRContact, RIRNetwork):
@@ -534,19 +629,21 @@ class ScheduledRIRSyncJob(JobRunner):
                 user_keys = RIRUserKey.objects.filter(rir_config=config).order_by("pk")[:1]
 
             if not user_keys.exists():
-                logger.warning("No API keys available for config %s, skipping", config.name)
+                self.logger.warning(f"No API keys for config {config.name}, skipping")
                 continue
 
             for user_key in user_keys:
+                self.logger.info(f"Using API key {user_key.pk} for config {config.name}")
                 try:
-                    logs = sync_rir_config(config, api_key=user_key.api_key, user_key=user_key)
+                    logs, _agg_nets = sync_rir_config(
+                        config, api_key=user_key.api_key, user_key=user_key, log=self.logger
+                    )
                     total_logs += len(logs)
                 except Exception:
-                    logger.exception(
-                        "Scheduled sync failed for config %s with key %s",
-                        config.name,
-                        user_key.pk,
+                    self.logger.exception(
+                        f"Scheduled sync failed for config {config.name} with key {user_key.pk}"
                     )
 
+        self.logger.info(f"Scheduled sync complete: {configs.count()} configs, {total_logs} logs")
         self.job.data = {"configs_synced": len(configs), "total_logs": total_logs}
         self.job.save()

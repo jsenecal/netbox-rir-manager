@@ -3,6 +3,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+def make_runner(cls):
+    """Create a job runner with mocked job and logger (bypasses __init__)."""
+    runner = cls.__new__(cls)
+    runner.job = MagicMock()
+    runner.job.data = {}
+    runner.logger = MagicMock()
+    return runner
+
+
 @pytest.mark.django_db
 class TestScheduledSyncJob:
     @patch("netbox_rir_manager.jobs.ARINBackend")
@@ -25,10 +34,7 @@ class TestScheduledSyncJob:
         mock_backend.find_net.return_value = None
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        job = MagicMock()
-        job.data = {}
-        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
-        runner.job = job
+        runner = make_runner(ScheduledRIRSyncJob)
 
         runner.run()
 
@@ -41,10 +47,7 @@ class TestScheduledSyncJob:
         rir_config.is_active = False
         rir_config.save()
 
-        job = MagicMock()
-        job.data = {}
-        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
-        runner.job = job
+        runner = make_runner(ScheduledRIRSyncJob)
 
         runner.run()
 
@@ -55,10 +58,7 @@ class TestScheduledSyncJob:
         """Config without any RIRUserKey entries should be skipped."""
         from netbox_rir_manager.jobs import ScheduledRIRSyncJob
 
-        job = MagicMock()
-        job.data = {}
-        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
-        runner.job = job
+        runner = make_runner(ScheduledRIRSyncJob)
 
         runner.run()
 
@@ -93,10 +93,7 @@ class TestScheduledSyncJob:
         mock_backend.find_net.return_value = None
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        job = MagicMock()
-        job.data = {}
-        runner = ScheduledRIRSyncJob.__new__(ScheduledRIRSyncJob)
-        runner.job = job
+        runner = make_runner(ScheduledRIRSyncJob)
 
         runner.run()
 
@@ -125,10 +122,11 @@ class TestRIRSyncJob:
         }
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        logs = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
+        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
 
         assert len(logs) == 1
         assert logs[0].status == "success"
+        assert agg_nets == []
         assert RIROrganization.objects.filter(handle="TESTORG-ARIN").exists()
         assert RIRSyncLog.objects.filter(rir_config=rir_config).count() == 1
 
@@ -141,10 +139,11 @@ class TestRIRSyncJob:
         mock_backend.get_organization.return_value = None
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        logs = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
+        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
 
         assert len(logs) == 1
         assert logs[0].status == "error"
+        assert agg_nets == []
         assert RIRSyncLog.objects.filter(rir_config=rir_config, status="error").count() == 1
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
@@ -222,12 +221,13 @@ class TestRIRSyncJob:
         }
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
 
         net = RIRNetwork.objects.get(handle="NET-192-0-2-0-1")
         assert net.net_name == "EXAMPLE-NET"
         assert net.aggregate is not None
         assert str(net.aggregate.prefix) == "192.0.2.0/24"
+        assert len(agg_nets) == 1
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_sets_synced_by(self, mock_backend_class, rir_config, rir_user_key):
@@ -266,18 +266,147 @@ class TestRIRSyncJob:
         mock_backend.find_net.return_value = None
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        # Create a mock job object
-        job = MagicMock()
-        job.object_id = rir_config.pk
-        job.data = {}
-
-        runner = SyncRIRConfigJob.__new__(SyncRIRConfigJob)
-        runner.job = job
+        runner = make_runner(SyncRIRConfigJob)
+        runner.job.object_id = rir_config.pk
 
         runner.run(user_id=admin_user.pk)
 
         # Verify the job data was updated
-        assert "rir_config" in job.data
+        assert "rir_config" in runner.job.data
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_returns_agg_nets(self, mock_backend_class, rir_config, rir):
+        """sync_rir_config returns (logs, agg_nets) with aggregate/network pairs."""
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.jobs import sync_rir_config
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/8", rir=rir)
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = None
+        mock_backend.find_net.return_value = {
+            "handle": "NET-10-0-0-0-1",
+            "net_name": "BIG-NET",
+            "version": 4,
+            "org_handle": "",
+            "parent_net_handle": "",
+            "net_blocks": [],
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+
+        assert len(logs) == 1
+        assert len(agg_nets) == 1
+        returned_agg, returned_net = agg_nets[0]
+        assert returned_agg.pk == agg.pk
+        assert isinstance(returned_net, RIRNetwork)
+        assert returned_net.handle == "NET-10-0-0-0-1"
+
+
+@pytest.mark.django_db
+class TestSyncPrefixesJob:
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_discovers_child_prefixes(self, mock_backend_class, rir_config, rir_user_key, rir):
+        """SyncPrefixesJob discovers and syncs child prefix networks."""
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.jobs import SyncPrefixesJob
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/20", rir=rir)
+        parent_net = RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-PARENT-20",
+            net_name="PARENT-NET",
+            aggregate=agg,
+        )
+        Prefix.objects.create(prefix="10.0.1.0/24")
+        Prefix.objects.create(prefix="10.0.2.0/24")
+
+        call_count = 0
+
+        def find_net_side_effect(start, end):
+            nonlocal call_count
+            call_count += 1
+            if start == "10.0.1.0":
+                return {
+                    "handle": "NET-CHILD-1",
+                    "net_name": "CHILD-NET-1",
+                    "version": 4,
+                    "org_handle": "",
+                    "parent_net_handle": "NET-PARENT-20",
+                    "net_blocks": [],
+                    "raw_data": {},
+                }
+            elif start == "10.0.2.0":
+                # Returns parent handle -- should be skipped
+                return {
+                    "handle": "NET-PARENT-20",
+                    "net_name": "PARENT-NET",
+                    "version": 4,
+                    "org_handle": "",
+                    "parent_net_handle": "",
+                    "net_blocks": [],
+                    "raw_data": {},
+                }
+            return None
+
+        mock_backend = MagicMock()
+        mock_backend.find_net.side_effect = find_net_side_effect
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        runner = make_runner(SyncPrefixesJob)
+
+        runner.run(
+            aggregate_id=agg.pk,
+            parent_handle=parent_net.handle,
+            user_key_id=rir_user_key.pk,
+        )
+
+        # Child net should be created
+        assert RIRNetwork.objects.filter(handle="NET-CHILD-1").exists()
+        # Parent-returning prefix should be skipped -- no duplicate
+        assert RIRNetwork.objects.filter(handle="NET-PARENT-20").count() == 1
+        # Sync log for the child
+        assert RIRSyncLog.objects.filter(object_handle="NET-CHILD-1").exists()
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_logs_progress(self, mock_backend_class, rir_config, rir_user_key, rir):
+        """SyncPrefixesJob logs progress via self.logger."""
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.jobs import SyncPrefixesJob
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/20", rir=rir)
+        RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-PARENT-20",
+            net_name="PARENT-NET",
+            aggregate=agg,
+        )
+        Prefix.objects.create(prefix="10.0.1.0/24")
+
+        mock_backend = MagicMock()
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        runner = make_runner(SyncPrefixesJob)
+
+        runner.run(
+            aggregate_id=agg.pk,
+            parent_handle="NET-PARENT-20",
+            user_key_id=rir_user_key.pk,
+        )
+
+        # Should have logged the scanning message
+        runner.logger.info.assert_called()
+        first_info_call = runner.logger.info.call_args_list[0]
+        assert "Scanning" in first_info_call[0][0]
 
 
 @pytest.mark.django_db
@@ -327,10 +456,7 @@ class TestReassignJobPreFlight:
         }
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        job = MagicMock()
-        job.data = {}
-        runner = ReassignJob.__new__(ReassignJob)
-        runner.job = job
+        runner = make_runner(ReassignJob)
 
         runner.run(
             prefix_id=reassign_setup["prefix"].pk,
@@ -338,8 +464,8 @@ class TestReassignJobPreFlight:
         )
 
         # Should have synced the intermediate net, not called reassign
-        assert job.data["status"] == "synced"
-        assert "NET-INTERMEDIATE-24" in job.data["message"]
+        assert runner.job.data["status"] == "synced"
+        assert "NET-INTERMEDIATE-24" in runner.job.data["message"]
         mock_backend.reassign_network.assert_not_called()
 
         # RIRNetwork should be created for the intermediate net
@@ -371,10 +497,7 @@ class TestReassignJobPreFlight:
         mock_backend.reassign_network.return_value = None
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        job = MagicMock()
-        job.data = {}
-        runner = ReassignJob.__new__(ReassignJob)
-        runner.job = job
+        runner = make_runner(ReassignJob)
 
         runner.run(
             prefix_id=reassign_setup["prefix"].pk,
@@ -396,10 +519,7 @@ class TestReassignJobPreFlight:
         mock_backend.reassign_network.return_value = None
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        job = MagicMock()
-        job.data = {}
-        runner = ReassignJob.__new__(ReassignJob)
-        runner.job = job
+        runner = make_runner(ReassignJob)
 
         runner.run(
             prefix_id=reassign_setup["prefix"].pk,
@@ -425,15 +545,12 @@ class TestRemoveNetworkJob:
         mock_backend.remove_network.return_value = True
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        job = MagicMock()
-        job.data = {}
-        runner = RemoveNetworkJob.__new__(RemoveNetworkJob)
-        runner.job = job
+        runner = make_runner(RemoveNetworkJob)
 
         runner.run(network_id=net.pk, user_key_id=rir_user_key.pk)
 
         mock_backend.remove_network.assert_called_once_with("NET-REMOVE-1")
-        assert job.data["status"] == "success"
+        assert runner.job.data["status"] == "success"
 
         log = RIRSyncLog.objects.get(object_handle="NET-REMOVE-1", operation="remove")
         assert log.status == "success"
@@ -452,15 +569,12 @@ class TestRemoveNetworkJob:
         mock_backend.remove_network.return_value = False
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        job = MagicMock()
-        job.data = {}
-        runner = RemoveNetworkJob.__new__(RemoveNetworkJob)
-        runner.job = job
+        runner = make_runner(RemoveNetworkJob)
 
         runner.run(network_id=net.pk, user_key_id=rir_user_key.pk)
 
-        assert job.data["status"] == "error"
-        assert job.data["message"] == "ARIN removal failed"
+        assert runner.job.data["status"] == "error"
+        assert runner.job.data["message"] == "ARIN removal failed"
 
         log = RIRSyncLog.objects.get(object_handle="NET-RMFAIL-1", operation="remove")
         assert log.status == "error"
