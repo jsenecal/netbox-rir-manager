@@ -63,14 +63,22 @@ class RIRContactFilterSet(NetBoxModelFilterSet):
     organization_id = django_filters.ModelMultipleChoiceFilter(
         queryset=RIROrganization.objects.all(), label="Organization"
     )
-    contact_id = django_filters.ModelMultipleChoiceFilter(queryset=Contact.objects.all(), label="Contact")
+    contact_id = django_filters.ModelMultipleChoiceFilter(queryset=Contact.objects.all(), label="NetBox Contact")
+    has_contact = django_filters.BooleanFilter(
+        field_name="contact", lookup_expr="isnull", exclude=True, label="Has NetBox contact"
+    )
 
     class Meta:
         model = RIRContact
         fields = ("id", "handle", "contact_type", "rir_config_id", "organization_id", "contact_id")
 
     def search(self, queryset, name, value):
-        return queryset.filter(handle__icontains=value) | queryset.filter(last_name__icontains=value)
+        return queryset.filter(
+            models.Q(handle__icontains=value)
+            | models.Q(last_name__icontains=value)
+            | models.Q(first_name__icontains=value)
+            | models.Q(contact__name__icontains=value)
+        )
 
 
 class RIRNetworkFilterSet(NetBoxModelFilterSet):

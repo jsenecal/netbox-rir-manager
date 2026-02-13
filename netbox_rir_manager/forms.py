@@ -129,6 +129,11 @@ class RIRContactForm(NetBoxModelForm):
 
 class RIRContactFilterForm(NetBoxModelFilterSetForm):
     model = RIRContact
+    fieldsets = (
+        FieldSet("q", "filter_id", "tag"),
+        FieldSet("rir_config_id", "contact_type", "organization_id", name="RIR"),
+        FieldSet("contact_id", "has_contact", name="NetBox Contact"),
+    )
     rir_config_id = DynamicModelMultipleChoiceField(
         queryset=RIRConfig.objects.all(), required=False, label="RIR Config"
     )
@@ -136,7 +141,8 @@ class RIRContactFilterForm(NetBoxModelFilterSetForm):
     organization_id = DynamicModelMultipleChoiceField(
         queryset=RIROrganization.objects.all(), required=False, label="Organization"
     )
-    contact_id = DynamicModelMultipleChoiceField(queryset=Contact.objects.all(), required=False, label="Contact")
+    contact_id = DynamicModelMultipleChoiceField(queryset=Contact.objects.all(), required=False, label="NetBox Contact")
+    has_contact = forms.NullBooleanField(required=False, label="Has NetBox contact")
 
 
 class RIRCustomerFilterForm(NetBoxModelFilterSetForm):
