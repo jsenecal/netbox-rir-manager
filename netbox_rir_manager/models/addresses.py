@@ -3,13 +3,15 @@ from django.urls import reverse
 from netbox.models import NetBoxModel
 
 
-class RIRSiteAddress(NetBoxModel):
-    """Cached structured address for a NetBox Site, populated via geocoding or manual entry."""
+class RIRAddress(NetBoxModel):
+    """Structured address for RIR records, optionally linked to a NetBox Site."""
 
     site = models.OneToOneField(
         "dcim.Site",
         on_delete=models.CASCADE,
         related_name="rir_address",
+        null=True,
+        blank=True,
     )
     street_address = models.TextField(blank=True, default="")
     city = models.CharField(max_length=100, blank=True, default="")
@@ -31,12 +33,13 @@ class RIRSiteAddress(NetBoxModel):
     last_resolved = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ["site__name"]
-        verbose_name = "RIR site address"
-        verbose_name_plural = "RIR site addresses"
+        ordering = ["city", "country"]
+        verbose_name = "RIR address"
+        verbose_name_plural = "RIR addresses"
 
     def __str__(self):
-        return f"{self.site.name} - {self.city}, {self.country}" if self.city else f"{self.site.name}"
+        label = self.site.name if self.site else "No site"
+        return f"{label} - {self.city}, {self.country}" if self.city else label
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_rir_manager:rirsiteaddress", args=[self.pk])
+        return reverse("plugins:netbox_rir_manager:riraddress", args=[self.pk])

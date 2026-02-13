@@ -59,14 +59,14 @@ class TestRIRConfig:
 @pytest.mark.django_db
 class TestRIROrganization:
     def test_create_rir_organization(self, rir_config):
-        from netbox_rir_manager.models import RIROrganization
+        from netbox_rir_manager.models import RIRAddress, RIROrganization
 
+        addr = RIRAddress.objects.create(city="Anytown", country="US")
         org = RIROrganization.objects.create(
             rir_config=rir_config,
             handle="EXAMPLE-ARIN",
             name="Example Corp",
-            city="Anytown",
-            country="US",
+            address=addr,
         )
         assert org.pk is not None
         assert str(org) == "EXAMPLE-ARIN"

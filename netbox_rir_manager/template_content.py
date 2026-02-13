@@ -1,6 +1,6 @@
 from netbox.plugins import PluginTemplateExtension
 
-from netbox_rir_manager.models import RIRNetwork, RIRSiteAddress
+from netbox_rir_manager.models import RIRAddress, RIRNetwork
 
 
 class RIRAggregateExtension(PluginTemplateExtension):
@@ -32,6 +32,7 @@ class RIRPrefixExtension(PluginTemplateExtension):
     def right_page(self):
         obj = self.context["object"]
         from ipam.models import Aggregate
+
         from netbox_rir_manager.models import RIRConfig
 
         rir_networks = RIRNetwork.objects.filter(prefix=obj)
@@ -84,7 +85,7 @@ class RIRSiteExtension(PluginTemplateExtension):
         obj = self.context["object"]
         try:
             site_address = obj.rir_address
-        except RIRSiteAddress.DoesNotExist:
+        except RIRAddress.DoesNotExist:
             site_address = None
 
         return self.render(

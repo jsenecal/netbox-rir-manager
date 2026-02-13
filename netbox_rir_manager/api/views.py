@@ -7,12 +7,12 @@ from rest_framework.response import Response
 from netbox_rir_manager.api.serializers import (
     NetworkReallocateSerializer,
     NetworkReassignSerializer,
+    RIRAddressSerializer,
     RIRConfigSerializer,
     RIRContactSerializer,
     RIRCustomerSerializer,
     RIRNetworkSerializer,
     RIROrganizationSerializer,
-    RIRSiteAddressSerializer,
     RIRSyncLogSerializer,
     RIRTicketSerializer,
     RIRUserKeySerializer,
@@ -20,23 +20,23 @@ from netbox_rir_manager.api.serializers import (
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
+    RIRAddressFilterSet,
     RIRConfigFilterSet,
     RIRContactFilterSet,
     RIRCustomerFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
-    RIRSiteAddressFilterSet,
     RIRSyncLogFilterSet,
     RIRTicketFilterSet,
     RIRUserKeyFilterSet,
 )
 from netbox_rir_manager.models import (
+    RIRAddress,
     RIRConfig,
     RIRContact,
     RIRCustomer,
     RIRNetwork,
     RIROrganization,
-    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -316,10 +316,10 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         )
 
 
-class RIRSiteAddressViewSet(NetBoxModelViewSet):
-    queryset = RIRSiteAddress.objects.prefetch_related("tags")
-    serializer_class = RIRSiteAddressSerializer
-    filterset_class = RIRSiteAddressFilterSet
+class RIRAddressViewSet(NetBoxModelViewSet):
+    queryset = RIRAddress.objects.prefetch_related("tags")
+    serializer_class = RIRAddressSerializer
+    filterset_class = RIRAddressFilterSet
 
 
 class RIRSyncLogViewSet(NetBoxModelViewSet):

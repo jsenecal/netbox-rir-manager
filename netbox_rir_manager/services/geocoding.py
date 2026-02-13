@@ -10,7 +10,7 @@ from django.utils import timezone
 if TYPE_CHECKING:
     from dcim.models import Site
 
-    from netbox_rir_manager.models import RIRSiteAddress
+    from netbox_rir_manager.models import RIRAddress
 
 logger = logging.getLogger(__name__)
 
@@ -135,22 +135,22 @@ def _get_geocoding_service() -> GeocodingService:
     return NominatimGeocoder()
 
 
-def resolve_site_address(site: Site) -> RIRSiteAddress | None:
+def resolve_site_address(site: Site) -> RIRAddress | None:
     """
     Resolve or return cached structured address for a Site.
 
-    1. If RIRSiteAddress already exists for this Site, return it.
+    1. If RIRAddress already exists for this Site, return it.
     2. If Site has latitude/longitude, reverse geocode.
     3. Else if Site has physical_address, forward geocode.
-    4. If geocoding succeeds, create and return RIRSiteAddress.
+    4. If geocoding succeeds, create and return RIRAddress.
     5. If fails, return None.
     """
-    from netbox_rir_manager.models import RIRSiteAddress
+    from netbox_rir_manager.models import RIRAddress
 
     # Check for existing cached address
     try:
         return site.rir_address
-    except RIRSiteAddress.DoesNotExist:
+    except RIRAddress.DoesNotExist:
         pass
 
     geocoder = _get_geocoding_service()
@@ -168,7 +168,7 @@ def resolve_site_address(site: Site) -> RIRSiteAddress | None:
         logger.warning("Could not resolve address for site %s (pk=%s)", site.name, site.pk)
         return None
 
-    address = RIRSiteAddress.objects.create(
+    address = RIRAddress.objects.create(
         site=site,
         street_address=result.street_address,
         city=result.city,

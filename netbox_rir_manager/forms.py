@@ -8,15 +8,55 @@ from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import BulkEditNullBooleanSelect
 
 from netbox_rir_manager.models import (
+    RIRAddress,
     RIRConfig,
     RIRContact,
     RIRCustomer,
     RIRNetwork,
     RIROrganization,
-    RIRSiteAddress,
     RIRTicket,
     RIRUserKey,
 )
+
+ADDRESS_FIELDS = ("street_address", "city", "state_province", "postal_code", "country")
+
+
+class _AddressFormMixin:
+    """Mixin that adds address form fields and transparently manages RIRAddress FK."""
+
+    def _init_address_fields(self):
+        """Populate address form fields from the linked RIRAddress."""
+        if self.instance and self.instance.pk and self.instance.address:
+            addr = self.instance.address
+            for field in ADDRESS_FIELDS:
+                self.initial.setdefault(field, getattr(addr, field, ""))
+
+    def _save_address(self, commit=True):
+        """Create or update the linked RIRAddress from form fields."""
+        address_data = {f: self.cleaned_data.get(f, "") for f in ADDRESS_FIELDS}
+        has_data = any(address_data.values())
+
+        if has_data:
+            if self.instance.address:
+                for key, val in address_data.items():
+                    setattr(self.instance.address, key, val)
+                if commit:
+                    self.instance.address.save()
+            else:
+                addr = RIRAddress(**address_data)
+                if commit:
+                    addr.save()
+                    self.instance.address = addr
+        elif self.instance.address and not self.instance.address.site:
+            # No address data and not site-linked: remove orphan
+            orphan = self.instance.address
+            self.instance.address = None
+            if commit:
+                self.instance.save(update_fields=["address"])
+                orphan.delete()
+                return
+        if commit:
+            self.instance.save(update_fields=["address"])
 
 
 class RIRConfigForm(NetBoxModelForm):
@@ -57,9 +97,16 @@ class RIRConfigImportForm(NetBoxModelImportForm):
         fields = ("rir", "name", "api_url", "org_handle", "is_active")
 
 
-class RIROrganizationForm(NetBoxModelForm):
+class RIROrganizationForm(_AddressFormMixin, NetBoxModelForm):
     rir_config = DynamicModelChoiceField(queryset=RIRConfig.objects.all())
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False)
+
+    # Explicit address form fields (not model fields)
+    street_address = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False)
+    city = forms.CharField(max_length=100, required=False)
+    state_province = forms.CharField(max_length=100, required=False)
+    postal_code = forms.CharField(max_length=20, required=False)
+    country = forms.CharField(max_length=2, required=False, help_text="ISO-3166-1 alpha-2 country code")
 
     fieldsets = (
         FieldSet("rir_config", "handle", "name", "tenant", name="Organization"),
@@ -74,13 +121,18 @@ class RIROrganizationForm(NetBoxModelForm):
             "handle",
             "name",
             "tenant",
-            "street_address",
-            "city",
-            "state_province",
-            "postal_code",
-            "country",
             "tags",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_address_fields()
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit:
+            self._save_address(commit=True)
+        return instance
 
 
 class RIROrganizationFilterForm(NetBoxModelFilterSetForm):
@@ -92,10 +144,17 @@ class RIROrganizationFilterForm(NetBoxModelFilterSetForm):
     country = forms.CharField(required=False)
 
 
-class RIRContactForm(NetBoxModelForm):
+class RIRContactForm(_AddressFormMixin, NetBoxModelForm):
     rir_config = DynamicModelChoiceField(queryset=RIRConfig.objects.all())
     organization = DynamicModelChoiceField(queryset=RIROrganization.objects.all(), required=False)
     contact = DynamicModelChoiceField(queryset=Contact.objects.all(), required=False)
+
+    # Explicit address form fields
+    street_address = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False)
+    city = forms.CharField(max_length=100, required=False)
+    state_province = forms.CharField(max_length=100, required=False)
+    postal_code = forms.CharField(max_length=20, required=False)
+    country = forms.CharField(max_length=2, required=False, help_text="ISO-3166-1 alpha-2 country code")
 
     fieldsets = (
         FieldSet("rir_config", "handle", "contact_type", name="Contact"),
@@ -116,15 +175,20 @@ class RIRContactForm(NetBoxModelForm):
             "company_name",
             "email",
             "phone",
-            "street_address",
-            "city",
-            "state_province",
-            "postal_code",
-            "country",
             "organization",
             "contact",
             "tags",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_address_fields()
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit:
+            self._save_address(commit=True)
+        return instance
 
 
 class RIRContactFilterForm(NetBoxModelFilterSetForm):
@@ -190,7 +254,7 @@ class RIRNetworkFilterForm(NetBoxModelFilterSetForm):
     auto_reassign = forms.NullBooleanField(required=False)
 
 
-class RIRSiteAddressForm(NetBoxModelForm):
+class RIRAddressForm(NetBoxModelForm):
     fieldsets = (
         FieldSet("site", name="Site"),
         FieldSet("street_address", "city", "state_province", "postal_code", "country", name="Address"),
@@ -198,7 +262,7 @@ class RIRSiteAddressForm(NetBoxModelForm):
     )
 
     class Meta:
-        model = RIRSiteAddress
+        model = RIRAddress
         fields = (
             "site",
             "street_address",

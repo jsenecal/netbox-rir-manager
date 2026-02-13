@@ -12,17 +12,18 @@ from netbox.views import generic
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
+    RIRAddressFilterSet,
     RIRConfigFilterSet,
     RIRContactFilterSet,
     RIRCustomerFilterSet,
     RIRNetworkFilterSet,
     RIROrganizationFilterSet,
-    RIRSiteAddressFilterSet,
     RIRSyncLogFilterSet,
     RIRTicketFilterSet,
     RIRUserKeyFilterSet,
 )
 from netbox_rir_manager.forms import (
+    RIRAddressForm,
     RIRConfigBulkEditForm,
     RIRConfigFilterForm,
     RIRConfigForm,
@@ -36,29 +37,28 @@ from netbox_rir_manager.forms import (
     RIRNetworkReassignForm,
     RIROrganizationFilterForm,
     RIROrganizationForm,
-    RIRSiteAddressForm,
     RIRTicketFilterForm,
     RIRUserKeyFilterForm,
     RIRUserKeyForm,
 )
 from netbox_rir_manager.models import (
+    RIRAddress,
     RIRConfig,
     RIRContact,
     RIRCustomer,
     RIRNetwork,
     RIROrganization,
-    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
 )
 from netbox_rir_manager.tables import (
+    RIRAddressTable,
     RIRConfigTable,
     RIRContactTable,
     RIRCustomerTable,
     RIRNetworkTable,
     RIROrganizationTable,
-    RIRSiteAddressTable,
     RIRSyncLogTable,
     RIRTicketTable,
     RIRUserKeyTable,
@@ -155,14 +155,14 @@ class RIRConfigBulkSyncView(LoginRequiredMixin, View):
 
 # --- RIROrganization Views ---
 class RIROrganizationListView(generic.ObjectListView):
-    queryset = RIROrganization.objects.all()
+    queryset = RIROrganization.objects.select_related("address").all()
     table = RIROrganizationTable
     filterset = RIROrganizationFilterSet
     filterset_form = RIROrganizationFilterForm
 
 
 class RIROrganizationView(generic.ObjectView):
-    queryset = RIROrganization.objects.all()
+    queryset = RIROrganization.objects.select_related("address").all()
 
 
 class RIROrganizationEditView(generic.ObjectEditView):
@@ -176,14 +176,14 @@ class RIROrganizationDeleteView(generic.ObjectDeleteView):
 
 # --- RIRContact Views ---
 class RIRContactListView(generic.ObjectListView):
-    queryset = RIRContact.objects.all()
+    queryset = RIRContact.objects.select_related("address").all()
     table = RIRContactTable
     filterset = RIRContactFilterSet
     filterset_form = RIRContactFilterForm
 
 
 class RIRContactView(generic.ObjectView):
-    queryset = RIRContact.objects.all()
+    queryset = RIRContact.objects.select_related("address").all()
 
 
 class RIRContactEditView(generic.ObjectEditView):
@@ -197,14 +197,14 @@ class RIRContactDeleteView(generic.ObjectDeleteView):
 
 # --- RIRCustomer Views ---
 class RIRCustomerListView(generic.ObjectListView):
-    queryset = RIRCustomer.objects.all()
+    queryset = RIRCustomer.objects.select_related("address").all()
     table = RIRCustomerTable
     filterset = RIRCustomerFilterSet
     filterset_form = RIRCustomerFilterForm
 
 
 class RIRCustomerView(generic.ObjectView):
-    queryset = RIRCustomer.objects.all()
+    queryset = RIRCustomer.objects.select_related("address").all()
 
 
 class RIRCustomerDeleteView(generic.ObjectDeleteView):
@@ -232,24 +232,24 @@ class RIRNetworkDeleteView(generic.ObjectDeleteView):
     queryset = RIRNetwork.objects.all()
 
 
-# --- RIRSiteAddress Views ---
-class RIRSiteAddressListView(generic.ObjectListView):
-    queryset = RIRSiteAddress.objects.all()
-    table = RIRSiteAddressTable
-    filterset = RIRSiteAddressFilterSet
+# --- RIRAddress Views ---
+class RIRAddressListView(generic.ObjectListView):
+    queryset = RIRAddress.objects.all()
+    table = RIRAddressTable
+    filterset = RIRAddressFilterSet
 
 
-class RIRSiteAddressView(generic.ObjectView):
-    queryset = RIRSiteAddress.objects.all()
+class RIRAddressView(generic.ObjectView):
+    queryset = RIRAddress.objects.all()
 
 
-class RIRSiteAddressEditView(generic.ObjectEditView):
-    queryset = RIRSiteAddress.objects.all()
-    form = RIRSiteAddressForm
+class RIRAddressEditView(generic.ObjectEditView):
+    queryset = RIRAddress.objects.all()
+    form = RIRAddressForm
 
 
-class RIRSiteAddressDeleteView(generic.ObjectDeleteView):
-    queryset = RIRSiteAddress.objects.all()
+class RIRAddressDeleteView(generic.ObjectDeleteView):
+    queryset = RIRAddress.objects.all()
 
 
 # --- RIRSyncLog Views ---
@@ -398,15 +398,18 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
                 )
                 return redirect(network.get_absolute_url())
 
-            RIRCustomer.objects.create(
-                rir_config=network.rir_config,
-                handle=customer_result["handle"],
-                customer_name=customer_data["customer_name"],
+            addr = RIRAddress.objects.create(
                 street_address=customer_data.get("street_address", ""),
                 city=customer_data.get("city", ""),
                 state_province=customer_data.get("state_province", ""),
                 postal_code=customer_data.get("postal_code", ""),
                 country=customer_data.get("country", ""),
+            )
+            RIRCustomer.objects.create(
+                rir_config=network.rir_config,
+                handle=customer_result["handle"],
+                customer_name=customer_data["customer_name"],
+                address=addr,
                 network=network,
                 raw_data=customer_result,
                 created_date=timezone.now(),
@@ -819,7 +822,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
                 initial["state_province"] = site_address.state_province
                 initial["postal_code"] = site_address.postal_code
                 initial["country"] = site_address.country
-            except RIRSiteAddress.DoesNotExist:
+            except RIRAddress.DoesNotExist:
                 pass
 
         # Generate net_name from tenant + prefix
@@ -899,7 +902,7 @@ class SiteAddressResolveView(LoginRequiredMixin, View):
         site = get_object_or_404(Site, pk=pk)
 
         # Delete existing address if any (force re-resolve)
-        RIRSiteAddress.objects.filter(site=site).delete()
+        RIRAddress.objects.filter(site=site).delete()
 
         address = resolve_site_address(site)
         if address:

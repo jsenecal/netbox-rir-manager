@@ -12,7 +12,7 @@ from netbox.jobs import JobRunner, system_job
 from utilities.request import NetBoxFakeRequest, apply_request_processors
 
 from netbox_rir_manager.backends.arin import ARINBackend
-from netbox_rir_manager.models import RIRContact, RIRCustomer, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.models import RIRAddress, RIRContact, RIRCustomer, RIRNetwork, RIROrganization, RIRSyncLog
 
 if TYPE_CHECKING:
     from netbox_rir_manager.models import RIRConfig, RIRUserKey
@@ -106,21 +106,37 @@ def _sync_organization(
         logs.append(sync_log)
         return logs, None
 
+    # Build address data from org_data
+    address_data = {
+        "street_address": org_data.get("street_address", ""),
+        "city": org_data.get("city", ""),
+        "state_province": org_data.get("state_province", ""),
+        "postal_code": org_data.get("postal_code", ""),
+        "country": org_data.get("country", ""),
+    }
+    has_address = any(address_data.values())
+
     org, created = RIROrganization.objects.update_or_create(
         handle=org_data["handle"],
         defaults={
             "rir_config": rir_config,
             "name": org_data.get("name", ""),
-            "street_address": org_data.get("street_address", ""),
-            "city": org_data.get("city", ""),
-            "state_province": org_data.get("state_province", ""),
-            "postal_code": org_data.get("postal_code", ""),
-            "country": org_data.get("country", ""),
             "raw_data": org_data,
             "last_synced": timezone.now(),
             "synced_by": user_key,
         },
     )
+
+    # Create or update linked address
+    if has_address:
+        if org.address:
+            for key, val in address_data.items():
+                setattr(org.address, key, val)
+            org.address.save()
+        else:
+            addr = RIRAddress.objects.create(**address_data)
+            org.address = addr
+            org.save(update_fields=["address"])
 
     log.info(f"{'Created' if created else 'Updated'} organization {org_data['handle']}")
 
@@ -169,6 +185,16 @@ def _sync_contacts(
             logs.append(sync_log)
             continue
 
+        # Build address data from poc_data
+        contact_address_data = {
+            "street_address": poc_data.get("street_address") or "",
+            "city": poc_data.get("city") or "",
+            "state_province": poc_data.get("state_province") or "",
+            "postal_code": poc_data.get("postal_code") or "",
+            "country": poc_data.get("country") or "",
+        }
+        has_contact_address = any(contact_address_data.values())
+
         contact, created = RIRContact.objects.update_or_create(
             handle=poc_data["handle"],
             defaults={
@@ -179,17 +205,23 @@ def _sync_contacts(
                 "company_name": poc_data.get("company_name") or "",
                 "email": poc_data.get("email") or "",
                 "phone": poc_data.get("phone") or "",
-                "street_address": poc_data.get("street_address") or "",
-                "city": poc_data.get("city") or "",
-                "state_province": poc_data.get("state_province") or "",
-                "postal_code": poc_data.get("postal_code") or "",
-                "country": poc_data.get("country") or "",
                 "organization": org,
                 "raw_data": poc_data.get("raw_data") or {},
                 "last_synced": timezone.now(),
                 "synced_by": user_key,
             },
         )
+
+        # Create or update linked address
+        if has_contact_address:
+            if contact.address:
+                for key, val in contact_address_data.items():
+                    setattr(contact.address, key, val)
+                contact.address.save()
+            else:
+                addr = RIRAddress.objects.create(**contact_address_data)
+                contact.address = addr
+                contact.save(update_fields=["address"])
 
         log.info(f"{'Created' if created else 'Updated'} contact {poc_data['handle']}")
         sync_log = RIRSyncLog.objects.create(
@@ -242,21 +274,37 @@ def _sync_customer_for_net(
     else:
         created_date = timezone.now()
 
+    # Build address data from cust_data
+    cust_address_data = {
+        "street_address": cust_data.get("street_address", ""),
+        "city": cust_data.get("city", ""),
+        "state_province": cust_data.get("state_province", ""),
+        "postal_code": cust_data.get("postal_code", ""),
+        "country": cust_data.get("country", ""),
+    }
+    has_cust_address = any(cust_address_data.values())
+
     _customer, created = RIRCustomer.objects.update_or_create(
         handle=cust_data["handle"],
         defaults={
             "rir_config": rir_config,
             "customer_name": cust_data.get("customer_name", ""),
-            "street_address": cust_data.get("street_address", ""),
-            "city": cust_data.get("city", ""),
-            "state_province": cust_data.get("state_province", ""),
-            "postal_code": cust_data.get("postal_code", ""),
-            "country": cust_data.get("country", ""),
             "network": network,
             "raw_data": cust_data,
             "created_date": created_date,
         },
     )
+
+    # Create or update linked address
+    if has_cust_address:
+        if _customer.address:
+            for key, val in cust_address_data.items():
+                setattr(_customer.address, key, val)
+            _customer.address.save()
+        else:
+            addr = RIRAddress.objects.create(**cust_address_data)
+            _customer.address = addr
+            _customer.save(update_fields=["address"])
 
     log.info(f"{'Created' if created else 'Updated'} customer {cust_data['handle']}")
     return RIRSyncLog.objects.create(
@@ -433,7 +481,7 @@ class ReassignJob(JobRunner):
         from ipam.models import Aggregate, Prefix
 
         from netbox_rir_manager.choices import normalize_ticket_status
-        from netbox_rir_manager.models import RIRSiteAddress, RIRTicket, RIRUserKey
+        from netbox_rir_manager.models import RIRTicket, RIRUserKey
         from netbox_rir_manager.services.geocoding import resolve_site_address
 
         prefix_id = kwargs.get("prefix_id")
@@ -555,7 +603,7 @@ class ReassignJob(JobRunner):
                 # Resolve site address
                 try:
                     site_address = site.rir_address
-                except RIRSiteAddress.DoesNotExist:
+                except RIRAddress.DoesNotExist:
                     site_address = resolve_site_address(site)
 
                 if not site_address:
@@ -588,15 +636,18 @@ class ReassignJob(JobRunner):
                     self.job.save()
                     return
 
-                RIRCustomer.objects.create(
-                    rir_config=rir_config,
-                    handle=customer_result["handle"],
-                    customer_name=tenant.name,
+                cust_addr = RIRAddress.objects.create(
                     street_address=site_address.street_address,
                     city=site_address.city,
                     state_province=site_address.state_province,
                     postal_code=site_address.postal_code,
                     country=site_address.country,
+                )
+                RIRCustomer.objects.create(
+                    rir_config=rir_config,
+                    handle=customer_result["handle"],
+                    customer_name=tenant.name,
+                    address=cust_addr,
                     network=parent_network,
                     tenant=tenant,
                     raw_data=customer_result,

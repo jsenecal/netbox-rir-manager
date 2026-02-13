@@ -111,16 +111,19 @@ if _netbox_available:
     @pytest.fixture
     def rir_organization(db, rir_config):
         """Create a test RIR organization."""
-        from netbox_rir_manager.models import RIROrganization
+        from netbox_rir_manager.models import RIRAddress, RIROrganization
 
-        return RIROrganization.objects.create(
-            rir_config=rir_config,
-            handle="TESTORG-ARIN",
-            name="Test Organization",
+        addr = RIRAddress.objects.create(
             city="Anytown",
             state_province="VA",
             postal_code="12345",
             country="US",
+        )
+        return RIROrganization.objects.create(
+            rir_config=rir_config,
+            handle="TESTORG-ARIN",
+            name="Test Organization",
+            address=addr,
         )
 
     @pytest.fixture

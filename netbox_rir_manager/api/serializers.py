@@ -2,12 +2,12 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
 from netbox_rir_manager.models import (
+    RIRAddress,
     RIRConfig,
     RIRContact,
     RIRCustomer,
     RIRNetwork,
     RIROrganization,
-    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -48,11 +48,7 @@ class RIROrganizationSerializer(NetBoxModelSerializer):
             "handle",
             "name",
             "tenant",
-            "street_address",
-            "city",
-            "state_province",
-            "postal_code",
-            "country",
+            "address",
             "raw_data",
             "last_synced",
             "tags",
@@ -78,6 +74,7 @@ class RIRContactSerializer(NetBoxModelSerializer):
             "company_name",
             "email",
             "phone",
+            "address",
             "organization",
             "contact",
             "raw_data",
@@ -100,11 +97,7 @@ class RIRCustomerSerializer(NetBoxModelSerializer):
             "rir_config",
             "handle",
             "customer_name",
-            "street_address",
-            "city",
-            "state_province",
-            "postal_code",
-            "country",
+            "address",
             "network",
             "tenant",
             "raw_data",
@@ -205,11 +198,11 @@ class RIRUserKeySerializer(NetBoxModelSerializer):
         )
 
 
-class RIRSiteAddressSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:rirsiteaddress-detail")
+class RIRAddressSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_rir_manager-api:riraddress-detail")
 
     class Meta:
-        model = RIRSiteAddress
+        model = RIRAddress
         fields = (
             "id",
             "url",

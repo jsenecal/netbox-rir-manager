@@ -16,11 +16,13 @@ class RIROrganization(NetBoxModel):
     )
     handle = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=255)
-    street_address = models.TextField(blank=True, default="")
-    city = models.CharField(max_length=100, blank=True, default="")
-    state_province = models.CharField(max_length=100, blank=True, default="")
-    postal_code = models.CharField(max_length=20, blank=True, default="")
-    country = models.CharField(max_length=2, blank=True, default="")
+    address = models.ForeignKey(
+        "netbox_rir_manager.RIRAddress",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rir_organizations",
+    )
     tenant = models.ForeignKey(
         "tenancy.Tenant",
         on_delete=models.SET_NULL,
@@ -68,11 +70,13 @@ class RIRContact(NetBoxModel):
     company_name = models.CharField(max_length=255, blank=True, default="")
     email = models.EmailField(blank=True, default="")
     phone = models.CharField(max_length=50, blank=True, default="")
-    street_address = models.TextField(blank=True, default="")
-    city = models.CharField(max_length=100, blank=True, default="")
-    state_province = models.CharField(max_length=100, blank=True, default="")
-    postal_code = models.CharField(max_length=20, blank=True, default="")
-    country = models.CharField(max_length=2, blank=True, default="")
+    address = models.ForeignKey(
+        "netbox_rir_manager.RIRAddress",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rir_contacts",
+    )
     organization = models.ForeignKey(
         RIROrganization,
         on_delete=models.SET_NULL,

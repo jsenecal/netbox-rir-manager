@@ -72,8 +72,6 @@ class TestRIROrganizationAPI:
             "rir_config": rir_config.pk,
             "handle": "NEWORG-ARIN",
             "name": "New Organization",
-            "city": "Springfield",
-            "country": "US",
         }
         response = admin_api_client.post(url, data, format="json")
         assert response.status_code == status.HTTP_201_CREATED

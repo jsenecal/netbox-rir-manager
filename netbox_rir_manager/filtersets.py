@@ -6,12 +6,12 @@ from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Contact, Tenant
 
 from netbox_rir_manager.models import (
+    RIRAddress,
     RIRConfig,
     RIRContact,
     RIRCustomer,
     RIRNetwork,
     RIROrganization,
-    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -33,10 +33,11 @@ class RIRConfigFilterSet(NetBoxModelFilterSet):
 class RIROrganizationFilterSet(NetBoxModelFilterSet):
     rir_config_id = django_filters.ModelMultipleChoiceFilter(queryset=RIRConfig.objects.all(), label="RIR Config")
     tenant_id = django_filters.ModelMultipleChoiceFilter(queryset=Tenant.objects.all(), label="Tenant")
+    country = django_filters.CharFilter(field_name="address__country")
 
     class Meta:
         model = RIROrganization
-        fields = ("id", "handle", "name", "rir_config_id", "tenant_id", "country")
+        fields = ("id", "handle", "name", "rir_config_id", "tenant_id")
 
     def search(self, queryset, name, value):
         return queryset.filter(handle__icontains=value) | queryset.filter(name__icontains=value)
@@ -97,13 +98,13 @@ class RIRNetworkFilterSet(NetBoxModelFilterSet):
         return queryset.filter(handle__icontains=value) | queryset.filter(net_name__icontains=value)
 
 
-class RIRSiteAddressFilterSet(NetBoxModelFilterSet):
+class RIRAddressFilterSet(NetBoxModelFilterSet):
     site_id = django_filters.NumberFilter(field_name="site__id")
     country = django_filters.CharFilter()
     auto_resolved = django_filters.BooleanFilter()
 
     class Meta:
-        model = RIRSiteAddress
+        model = RIRAddress
         fields = ("id", "site_id", "country", "auto_resolved")
 
     def search(self, queryset, name, value):

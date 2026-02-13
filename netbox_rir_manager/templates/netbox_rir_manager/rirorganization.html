@@ -30,31 +30,33 @@
                 </tr>
             </table>
         </div>
+        {% if object.address %}
         <div class="card">
             <h5 class="card-header">Address</h5>
             <table class="table table-hover attr-table">
                 <tr>
                     <th scope="row">Street Address</th>
-                    <td>{{ object.street_address|placeholder }}</td>
+                    <td>{{ object.address.street_address|placeholder }}</td>
                 </tr>
                 <tr>
                     <th scope="row">City</th>
-                    <td>{{ object.city|placeholder }}</td>
+                    <td>{{ object.address.city|placeholder }}</td>
                 </tr>
                 <tr>
                     <th scope="row">State/Province</th>
-                    <td>{{ object.state_province|placeholder }}</td>
+                    <td>{{ object.address.state_province|placeholder }}</td>
                 </tr>
                 <tr>
                     <th scope="row">Postal Code</th>
-                    <td>{{ object.postal_code|placeholder }}</td>
+                    <td>{{ object.address.postal_code|placeholder }}</td>
                 </tr>
                 <tr>
                     <th scope="row">Country</th>
-                    <td>{{ object.country|placeholder }}</td>
+                    <td>{{ object.address.country|placeholder }}</td>
                 </tr>
             </table>
         </div>
+        {% endif %}
         {% plugin_left_page object %}
     </div>
     <div class="col col-md-6">

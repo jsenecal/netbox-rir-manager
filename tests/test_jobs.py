@@ -348,7 +348,8 @@ class TestRIRSyncJob:
         assert RIRCustomer.objects.filter(handle="C07654321").exists()
         customer = RIRCustomer.objects.get(handle="C07654321")
         assert customer.customer_name == "Acme Corp"
-        assert customer.city == "Anytown"
+        assert customer.address is not None
+        assert customer.address.city == "Anytown"
         net = RIRNetwork.objects.get(handle="NET-192-0-2-0-1")
         assert customer.network == net
 

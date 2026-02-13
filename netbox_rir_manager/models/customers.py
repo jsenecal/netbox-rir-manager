@@ -14,11 +14,13 @@ class RIRCustomer(NetBoxModel):
     )
     handle = models.CharField(max_length=50, unique=True)
     customer_name = models.CharField(max_length=255)
-    street_address = models.TextField(blank=True, default="")
-    city = models.CharField(max_length=100, blank=True, default="")
-    state_province = models.CharField(max_length=100, blank=True, default="")
-    postal_code = models.CharField(max_length=20, blank=True, default="")
-    country = models.CharField(max_length=2, blank=True, default="")
+    address = models.ForeignKey(
+        "netbox_rir_manager.RIRAddress",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rir_customers",
+    )
     network = models.ForeignKey(
         "netbox_rir_manager.RIRNetwork",
         on_delete=models.CASCADE,

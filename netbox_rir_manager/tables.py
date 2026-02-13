@@ -2,12 +2,12 @@ import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 
 from netbox_rir_manager.models import (
+    RIRAddress,
     RIRConfig,
     RIRContact,
     RIRCustomer,
     RIRNetwork,
     RIROrganization,
-    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -43,8 +43,8 @@ class RIROrganizationTable(NetBoxTable):
     name = tables.Column()
     rir_config = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
-    city = tables.Column()
-    country = tables.Column()
+    city = tables.Column(accessor="address__city", verbose_name="City")
+    country = tables.Column(accessor="address__country", verbose_name="Country")
     last_synced = columns.DateTimeColumn()
 
     class Meta(NetBoxTable.Meta):
@@ -61,8 +61,8 @@ class RIRContactTable(NetBoxTable):
     company_name = tables.Column()
     email = tables.Column()
     phone = tables.Column()
-    city = tables.Column()
-    country = tables.Column()
+    city = tables.Column(accessor="address__city", verbose_name="City")
+    country = tables.Column(accessor="address__country", verbose_name="Country")
     organization = tables.Column(linkify=True)
     contact = tables.Column(linkify=True)
     last_synced = columns.DateTimeColumn()
@@ -94,8 +94,8 @@ class RIRCustomerTable(NetBoxTable):
     rir_config = tables.Column(linkify=True)
     network = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
-    city = tables.Column()
-    country = tables.Column()
+    city = tables.Column(accessor="address__city", verbose_name="City")
+    country = tables.Column(accessor="address__country", verbose_name="Country")
     created_date = columns.DateTimeColumn()
     actions = columns.ActionsColumn(actions=("delete", "changelog"))
 
@@ -152,7 +152,7 @@ class RIRNetworkTable(NetBoxTable):
         )
 
 
-class RIRSiteAddressTable(NetBoxTable):
+class RIRAddressTable(NetBoxTable):
     site = tables.Column(linkify=True)
     city = tables.Column()
     state_province = tables.Column()
@@ -161,7 +161,7 @@ class RIRSiteAddressTable(NetBoxTable):
     last_resolved = columns.DateTimeColumn()
 
     class Meta(NetBoxTable.Meta):
-        model = RIRSiteAddress
+        model = RIRAddress
         fields = ("pk", "id", "site", "city", "state_province", "country", "auto_resolved", "last_resolved")
         default_columns = ("site", "city", "state_province", "country", "auto_resolved", "last_resolved")
 

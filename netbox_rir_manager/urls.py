@@ -3,12 +3,12 @@ from netbox.views.generic import ObjectChangeLogView, ObjectJobsView
 
 from netbox_rir_manager import views
 from netbox_rir_manager.models import (
+    RIRAddress,
     RIRConfig,
     RIRContact,
     RIRCustomer,
     RIRNetwork,
     RIROrganization,
-    RIRSiteAddress,
     RIRSyncLog,
     RIRTicket,
     RIRUserKey,
@@ -89,17 +89,17 @@ urlpatterns = [
     path("networks/<int:pk>/reallocate/", views.RIRNetworkReallocateView.as_view(), name="rirnetwork_reallocate"),
     path("networks/<int:pk>/remove/", views.RIRNetworkRemoveView.as_view(), name="rirnetwork_remove"),
     path("networks/<int:pk>/delete-arin/", views.RIRNetworkDeleteARINView.as_view(), name="rirnetwork_delete_arin"),
-    # RIRSiteAddress
-    path("site-addresses/", views.RIRSiteAddressListView.as_view(), name="rirsiteaddress_list"),
-    path("site-addresses/add/", views.RIRSiteAddressEditView.as_view(), name="rirsiteaddress_add"),
-    path("site-addresses/<int:pk>/", views.RIRSiteAddressView.as_view(), name="rirsiteaddress"),
-    path("site-addresses/<int:pk>/edit/", views.RIRSiteAddressEditView.as_view(), name="rirsiteaddress_edit"),
-    path("site-addresses/<int:pk>/delete/", views.RIRSiteAddressDeleteView.as_view(), name="rirsiteaddress_delete"),
+    # RIRAddress
+    path("addresses/", views.RIRAddressListView.as_view(), name="riraddress_list"),
+    path("addresses/add/", views.RIRAddressEditView.as_view(), name="riraddress_add"),
+    path("addresses/<int:pk>/", views.RIRAddressView.as_view(), name="riraddress"),
+    path("addresses/<int:pk>/edit/", views.RIRAddressEditView.as_view(), name="riraddress_edit"),
+    path("addresses/<int:pk>/delete/", views.RIRAddressDeleteView.as_view(), name="riraddress_delete"),
     path(
-        "site-addresses/<int:pk>/changelog/",
+        "addresses/<int:pk>/changelog/",
         ObjectChangeLogView.as_view(),
-        name="rirsiteaddress_changelog",
-        kwargs={"model": RIRSiteAddress},
+        name="riraddress_changelog",
+        kwargs={"model": RIRAddress},
     ),
     # RIRSyncLog
     path("sync-logs/", views.RIRSyncLogListView.as_view(), name="rirsynclog_list"),
