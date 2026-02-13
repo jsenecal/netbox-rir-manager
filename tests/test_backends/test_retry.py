@@ -19,6 +19,15 @@ class TestARINBackendRetry:
         mock_org.iso3166_2 = ""
         mock_org.postal_code = ""
         mock_org.iso3166_1 = None
+        mock_org.dict.return_value = {
+            "handle": "TEST-ARIN",
+            "org_name": "Test",
+            "street_address": None,
+            "city": "",
+            "iso3166_2": "",
+            "postal_code": "",
+            "iso3166_1": None,
+        }
 
         # First two calls raise, third succeeds
         backend.api.org.from_handle = MagicMock(
@@ -52,6 +61,20 @@ class TestARINBackendRetry:
         mock_poc.city = ""
         mock_poc.postal_code = ""
         mock_poc.iso3166_1 = None
+        mock_poc.dict.return_value = {
+            "handle": "JD1-ARIN",
+            "contact_type": "PERSON",
+            "first_name": "John",
+            "last_name": "Doe",
+            "company_name": "",
+            "emails": [],
+            "phones": [],
+            "city": "",
+            "postal_code": "",
+            "iso3166_1": None,
+            "street_address": None,
+            "iso3166_2": "",
+        }
 
         backend.api.poc.from_handle = MagicMock(side_effect=[ConnectionError("fail"), mock_poc])
         result = backend.get_poc("JD1-ARIN")
@@ -69,6 +92,14 @@ class TestARINBackendRetry:
         mock_net.org_handle = ""
         mock_net.parent_net_handle = ""
         mock_net.net_blocks = []
+        mock_net.dict.return_value = {
+            "handle": "NET-1",
+            "net_name": "TEST",
+            "version": 4,
+            "org_handle": "",
+            "parent_net_handle": "",
+            "net_blocks": [],
+        }
 
         backend.api.net.find_net = MagicMock(side_effect=[ConnectionError("fail"), mock_net])
         result = backend.find_net("192.0.2.0", "192.0.2.255")

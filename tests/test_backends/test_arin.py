@@ -106,6 +106,20 @@ def test_get_poc(mock_api_class):
     mock_poc.city = "Anytown"
     mock_poc.postal_code = "12345"
     mock_poc.iso3166_1 = MagicMock(code2="US")
+    mock_poc.dict.return_value = {
+        "handle": "JD123-ARIN",
+        "last_name": "Doe",
+        "first_name": "John",
+        "contact_type": "PERSON",
+        "company_name": "Example Corp",
+        "city": "Anytown",
+        "postal_code": "12345",
+        "iso3166_1": {"code2": "US"},
+        "emails": ["jdoe@example.com"],
+        "phones": [],
+        "street_address": None,
+        "iso3166_2": "",
+    }
     mock_api.poc.from_handle.return_value = mock_poc
     mock_api_class.return_value = mock_api
 
@@ -134,6 +148,16 @@ def test_get_poc_no_country(mock_api_class):
     mock_poc.last_name = "Doe"
     mock_poc.contact_type = "PERSON"
     mock_poc.iso3166_1 = None
+    mock_poc.dict.return_value = {
+        "handle": "JD123-ARIN",
+        "last_name": "Doe",
+        "contact_type": "PERSON",
+        "iso3166_1": None,
+        "emails": [],
+        "phones": [],
+        "street_address": None,
+        "iso3166_2": "",
+    }
     mock_api.poc.from_handle.return_value = mock_poc
     mock_api_class.return_value = mock_api
 
@@ -155,6 +179,15 @@ def test_get_organization(mock_api_class):
     mock_org.iso3166_2 = "VA"
     mock_org.postal_code = "12345"
     mock_org.iso3166_1 = MagicMock(code2="US")
+    mock_org.dict.return_value = {
+        "handle": "EXAMPLE-ARIN",
+        "org_name": "Example Corp",
+        "street_address": None,
+        "city": "Anytown",
+        "iso3166_2": "VA",
+        "postal_code": "12345",
+        "iso3166_1": {"code2": "US"},
+    }
     mock_api.org.from_handle.return_value = mock_org
     mock_api_class.return_value = mock_api
 
@@ -188,6 +221,15 @@ def test_get_organization_with_street_address(mock_api_class):
     mock_org.iso3166_2 = "VA"
     mock_org.postal_code = "12345"
     mock_org.iso3166_1 = MagicMock(code2="US")
+    mock_org.dict.return_value = {
+        "handle": "EXAMPLE-ARIN",
+        "org_name": "Example Corp",
+        "street_address": [{"line": "123 Main St"}, {"line": "Suite 100"}],
+        "city": "Anytown",
+        "iso3166_2": "VA",
+        "postal_code": "12345",
+        "iso3166_1": {"code2": "US"},
+    }
     mock_api.org.from_handle.return_value = mock_org
     mock_api_class.return_value = mock_api
 
@@ -208,6 +250,14 @@ def test_get_network(mock_api_class):
     mock_net.org_handle = "EXAMPLE-ARIN"
     mock_net.parent_net_handle = ""
     mock_net.net_blocks = None
+    mock_net.dict.return_value = {
+        "handle": "NET-192-0-2-0-1",
+        "net_name": "EXAMPLE-NET",
+        "version": 4,
+        "org_handle": "EXAMPLE-ARIN",
+        "parent_net_handle": "",
+        "net_blocks": None,
+    }
     mock_api.net.from_handle.return_value = mock_net
     mock_api_class.return_value = mock_api
 
@@ -220,7 +270,7 @@ def test_get_network(mock_api_class):
     assert result["net_name"] == "EXAMPLE-NET"
     assert result["version"] == 4
     assert result["org_handle"] == "EXAMPLE-ARIN"
-    assert result["net_blocks"] == []
+    assert result["net_blocks"] is None
     assert "raw_data" in result
 
 
@@ -240,6 +290,16 @@ def test_get_network_with_blocks(mock_api_class):
     block.cidr_length = 24
     block.type = "A"
     mock_net.net_blocks = [block]
+    mock_net.dict.return_value = {
+        "handle": "NET-192-0-2-0-1",
+        "net_name": "EXAMPLE-NET",
+        "version": 4,
+        "org_handle": "EXAMPLE-ARIN",
+        "parent_net_handle": "",
+        "net_blocks": [
+            {"start_address": "192.0.2.0", "end_address": "192.0.2.255", "cidr_length": 24, "type": "A"}
+        ],
+    }
 
     mock_api.net.from_handle.return_value = mock_net
     mock_api_class.return_value = mock_api
@@ -359,20 +419,24 @@ def _make_mock_net(**overrides):
     mock_net = MagicMock()
     for key, value in defaults.items():
         setattr(mock_net, key, value)
-    mock_net.dict.return_value = {}
+    mock_net.dict.return_value = dict(defaults)
     return mock_net
 
 
 def _make_mock_ticket_request(ticket_no="TKT-001", net=None):
     """Create a MagicMock that looks like a pyregrws TicketRequest."""
+    ticket_data = {
+        "ticket_no": ticket_no,
+        "web_ticket_status": "PENDING_REVIEW",
+        "web_ticket_type": "IPV4_SIMPLE_REASSIGN",
+        "web_ticket_resolution": "",
+        "created_date": "2026-02-05",
+        "resolved_date": "",
+    }
     mock_ticket = MagicMock()
-    mock_ticket.ticket_no = ticket_no
-    mock_ticket.web_ticket_status = "PENDING_REVIEW"
-    mock_ticket.web_ticket_type = "IPV4_SIMPLE_REASSIGN"
-    mock_ticket.web_ticket_resolution = ""
-    mock_ticket.created_date = "2026-02-05"
-    mock_ticket.resolved_date = ""
-    mock_ticket.dict.return_value = {}
+    for key, value in ticket_data.items():
+        setattr(mock_ticket, key, value)
+    mock_ticket.dict.return_value = dict(ticket_data)
 
     mock_ticket_request = MagicMock()
     mock_ticket_request.ticket = mock_ticket
@@ -810,7 +874,11 @@ def test_create_customer_success(mock_api_class):
     mock_customer.handle = "C-TEST"
     mock_customer.customer_name = "Test Customer"
     mock_customer.parent_org_handle = "ORG-TEST"
-    mock_customer.dict.return_value = {}
+    mock_customer.dict.return_value = {
+        "handle": "C-TEST",
+        "customer_name": "Test Customer",
+        "parent_org_handle": "ORG-TEST",
+    }
 
     mock_api.net.from_handle.return_value = mock_parent
     mock_api.customer.create_for_net.return_value = mock_customer
