@@ -9,12 +9,15 @@
                     <i class="mdi mdi-pencil"></i>
                 </a>
             {% endif %}
-            <form method="post" action="{% url 'plugins:netbox_rir_manager:site_resolve_address' object.pk %}" class="d-inline">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-primary" title="Resolve address via geocoding">
-                    <i class="mdi mdi-map-marker"></i> Resolve
-                </button>
-            </form>
+            <a href="#"
+                class="btn btn-sm btn-outline-primary"
+                title="Resolve address via geocoding"
+                data-bs-toggle="modal" data-bs-target="#htmx-modal"
+                hx-get="{% url 'plugins:netbox_rir_manager:site_resolve_address' object.pk %}"
+                hx-target="#htmx-modal .modal-content" hx-swap="innerHTML"
+            >
+                <i class="mdi mdi-map-marker"></i> Resolve
+            </a>
         </span>
     </h5>
     {% if site_address %}

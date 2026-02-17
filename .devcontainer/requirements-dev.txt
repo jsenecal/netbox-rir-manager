@@ -3,10 +3,12 @@ build
 bumpver
 debugpy
 djlint
+geopy
 ipython
 mock
 mypy
 pre-commit
+pycountry
 pytest
 pytest-cov
 pytest-django

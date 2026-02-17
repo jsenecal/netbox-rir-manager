@@ -26,6 +26,12 @@ class GeocodingResult:
     country: str  # ISO-3166-1 alpha-2 (e.g. "US", "CA")
     raw: dict
 
+    @property
+    def raw_json(self) -> str:
+        import json
+
+        return json.dumps(self.raw)
+
 
 class GeocodingService(ABC):
     """Abstract base class for geocoding providers."""
@@ -37,6 +43,14 @@ class GeocodingService(ABC):
     @abstractmethod
     def reverse_geocode(self, lat: float, lng: float) -> GeocodingResult | None:
         """Reverse geocode coordinates to structured address components."""
+
+    @abstractmethod
+    def geocode_many(self, address: str, limit: int = 5) -> list[GeocodingResult]:
+        """Forward geocode returning multiple candidates."""
+
+    @abstractmethod
+    def reverse_geocode_many(self, lat: float, lng: float, limit: int = 5) -> list[GeocodingResult]:
+        """Reverse geocode returning multiple candidates."""
 
 
 class NominatimGeocoder(GeocodingService):
@@ -71,6 +85,30 @@ class NominatimGeocoder(GeocodingService):
         except Exception:
             logger.exception("Nominatim reverse geocode failed for: %s, %s", lat, lng)
             return None
+
+    def geocode_many(self, address: str, limit: int = 5) -> list[GeocodingResult]:
+        try:
+            geocoder = self._get_geocoder()
+            locations = geocoder.geocode(address, addressdetails=True, language="en", exactly_one=False, limit=limit)
+            if not locations:
+                return []
+            return [self._parse_location(loc) for loc in locations]
+        except Exception:
+            logger.exception("Nominatim forward geocode_many failed for: %s", address)
+            return []
+
+    def reverse_geocode_many(self, lat: float, lng: float, limit: int = 5) -> list[GeocodingResult]:
+        try:
+            geocoder = self._get_geocoder()
+            # Nominatim reverse geocode doesn't support multiple results natively,
+            # so we get one result and return it as a list
+            location = geocoder.reverse((lat, lng), addressdetails=True, language="en")
+            if location is None:
+                return []
+            return [self._parse_location(location)]
+        except Exception:
+            logger.exception("Nominatim reverse geocode_many failed for: %s, %s", lat, lng)
+            return []
 
     def _parse_location(self, location) -> GeocodingResult:
         raw = location.raw or {}
@@ -133,6 +171,32 @@ def _get_geocoding_service() -> GeocodingService:
 
     # Default fallback
     return NominatimGeocoder()
+
+
+def resolve_site_address_candidates(site: Site, query: str | None = None, limit: int = 5) -> list[GeocodingResult]:
+    """
+    Return multiple geocoding candidates for a Site.
+
+    If query is provided, forward geocode that query.
+    Otherwise try reverse geocode from coords, fallback to forward geocode from physical_address.
+    Returns empty list if nothing works.
+    """
+    geocoder = _get_geocoding_service()
+
+    if query:
+        return geocoder.geocode_many(query, limit=limit)
+
+    # Try reverse geocode from coordinates
+    if site.latitude and site.longitude:
+        results = geocoder.reverse_geocode_many(float(site.latitude), float(site.longitude), limit=limit)
+        if results:
+            return results
+
+    # Fallback to forward geocode from physical address
+    if site.physical_address:
+        return geocoder.geocode_many(site.physical_address, limit=limit)
+
+    return []
 
 
 def resolve_site_address(site: Site) -> RIRAddress | None:

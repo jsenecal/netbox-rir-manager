@@ -1,12 +1,22 @@
 import ipaddress
+import json
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
-from netbox.object_actions import AddObject, BulkDelete, BulkEdit, BulkExport, BulkImport, ObjectAction
+from netbox.object_actions import (
+    AddObject,
+    BulkDelete,
+    BulkEdit,
+    BulkExport,
+    BulkImport,
+    DeleteObject,
+    ObjectAction,
+)
 from netbox.views import generic
 
 from netbox_rir_manager.backends.arin import ARINBackend
@@ -23,6 +33,7 @@ from netbox_rir_manager.filtersets import (
     RIRUserKeyFilterSet,
 )
 from netbox_rir_manager.forms import (
+    RIRAddressFilterForm,
     RIRAddressForm,
     RIRConfigBulkEditForm,
     RIRConfigFilterForm,
@@ -201,10 +212,12 @@ class RIRCustomerListView(generic.ObjectListView):
     table = RIRCustomerTable
     filterset = RIRCustomerFilterSet
     filterset_form = RIRCustomerFilterForm
+    actions = (BulkExport, BulkDelete)
 
 
 class RIRCustomerView(generic.ObjectView):
     queryset = RIRCustomer.objects.select_related("address").all()
+    actions = (DeleteObject,)
 
 
 class RIRCustomerDeleteView(generic.ObjectDeleteView):
@@ -237,6 +250,7 @@ class RIRAddressListView(generic.ObjectListView):
     queryset = RIRAddress.objects.all()
     table = RIRAddressTable
     filterset = RIRAddressFilterSet
+    filterset_form = RIRAddressFilterForm
 
 
 class RIRAddressView(generic.ObjectView):
@@ -890,27 +904,93 @@ class PrefixReassignView(LoginRequiredMixin, View):
         return redirect(prefix.get_absolute_url())
 
 
-# --- Site Address Resolve View ---
-class SiteAddressResolveView(LoginRequiredMixin, View):
-    """Resolve a Site's address via geocoding."""
+# --- Site Address Resolve Views ---
+class SiteAddressResolveModalView(LoginRequiredMixin, View):
+    """Return HTMX modal content with geocoding candidates for a Site."""
+
+    template_name = "netbox_rir_manager/htmx/site_address_resolve_modal.html"
+
+    def get(self, request, pk):
+        from dcim.models import Site
+
+        from netbox_rir_manager.services.geocoding import resolve_site_address_candidates
+
+        site = get_object_or_404(Site, pk=pk)
+        candidates = resolve_site_address_candidates(site)
+
+        # Pre-fill search field with physical address or coords
+        if site.physical_address:
+            search_query = site.physical_address
+        elif site.latitude and site.longitude:
+            search_query = f"{site.latitude}, {site.longitude}"
+        else:
+            search_query = ""
+
+        return render(request, self.template_name, {
+            "site": site,
+            "candidates": candidates,
+            "search_query": search_query,
+        })
 
     def post(self, request, pk):
         from dcim.models import Site
 
-        from netbox_rir_manager.services.geocoding import resolve_site_address
+        from netbox_rir_manager.services.geocoding import resolve_site_address_candidates
+
+        site = get_object_or_404(Site, pk=pk)
+        query = request.POST.get("query", "").strip()
+        candidates = resolve_site_address_candidates(site, query=query or None)
+
+        return render(request, self.template_name, {
+            "site": site,
+            "candidates": candidates,
+            "search_query": query,
+        })
+
+
+class SiteAddressSelectView(LoginRequiredMixin, View):
+    """Create an RIRAddress from a selected geocoding candidate."""
+
+    def post(self, request, pk):
+        from dcim.models import Site
 
         site = get_object_or_404(Site, pk=pk)
 
-        # Delete existing address if any (force re-resolve)
+        street_address = request.POST.get("street_address", "")
+        city = request.POST.get("city", "")
+        state_province = request.POST.get("state_province", "")
+        postal_code = request.POST.get("postal_code", "")
+        country = request.POST.get("country", "")
+        raw_geocode_str = request.POST.get("raw_geocode", "{}")
+
+        try:
+            raw_geocode = json.loads(raw_geocode_str)
+        except (json.JSONDecodeError, TypeError):
+            raw_geocode = {}
+
+        # Delete any existing RIRAddress for this site
         RIRAddress.objects.filter(site=site).delete()
 
-        address = resolve_site_address(site)
-        if address:
-            messages.success(
-                request,
-                f"Address resolved: {address.city}, {address.state_province}, {address.country}",
-            )
-        else:
-            messages.warning(request, "Could not resolve address for this site. Add coordinates or a physical address.")
+        # Use get_or_create on address fields to handle unique constraint
+        address, created = RIRAddress.objects.get_or_create(
+            street_address=street_address,
+            city=city,
+            state_province=state_province,
+            postal_code=postal_code,
+            country=country,
+            defaults={
+                "raw_geocode": raw_geocode,
+                "auto_resolved": True,
+                "last_resolved": timezone.now(),
+            },
+        )
 
-        return redirect(site.get_absolute_url())
+        # Assign site FK (whether newly created or existing)
+        address.site = site
+        address.auto_resolved = True
+        address.last_resolved = timezone.now()
+        if raw_geocode:
+            address.raw_geocode = raw_geocode
+        address.save()
+
+        return HttpResponse(status=204, headers={"HX-Redirect": site.get_absolute_url()})
