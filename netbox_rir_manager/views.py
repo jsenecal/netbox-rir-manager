@@ -157,11 +157,15 @@ class RIRConfigBulkSyncView(LoginRequiredMixin, View):
             messages.warning(request, "No configs were selected.")
             return redirect(reverse("plugins:netbox_rir_manager:rirconfig_list"))
 
-        return render(request, "netbox_rir_manager/rirconfig_bulk_sync.html", {
-            "table": table,
-            "pk_list": pk_list,
-            "return_url": reverse("plugins:netbox_rir_manager:rirconfig_list"),
-        })
+        return render(
+            request,
+            "netbox_rir_manager/rirconfig_bulk_sync.html",
+            {
+                "table": table,
+                "pk_list": pk_list,
+                "return_url": reverse("plugins:netbox_rir_manager:rirconfig_list"),
+            },
+        )
 
 
 # --- RIROrganization Views ---
@@ -697,7 +701,10 @@ class AggregateSyncView(LoginRequiredMixin, View):
             return redirect(aggregate.get_absolute_url())
 
         net, created = RIRNetwork.sync_from_arin(
-            net_data, rir_config, aggregate=aggregate, user_key=user_key,
+            net_data,
+            rir_config,
+            aggregate=aggregate,
+            user_key=user_key,
         )
 
         RIRSyncLog.objects.create(
@@ -724,9 +731,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
         prefix = get_object_or_404(Prefix, pk=pk)
 
         # Find parent aggregate to determine RIR config
-        agg = Aggregate.objects.filter(
-            prefix__net_contains_or_equals=prefix.prefix
-        ).first()
+        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
         if not agg:
             messages.error(request, "No parent aggregate found for this prefix.")
             return redirect(prefix.get_absolute_url())
@@ -770,7 +775,10 @@ class PrefixSyncView(LoginRequiredMixin, View):
             return redirect(prefix.get_absolute_url())
 
         net, created = RIRNetwork.sync_from_arin(
-            net_data, rir_config, prefix=prefix, user_key=user_key,
+            net_data,
+            rir_config,
+            prefix=prefix,
+            user_key=user_key,
         )
 
         RIRSyncLog.objects.create(
@@ -797,9 +805,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
         prefix = get_object_or_404(Prefix, pk=pk)
 
         # Find parent RIRNetwork
-        agg = Aggregate.objects.filter(
-            prefix__net_contains_or_equals=prefix.prefix
-        ).first()
+        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
         parent_network = RIRNetwork.objects.filter(aggregate=agg).first() if agg else None
 
         # Pre-fill form
@@ -860,9 +866,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
         form = RIRNetworkReassignForm(request.POST)
 
         # Find parent RIRNetwork
-        agg = Aggregate.objects.filter(
-            prefix__net_contains_or_equals=prefix.prefix
-        ).first()
+        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
         parent_network = RIRNetwork.objects.filter(aggregate=agg).first() if agg else None
 
         if not form.is_valid():
@@ -925,11 +929,15 @@ class SiteAddressResolveModalView(LoginRequiredMixin, View):
         else:
             search_query = ""
 
-        return render(request, self.template_name, {
-            "site": site,
-            "candidates": candidates,
-            "search_query": search_query,
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                "site": site,
+                "candidates": candidates,
+                "search_query": search_query,
+            },
+        )
 
     def post(self, request, pk):
         from dcim.models import Site
@@ -940,11 +948,15 @@ class SiteAddressResolveModalView(LoginRequiredMixin, View):
         query = request.POST.get("query", "").strip()
         candidates = resolve_site_address_candidates(site, query=query or None)
 
-        return render(request, self.template_name, {
-            "site": site,
-            "candidates": candidates,
-            "search_query": query,
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                "site": site,
+                "candidates": candidates,
+                "search_query": query,
+            },
+        )
 
 
 class SiteAddressSelectView(LoginRequiredMixin, View):

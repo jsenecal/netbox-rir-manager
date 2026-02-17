@@ -53,9 +53,7 @@ class RIRCustomerFilterSet(NetBoxModelFilterSet):
         fields = ("id", "handle", "customer_name", "rir_config_id", "network_id", "tenant_id")
 
     def search(self, queryset, name, value):
-        return queryset.filter(
-            models.Q(handle__icontains=value) | models.Q(customer_name__icontains=value)
-        )
+        return queryset.filter(models.Q(handle__icontains=value) | models.Q(customer_name__icontains=value))
 
 
 class RIRContactFilterSet(NetBoxModelFilterSet):

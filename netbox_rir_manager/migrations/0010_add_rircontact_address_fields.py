@@ -4,35 +4,34 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('netbox_rir_manager', '0009_add_rirnetwork_net_type'),
+        ("netbox_rir_manager", "0009_add_rirnetwork_net_type"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='rircontact',
-            name='city',
-            field=models.CharField(blank=True, default='', max_length=100),
+            model_name="rircontact",
+            name="city",
+            field=models.CharField(blank=True, default="", max_length=100),
         ),
         migrations.AddField(
-            model_name='rircontact',
-            name='country',
-            field=models.CharField(blank=True, default='', max_length=2),
+            model_name="rircontact",
+            name="country",
+            field=models.CharField(blank=True, default="", max_length=2),
         ),
         migrations.AddField(
-            model_name='rircontact',
-            name='postal_code',
-            field=models.CharField(blank=True, default='', max_length=20),
+            model_name="rircontact",
+            name="postal_code",
+            field=models.CharField(blank=True, default="", max_length=20),
         ),
         migrations.AddField(
-            model_name='rircontact',
-            name='state_province',
-            field=models.CharField(blank=True, default='', max_length=100),
+            model_name="rircontact",
+            name="state_province",
+            field=models.CharField(blank=True, default="", max_length=100),
         ),
         migrations.AddField(
-            model_name='rircontact',
-            name='street_address',
-            field=models.TextField(blank=True, default=''),
+            model_name="rircontact",
+            name="street_address",
+            field=models.TextField(blank=True, default=""),
         ),
     ]

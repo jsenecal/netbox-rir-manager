@@ -206,9 +206,7 @@ class RIRNetwork(NetBoxModel):
     @classmethod
     def find_for_prefix(cls, prefix):
         """Find the parent RIRNetwork for a prefix via its containing Aggregate."""
-        agg = Aggregate.objects.filter(
-            prefix__net_contains_or_equals=prefix.prefix
-        ).first()
+        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
         if not agg:
             return None, None
         network = cls.objects.filter(aggregate=agg).first()

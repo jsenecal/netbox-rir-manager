@@ -214,9 +214,7 @@ class RIRAddressForm(NetBoxModelForm):
 
 class RIRAddressFilterForm(NetBoxModelFilterSetForm):
     model = RIRAddress
-    site_id = DynamicModelMultipleChoiceField(
-        queryset=Site.objects.all(), required=False, label="Site"
-    )
+    site_id = DynamicModelMultipleChoiceField(queryset=Site.objects.all(), required=False, label="Site")
     country = forms.CharField(required=False)
     auto_resolved = forms.NullBooleanField(required=False)
 

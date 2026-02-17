@@ -296,9 +296,7 @@ def test_get_network_with_blocks(mock_api_class):
         "version": 4,
         "org_handle": "EXAMPLE-ARIN",
         "parent_net_handle": "",
-        "net_blocks": [
-            {"start_address": "192.0.2.0", "end_address": "192.0.2.255", "cidr_length": 24, "type": "A"}
-        ],
+        "net_blocks": [{"start_address": "192.0.2.0", "end_address": "192.0.2.255", "cidr_length": 24, "type": "A"}],
     }
 
     mock_api.net.from_handle.return_value = mock_net

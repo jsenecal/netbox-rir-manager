@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('dcim', '0225_gfk_indexes'),
-        ('netbox_rir_manager', '0015_unique_address_constraint'),
+        ("dcim", "0225_gfk_indexes"),
+        ("netbox_rir_manager", "0015_unique_address_constraint"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='riraddress',
-            name='location',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='rir_addresses', to='dcim.location'),
+            model_name="riraddress",
+            name="location",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="rir_addresses",
+                to="dcim.location",
+            ),
         ),
     ]

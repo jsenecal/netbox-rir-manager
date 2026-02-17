@@ -164,8 +164,16 @@ class RIRAddressTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = RIRAddress
         fields = (
-            "pk", "id", "site", "street_address", "city", "state_province", "country",
-            "auto_resolved", "last_resolved", "actions",
+            "pk",
+            "id",
+            "site",
+            "street_address",
+            "city",
+            "state_province",
+            "country",
+            "auto_resolved",
+            "last_resolved",
+            "actions",
         )
         default_columns = ("site", "city", "country", "auto_resolved")
 

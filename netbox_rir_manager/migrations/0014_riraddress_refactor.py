@@ -16,10 +16,15 @@ def migrate_addresses_forward(apps, schema_editor):
     for model_name in ("RIROrganization", "RIRContact", "RIRCustomer"):
         Model = apps.get_model("netbox_rir_manager", model_name)
         for obj in Model.objects.all():
-            has_data = any([
-                obj.street_address, obj.city, obj.state_province,
-                obj.postal_code, obj.country,
-            ])
+            has_data = any(
+                [
+                    obj.street_address,
+                    obj.city,
+                    obj.state_province,
+                    obj.postal_code,
+                    obj.country,
+                ]
+            )
             if not has_data:
                 continue
             addr = RIRAddress.objects.create(
@@ -34,7 +39,6 @@ def migrate_addresses_forward(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("netbox_rir_manager", "0013_rircustomer"),
     ]

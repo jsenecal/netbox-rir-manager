@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('netbox_rir_manager', '0011_rirsiteaddress_rirorganization_tenant_rirnetwork_auto_reassign'),
+        ("netbox_rir_manager", "0011_rirsiteaddress_rirorganization_tenant_rirnetwork_auto_reassign"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='rircontact',
-            name='last_name',
-            field=models.CharField(blank=True, default='', max_length=100),
+            model_name="rircontact",
+            name="last_name",
+            field=models.CharField(blank=True, default="", max_length=100),
         ),
     ]

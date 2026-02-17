@@ -40,9 +40,7 @@ class RIRPrefixExtension(PluginTemplateExtension):
         # Determine if sync button should be shown:
         # Parent aggregate must have an active RIR config
         show_sync_button = False
-        agg = Aggregate.objects.filter(
-            prefix__net_contains_or_equals=obj.prefix
-        ).first()
+        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=obj.prefix).first()
         if agg and RIRConfig.objects.filter(rir=agg.rir, is_active=True).exists():
             show_sync_button = True
 
@@ -64,9 +62,7 @@ class RIRPrefixExtension(PluginTemplateExtension):
 
         can_reassign = False
         if not RIRNetwork.objects.filter(prefix=obj).exists():
-            agg = Aggregate.objects.filter(
-                prefix__net_contains_or_equals=obj.prefix
-            ).first()
+            agg = Aggregate.objects.filter(prefix__net_contains_or_equals=obj.prefix).first()
             if agg and RIRNetwork.objects.filter(aggregate=agg).exists():
                 can_reassign = True
 

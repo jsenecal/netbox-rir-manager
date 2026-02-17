@@ -33,18 +33,18 @@ class Migration(migrations.Migration):
     atomic = False
 
     dependencies = [
-        ('dcim', '0225_gfk_indexes'),
-        ('extras', '0134_owner'),
-        ('netbox_rir_manager', '0014_riraddress_refactor'),
+        ("dcim", "0225_gfk_indexes"),
+        ("extras", "0134_owner"),
+        ("netbox_rir_manager", "0014_riraddress_refactor"),
     ]
 
     operations = [
         migrations.RunPython(dedup_addresses, migrations.RunPython.noop),
         migrations.AddConstraint(
-            model_name='riraddress',
+            model_name="riraddress",
             constraint=models.UniqueConstraint(
-                fields=('street_address', 'city', 'state_province', 'postal_code', 'country'),
-                name='unique_rir_address',
+                fields=("street_address", "city", "state_province", "postal_code", "country"),
+                name="unique_rir_address",
             ),
         ),
     ]

@@ -97,9 +97,7 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
         return
 
     # 4. Find parent aggregate with auto_reassign RIRNetwork
-    agg = Aggregate.objects.filter(
-        prefix__net_contains_or_equals=instance.prefix
-    ).first()
+    agg = Aggregate.objects.filter(prefix__net_contains_or_equals=instance.prefix).first()
     if not agg:
         return
 

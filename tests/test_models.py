@@ -515,9 +515,7 @@ class TestRIRNetworkSyncFromArin:
     def test_updates_existing_network(self, rir_config):
         from netbox_rir_manager.models import RIRNetwork
 
-        RIRNetwork.objects.create(
-            rir_config=rir_config, handle="NET-EXIST-1", net_name="OLD-NAME"
-        )
+        RIRNetwork.objects.create(rir_config=rir_config, handle="NET-EXIST-1", net_name="OLD-NAME")
         net_data = {
             "handle": "NET-EXIST-1",
             "net_name": "NEW-NAME",
@@ -583,9 +581,7 @@ class TestRIRNetworkSyncFromArin:
         from netbox_rir_manager.models import RIRNetwork
 
         agg = Aggregate.objects.create(prefix="203.0.113.0/24", rir=rir)
-        RIRNetwork.objects.create(
-            rir_config=rir_config, handle="NET-KEEP-AGG-1", net_name="KEEP", aggregate=agg
-        )
+        RIRNetwork.objects.create(rir_config=rir_config, handle="NET-KEEP-AGG-1", net_name="KEEP", aggregate=agg)
         net_data = {"handle": "NET-KEEP-AGG-1", "net_name": "UPDATED"}
         net, created = RIRNetwork.sync_from_arin(net_data, rir_config)
         assert created is False

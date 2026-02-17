@@ -306,7 +306,6 @@ class TestRIRSyncJob:
         assert isinstance(returned_net, RIRNetwork)
         assert returned_net.handle == "NET-10-0-0-0-1"
 
-
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_network_with_customer_handle(self, mock_backend_class, rir_config, rir):
         """When a network has a customer_handle, the customer is fetched and persisted."""
@@ -567,9 +566,7 @@ class TestReassignJobPreFlight:
         return {"agg": agg, "parent": parent, "prefix": pfx}
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
-    def test_preflight_syncs_existing_reassignment(
-        self, mock_backend_class, reassign_setup, rir_config, rir_user_key
-    ):
+    def test_preflight_syncs_existing_reassignment(self, mock_backend_class, reassign_setup, rir_config, rir_user_key):
         """When ARIN returns a different net than parent, job syncs and returns early."""
         from netbox_rir_manager.jobs import ReassignJob
         from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
@@ -601,9 +598,7 @@ class TestReassignJobPreFlight:
         assert net.prefix == reassign_setup["prefix"]
 
         # Sync log should record skipped
-        log = RIRSyncLog.objects.filter(
-            object_handle="NET-INTERMEDIATE-24", status="skipped"
-        ).first()
+        log = RIRSyncLog.objects.filter(object_handle="NET-INTERMEDIATE-24", status="skipped").first()
         assert log is not None
         assert "already reassigned" in log.message
 
@@ -664,9 +659,7 @@ class TestRemoveNetworkJob:
         from netbox_rir_manager.jobs import RemoveNetworkJob
         from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
 
-        net = RIRNetwork.objects.create(
-            rir_config=rir_config, handle="NET-REMOVE-1", net_name="REMOVE-NET"
-        )
+        net = RIRNetwork.objects.create(rir_config=rir_config, handle="NET-REMOVE-1", net_name="REMOVE-NET")
 
         mock_backend = MagicMock()
         mock_backend.remove_network.return_value = True
@@ -688,9 +681,7 @@ class TestRemoveNetworkJob:
         from netbox_rir_manager.jobs import RemoveNetworkJob
         from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
 
-        net = RIRNetwork.objects.create(
-            rir_config=rir_config, handle="NET-RMFAIL-1", net_name="FAIL-NET"
-        )
+        net = RIRNetwork.objects.create(rir_config=rir_config, handle="NET-RMFAIL-1", net_name="FAIL-NET")
 
         mock_backend = MagicMock()
         mock_backend.remove_network.return_value = False

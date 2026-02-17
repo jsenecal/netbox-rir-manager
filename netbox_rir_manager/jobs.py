@@ -25,15 +25,17 @@ def _changelog_context(user):
     """Context manager that enables change logging if a valid user is available."""
     User = get_user_model()
     if user is not None and isinstance(user, User):
-        request = NetBoxFakeRequest({
-            "META": {},
-            "POST": {},
-            "GET": {},
-            "FILES": {},
-            "user": user,
-            "path": "",
-            "id": uuid.uuid4(),
-        })
+        request = NetBoxFakeRequest(
+            {
+                "META": {},
+                "POST": {},
+                "GET": {},
+                "FILES": {},
+                "user": user,
+                "path": "",
+                "id": uuid.uuid4(),
+            }
+        )
         with apply_request_processors(request):
             yield
     else:
@@ -344,7 +346,10 @@ def _sync_aggregate_nets(
             continue
 
         parent_net, created = RIRNetwork.sync_from_arin(
-            net_data, rir_config, aggregate=agg, user_key=user_key,
+            net_data,
+            rir_config,
+            aggregate=agg,
+            user_key=user_key,
         )
         log.info(f"{'Created' if created else 'Updated'} network {net_data['handle']} for aggregate {agg.prefix}")
 
@@ -443,7 +448,10 @@ class SyncPrefixesJob(JobRunner):
                     continue
 
                 _net, created = RIRNetwork.sync_from_arin(
-                    pfx_net_data, rir_config, prefix=pfx, user_key=user_key,
+                    pfx_net_data,
+                    rir_config,
+                    prefix=pfx,
+                    user_key=user_key,
                 )
                 self.logger.info(
                     f"{'Created' if created else 'Updated'} network {pfx_net_data['handle']} for prefix {pfx.prefix}"
@@ -462,7 +470,12 @@ class SyncPrefixesJob(JobRunner):
                 )
 
                 _sync_customer_for_net(
-                    backend, rir_config, pfx_net_data, _net, user_key=user_key, log=self.logger,
+                    backend,
+                    rir_config,
+                    pfx_net_data,
+                    _net,
+                    user_key=user_key,
+                    log=self.logger,
                 )
 
 
@@ -496,9 +509,7 @@ class ReassignJob(JobRunner):
 
         with _changelog_context(self.job.user):
             # Find the parent RIRNetwork via Aggregate
-            agg = Aggregate.objects.filter(
-                prefix__net_contains_or_equals=prefix.prefix
-            ).first()
+            agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
             if not agg:
                 self.logger.error(f"No matching Aggregate found for prefix {prefix.prefix}")
                 self.job.data["status"] = "error"
@@ -537,11 +548,12 @@ class ReassignJob(JobRunner):
 
                 # Already reassigned at ARIN (different net than parent) -- just sync it
                 if actual_handle and actual_handle != parent_network.handle:
-                    self.logger.warning(
-                        f"Pre-flight: prefix already reassigned as {actual_handle}, syncing instead"
-                    )
+                    self.logger.warning(f"Pre-flight: prefix already reassigned as {actual_handle}, syncing instead")
                     RIRNetwork.sync_from_arin(
-                        actual_net, rir_config, prefix=prefix, user_key=user_key,
+                        actual_net,
+                        rir_config,
+                        prefix=prefix,
+                        user_key=user_key,
                     )
                     self.job.data["status"] = "synced"
                     self.job.data["message"] = (
@@ -694,7 +706,10 @@ class ReassignJob(JobRunner):
             net_result = result.get("net")
             if net_result and net_result.get("handle"):
                 RIRNetwork.sync_from_arin(
-                    net_result, rir_config, prefix=prefix, user_key=user_key,
+                    net_result,
+                    rir_config,
+                    prefix=prefix,
+                    user_key=user_key,
                 )
 
             RIRSyncLog.objects.create(
@@ -808,9 +823,7 @@ class ScheduledRIRSyncJob(JobRunner):
                         )
                         total_logs += len(logs)
                     except Exception:
-                        self.logger.exception(
-                            f"Scheduled sync failed for config {config.name} with key {user_key.pk}"
-                        )
+                        self.logger.exception(f"Scheduled sync failed for config {config.name} with key {user_key.pk}")
 
         self.logger.info(f"Scheduled sync complete: {configs.count()} configs, {total_logs} logs")
         self.job.data = {"configs_synced": len(configs), "total_logs": total_logs}
