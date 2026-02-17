@@ -76,10 +76,9 @@ python_functions = ["test_*"]
 addopts = "-v --cov=netbox_rir_manager --cov-report=term-missing --reuse-db"
 
 [tool.bumpver]
-current_version = "0.2.0"
-version_pattern = "MAJOR.MINOR.PATCH"
+current_version = "v0.2.0"
+version_pattern = "vMAJOR.MINOR.PATCH"
 commit_message = "chore: bump version {old_version} -> {new_version}"
-tag_pattern = "v{version}"
 commit = true
 tag = true
 push = true
@@ -87,8 +86,8 @@ push = true
 [tool.bumpver.file_patterns]
 "pyproject.toml" = [
     'current_version = "{version}"',
-    'version = "{version}"',
+    'version = "{pep440_version}"',
 ]
 "netbox_rir_manager/__init__.py" = [
-    '__version__ = "{version}"',
+    '__version__ = "{pep440_version}"',
 ]
