@@ -27,6 +27,15 @@ class GeocodingResult:
     raw: dict
 
     @property
+    def display_name(self) -> str:
+        return self.raw.get("display_name", "")
+
+    @property
+    def address_key(self) -> tuple:
+        """Key for deduplication based on structured address fields."""
+        return (self.street_address, self.city, self.state_province, self.postal_code, self.country)
+
+    @property
     def raw_json(self) -> str:
         import json
 
@@ -173,28 +182,42 @@ def _get_geocoding_service() -> GeocodingService:
     return NominatimGeocoder()
 
 
+def _deduplicate_results(results: list[GeocodingResult]) -> list[GeocodingResult]:
+    """Remove candidates with identical structured address fields, keeping the first."""
+    seen: set[tuple] = set()
+    unique = []
+    for r in results:
+        if r.address_key not in seen:
+            seen.add(r.address_key)
+            unique.append(r)
+    return unique
+
+
 def resolve_site_address_candidates(site: Site, query: str | None = None, limit: int = 5) -> list[GeocodingResult]:
     """
     Return multiple geocoding candidates for a Site.
 
-    If query is provided, forward geocode that query.
+    If query is provided, forward geocode that query (with fallback to site data if empty).
     Otherwise try reverse geocode from coords, fallback to forward geocode from physical_address.
-    Returns empty list if nothing works.
+    Returns empty list if nothing works. Duplicates are removed.
     """
     geocoder = _get_geocoding_service()
 
     if query:
-        return geocoder.geocode_many(query, limit=limit)
+        results = geocoder.geocode_many(query, limit=limit)
+        if results:
+            return _deduplicate_results(results)
+        # Query failed — fall through to site-based resolution
 
     # Try reverse geocode from coordinates
     if site.latitude and site.longitude:
         results = geocoder.reverse_geocode_many(float(site.latitude), float(site.longitude), limit=limit)
         if results:
-            return results
+            return _deduplicate_results(results)
 
     # Fallback to forward geocode from physical address
     if site.physical_address:
-        return geocoder.geocode_many(site.physical_address, limit=limit)
+        return _deduplicate_results(geocoder.geocode_many(site.physical_address, limit=limit))
 
     return []
 

@@ -918,11 +918,12 @@ class SiteAddressResolveModalView(LoginRequiredMixin, View):
         site = get_object_or_404(Site, pk=pk)
         candidates = resolve_site_address_candidates(site)
 
-        # Pre-fill search field with physical address or coords
-        if site.physical_address:
-            search_query = site.physical_address
-        elif site.latitude and site.longitude:
+        # Pre-fill search field based on which source produced results:
+        # reverse geocode from coords → show coords, forward geocode → show address
+        if site.latitude and site.longitude:
             search_query = f"{site.latitude}, {site.longitude}"
+        elif site.physical_address:
+            search_query = site.physical_address
         else:
             search_query = ""
 

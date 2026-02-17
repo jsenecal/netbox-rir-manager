@@ -14,7 +14,7 @@
                 title="Resolve address via geocoding"
                 data-bs-toggle="modal" data-bs-target="#htmx-modal"
                 hx-get="{% url 'plugins:netbox_rir_manager:site_resolve_address' object.pk %}"
-                hx-target="#htmx-modal .modal-content" hx-swap="innerHTML"
+                hx-target="#htmx-modal-content" hx-swap="innerHTML"
             >
                 <i class="mdi mdi-map-marker"></i> Resolve
             </a>
