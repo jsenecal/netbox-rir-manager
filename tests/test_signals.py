@@ -172,3 +172,148 @@ class TestPrefixDeleteSignal:
             pfx.delete()
 
         mock_job.enqueue.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestAutoReassignStatusGuard:
+    """Tests that auto_reassign_prefix only fires for active prefixes."""
+
+    def test_skips_deprecated_prefix(self, rir_config, rir_user_key, rir):
+        """A deprecated prefix with site+tenant should NOT trigger reassignment."""
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.20.0.0/16", rir=rir)
+        RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-10-20-0-0-1",
+            net_name="PARENT-NET",
+            aggregate=agg,
+            auto_reassign=True,
+        )
+
+        with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job:
+            Prefix.objects.create(prefix="10.20.1.0/24", status="deprecated")
+
+        mock_job.enqueue.assert_not_called()
+
+    def test_skips_reserved_prefix(self, rir_config, rir_user_key, rir):
+        """A reserved prefix should NOT trigger reassignment."""
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.21.0.0/16", rir=rir)
+        RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-10-21-0-0-1",
+            net_name="PARENT-NET-2",
+            aggregate=agg,
+            auto_reassign=True,
+        )
+
+        with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job:
+            Prefix.objects.create(prefix="10.21.1.0/24", status="reserved")
+
+        mock_job.enqueue.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestPrefixDeactivateSignal:
+    """Tests for remove_network_on_prefix_deactivate signal."""
+
+    def test_enqueues_removal_on_deactivation(self, rir_config, rir_user_key):
+        """Changing prefix to deprecated should enqueue ARIN network removal."""
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        pfx = Prefix.objects.create(prefix="10.30.0.0/24", status="active")
+        RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-DEACT-1",
+            net_name="DEACT-NET",
+            prefix=pfx,
+        )
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
+            pfx.status = "deprecated"
+            pfx.save()
+
+        mock_job.enqueue.assert_called_once()
+        call_kwargs = mock_job.enqueue.call_args[1]
+        assert call_kwargs["network_id"] is not None
+        assert call_kwargs["user_key_id"] == rir_user_key.pk
+
+    def test_skips_active_prefix(self, rir_config, rir_user_key):
+        """Saving a prefix that stays active should NOT trigger removal."""
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        pfx = Prefix.objects.create(prefix="10.31.0.0/24", status="active")
+        RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-ACTIVE-1",
+            net_name="ACTIVE-NET",
+            prefix=pfx,
+        )
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
+            pfx.description = "updated"
+            pfx.save()
+
+        mock_job.enqueue.assert_not_called()
+
+    def test_skips_newly_created_prefix(self, rir_config, rir_user_key):
+        """A newly created deprecated prefix should NOT trigger removal."""
+        from ipam.models import Prefix
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
+            Prefix.objects.create(prefix="10.32.0.0/24", status="deprecated")
+
+        mock_job.enqueue.assert_not_called()
+
+    def test_skips_parent_allocation(self, rir_config, rir_user_key, rir):
+        """RIRNetwork with aggregate set should NOT trigger removal on deactivation."""
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        agg = Aggregate.objects.create(prefix="10.33.0.0/20", rir=rir)
+        pfx = Prefix.objects.create(prefix="10.33.0.0/20", status="active")
+        RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-DEACT-PARENT-1",
+            net_name="DEACT-PARENT",
+            prefix=pfx,
+            aggregate=agg,
+        )
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
+            pfx.status = "deprecated"
+            pfx.save()
+
+        mock_job.enqueue.assert_not_called()
+
+    def test_warns_when_no_api_key(self, rir_config):
+        """Deactivation logs a warning when no API key exists."""
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        pfx = Prefix.objects.create(prefix="10.34.0.0/24", status="active")
+        RIRNetwork.objects.create(
+            rir_config=rir_config,
+            handle="NET-DEACT-NOKEY-1",
+            net_name="DEACT-NOKEY",
+            prefix=pfx,
+        )
+
+        with patch("netbox_rir_manager.signals.logger") as mock_logger:
+            pfx.status = "deprecated"
+            pfx.save()
+
+        mock_logger.warning.assert_called_once()
+        assert "no API key" in mock_logger.warning.call_args[0][0]

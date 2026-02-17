@@ -71,6 +71,9 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     if raw:
         return
 
+    if instance.status != "active":
+        return
+
     from dcim.models import Site
     from ipam.models import Aggregate
 
@@ -130,6 +133,28 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
         prefix_id=instance.pk,
         user_key_id=user_key.pk,
     )
+
+
+@receiver(post_save, sender="ipam.Prefix")
+def remove_network_on_prefix_deactivate(sender, instance, created=False, raw=False, **kwargs):
+    """Remove ARIN reassignment when a prefix is no longer active."""
+    if raw or created:
+        return
+
+    if instance.status == "active":
+        return
+
+    from netbox_rir_manager.models import RIRNetwork
+
+    rir_networks = RIRNetwork.objects.filter(prefix=instance, aggregate__isnull=True)
+    for network in rir_networks:
+        if not network.enqueue_removal():
+            logger.warning(
+                "Cannot remove ARIN network %s for deactivated prefix %s: no API key for config %s",
+                network.handle,
+                instance.prefix,
+                network.rir_config.name,
+            )
 
 
 @receiver(pre_delete, sender="ipam.Prefix")
