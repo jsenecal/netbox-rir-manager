@@ -1,3 +1,4 @@
+from dcim.models import Location, Site
 from django import forms
 from django.contrib.auth import get_user_model
 from ipam.models import RIR
@@ -185,8 +186,14 @@ class RIRNetworkFilterForm(NetBoxModelFilterSetForm):
 
 
 class RIRAddressForm(NetBoxModelForm):
+    location = DynamicModelChoiceField(
+        queryset=Location.objects.all(),
+        required=False,
+        query_params={"site_id": "$site"},
+    )
+
     fieldsets = (
-        FieldSet("site", name="Site"),
+        FieldSet("site", "location", name="Site"),
         FieldSet("street_address", "city", "state_province", "postal_code", "country", name="Address"),
         FieldSet("tags", name="Tags"),
     )
@@ -195,6 +202,7 @@ class RIRAddressForm(NetBoxModelForm):
         model = RIRAddress
         fields = (
             "site",
+            "location",
             "street_address",
             "city",
             "state_province",
@@ -202,6 +210,15 @@ class RIRAddressForm(NetBoxModelForm):
             "country",
             "tags",
         )
+
+
+class RIRAddressFilterForm(NetBoxModelFilterSetForm):
+    model = RIRAddress
+    site_id = DynamicModelMultipleChoiceField(
+        queryset=Site.objects.all(), required=False, label="Site"
+    )
+    country = forms.CharField(required=False)
+    auto_resolved = forms.NullBooleanField(required=False)
 
 
 class RIRTicketFilterForm(NetBoxModelFilterSetForm):

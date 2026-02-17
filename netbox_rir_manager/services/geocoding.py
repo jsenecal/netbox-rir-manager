@@ -234,11 +234,10 @@ def resolve_site_address(site: Site) -> RIRAddress | None:
     """
     from netbox_rir_manager.models import RIRAddress
 
-    # Check for existing cached address
-    try:
-        return site.rir_address
-    except RIRAddress.DoesNotExist:
-        pass
+    # Check for existing cached site-level address
+    existing = RIRAddress.get_for_site(site)
+    if existing:
+        return existing
 
     geocoder = _get_geocoding_service()
     result = None

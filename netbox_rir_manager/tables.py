@@ -154,6 +154,7 @@ class RIRNetworkTable(NetBoxTable):
 
 class RIRAddressTable(NetBoxTable):
     site = tables.Column(linkify=True)
+    street_address = tables.Column()
     city = tables.Column()
     state_province = tables.Column()
     country = tables.Column()
@@ -162,8 +163,11 @@ class RIRAddressTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = RIRAddress
-        fields = ("pk", "id", "site", "city", "state_province", "country", "auto_resolved", "last_resolved")
-        default_columns = ("site", "city", "state_province", "country", "auto_resolved", "last_resolved")
+        fields = (
+            "pk", "id", "site", "street_address", "city", "state_province", "country",
+            "auto_resolved", "last_resolved", "actions",
+        )
+        default_columns = ("site", "city", "country", "auto_resolved")
 
 
 class RIRSyncLogTable(NetBoxTable):

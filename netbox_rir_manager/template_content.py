@@ -83,10 +83,7 @@ class RIRSiteExtension(PluginTemplateExtension):
 
     def right_page(self):
         obj = self.context["object"]
-        try:
-            site_address = obj.rir_address
-        except RIRAddress.DoesNotExist:
-            site_address = None
+        site_address = RIRAddress.get_for_site(obj)
 
         return self.render(
             "netbox_rir_manager/inc/rir_site_address_panel.html",

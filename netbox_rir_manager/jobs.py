@@ -134,7 +134,7 @@ def _sync_organization(
                 setattr(org.address, key, val)
             org.address.save()
         else:
-            addr = RIRAddress.objects.create(**address_data)
+            addr, _ = RIRAddress.objects.get_or_create(**address_data)
             org.address = addr
             org.save(update_fields=["address"])
 
@@ -219,7 +219,7 @@ def _sync_contacts(
                     setattr(contact.address, key, val)
                 contact.address.save()
             else:
-                addr = RIRAddress.objects.create(**contact_address_data)
+                addr, _ = RIRAddress.objects.get_or_create(**contact_address_data)
                 contact.address = addr
                 contact.save(update_fields=["address"])
 
@@ -302,7 +302,7 @@ def _sync_customer_for_net(
                 setattr(_customer.address, key, val)
             _customer.address.save()
         else:
-            addr = RIRAddress.objects.create(**cust_address_data)
+            addr, _ = RIRAddress.objects.get_or_create(**cust_address_data)
             _customer.address = addr
             _customer.save(update_fields=["address"])
 
@@ -601,9 +601,8 @@ class ReassignJob(JobRunner):
                     return
 
                 # Resolve site address
-                try:
-                    site_address = site.rir_address
-                except RIRAddress.DoesNotExist:
+                site_address = RIRAddress.get_for_site(site)
+                if not site_address:
                     site_address = resolve_site_address(site)
 
                 if not site_address:
@@ -636,7 +635,7 @@ class ReassignJob(JobRunner):
                     self.job.save()
                     return
 
-                cust_addr = RIRAddress.objects.create(
+                cust_addr, _ = RIRAddress.objects.get_or_create(
                     street_address=site_address.street_address,
                     city=site_address.city,
                     state_province=site_address.state_province,

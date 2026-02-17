@@ -829,15 +829,13 @@ class PrefixReassignView(LoginRequiredMixin, View):
                 site = scope
 
         if site:
-            try:
-                site_address = site.rir_address
+            site_address = RIRAddress.get_for_site(site)
+            if site_address:
                 initial["street_address"] = site_address.street_address
                 initial["city"] = site_address.city
                 initial["state_province"] = site_address.state_province
                 initial["postal_code"] = site_address.postal_code
                 initial["country"] = site_address.country
-            except RIRAddress.DoesNotExist:
-                pass
 
         # Generate net_name from tenant + prefix
         if prefix.tenant:
@@ -969,8 +967,8 @@ class SiteAddressSelectView(LoginRequiredMixin, View):
         except (json.JSONDecodeError, TypeError):
             raw_geocode = {}
 
-        # Delete any existing RIRAddress for this site
-        RIRAddress.objects.filter(site=site).delete()
+        # Delete existing site-level address (not location-specific ones)
+        RIRAddress.objects.filter(site=site, location__isnull=True).delete()
 
         # Use get_or_create on address fields to handle unique constraint
         address, created = RIRAddress.objects.get_or_create(

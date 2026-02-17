@@ -13,6 +13,10 @@
                     <td>{{ object.site|linkify|placeholder }}</td>
                 </tr>
                 <tr>
+                    <th scope="row">Location</th>
+                    <td>{{ object.location|linkify|placeholder }}</td>
+                </tr>
+                <tr>
                     <th scope="row">Auto Resolved</th>
                     <td>
                         {% if object.auto_resolved %}

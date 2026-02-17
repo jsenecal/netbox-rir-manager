@@ -81,6 +81,19 @@ menu = PluginMenu(
                     link_text="Customers",
                     permissions=["netbox_rir_manager.view_rircustomer"],
                 ),
+                PluginMenuItem(
+                    link="plugins:netbox_rir_manager:riraddress_list",
+                    link_text="Addresses",
+                    permissions=["netbox_rir_manager.view_riraddress"],
+                    buttons=(
+                        PluginMenuButton(
+                            link="plugins:netbox_rir_manager:riraddress_add",
+                            title="Add",
+                            icon_class="mdi mdi-plus-thick",
+                            permissions=["netbox_rir_manager.add_riraddress"],
+                        ),
+                    ),
+                ),
             ),
         ),
         (
