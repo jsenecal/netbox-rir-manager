@@ -5,7 +5,7 @@ services:
     image: netboxcommunity/netbox:${NETBOX_VARIANT-latest}-devcontainer
     depends_on:
       - postgres
-      - redis
+      - valkey
     build:
       dockerfile: .devcontainer/Dockerfile-plugin_dev
       context: ..
@@ -41,19 +41,19 @@ services:
   # postgres
   postgres:
     container_name: netbox-rir-manager-postgres
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     env_file: env/postgres.env
     volumes:
       - netbox-postgres-data:/var/lib/postgresql/data
 
-  # redis
-  redis:
-    container_name: netbox-rir-manager-redis
-    image: redis:7-alpine
+  # valkey
+  valkey:
+    container_name: netbox-rir-manager-valkey
+    image: valkey/valkey:9-alpine
     command:
       - sh
       - -c # this is to evaluate the $REDIS_PASSWORD from the env
-      - redis-server --appendonly yes --requirepass $$REDIS_PASSWORD ## $$ because of docker-compose
+      - valkey-server --appendonly yes --requirepass $$REDIS_PASSWORD ## $$ because of docker-compose
     env_file: env/redis.env
 
 volumes:
