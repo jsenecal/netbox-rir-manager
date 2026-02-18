@@ -140,7 +140,23 @@ All models and actions are exposed through NetBox's REST API under `/api/plugins
 
 ## Development
 
-### Setup
+### Dev Container (recommended)
+
+The repository includes a full [Dev Container](https://containers.dev/) configuration that provides a ready-to-go development environment with NetBox, PostgreSQL 18, and Valkey 9.
+
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and either [VS Code](https://code.visualstudio.com/) with the Dev Containers extension or the [devcontainer CLI](https://github.com/devcontainers/cli).
+
+1. Open the repository in VS Code and select **Reopen in Container** when prompted (or run `Dev Containers: Reopen in Container` from the command palette)
+2. The container installs the plugin in editable mode, runs database migrations, and starts an RQ worker automatically
+3. Start the development server:
+
+```bash
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py runserver 0.0.0.0:8009
+```
+
+NetBox is available at `http://localhost:8009` (default credentials: `admin` / `admin`).
+
+### Manual Setup
 
 ```bash
 git clone https://github.com/jsenecal/netbox-rir-manager.git
@@ -161,7 +177,7 @@ ruff format --check netbox_rir_manager/ tests/
 pytest
 ```
 
-Tests require a running NetBox environment with PostgreSQL and Redis. See the [CI workflow](.github/workflows/ci.yml) for the full setup.
+Tests require a running NetBox environment with PostgreSQL and Valkey (or Redis). The Dev Container provides this out of the box. See the [CI workflow](.github/workflows/ci.yml) for the full setup.
 
 ## Contributing
 
