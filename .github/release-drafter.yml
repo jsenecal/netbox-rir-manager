@@ -20,27 +20,38 @@ categories:
 change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
 change-title-escapes: '\<*_&'
 
+# title accepts a list of regex patterns (release-drafter v6 schema).
 autolabeler:
   - label: feat
-    title: { prefix: "feat" }
+    title:
+      - '/^feat(\(.+\))?:/i'
   - label: fix
-    title: { prefix: "fix" }
+    title:
+      - '/^fix(\(.+\))?:/i'
   - label: docs
-    title: { prefix: "docs" }
+    title:
+      - '/^docs(\(.+\))?:/i'
   - label: chore
-    title: { prefix: "chore" }
+    title:
+      - '/^chore(\(.+\))?:/i'
   - label: refactor
-    title: { prefix: "refactor" }
+    title:
+      - '/^refactor(\(.+\))?:/i'
   - label: test
-    title: { prefix: "test" }
+    title:
+      - '/^test(\(.+\))?:/i'
   - label: ci
-    title: { prefix: "ci" }
+    title:
+      - '/^ci(\(.+\))?:/i'
   - label: perf
-    title: { prefix: "perf" }
+    title:
+      - '/^perf(\(.+\))?:/i'
   - label: build
-    title: { prefix: "build" }
+    title:
+      - '/^build(\(.+\))?:/i'
   - label: revert
-    title: { prefix: "revert" }
+    title:
+      - '/^revert(\(.+\))?:/i'
 
 version-resolver:
   major:
