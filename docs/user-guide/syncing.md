@@ -4,7 +4,7 @@ The plugin imports organizations, contacts (POCs), networks, and ASNs from your 
 
 ## Manual sync
 
-Trigger a sync from the **RIR Config** detail view. The page reports progress and surfaces errors as they happen. A complete log entry lands under **RIR Manager → Sync Logs** when the run finishes.
+Trigger a sync from the **RIR Config** detail view. The page reports progress and surfaces errors as they happen. A complete log entry lands under **RIR Manager -> Sync Logs** when the run finishes.
 
 ## Scheduled sync
 
@@ -14,4 +14,4 @@ A background RQ job runs automatically on the cadence set by `sync_interval_hour
 
 When `auto_link_networks` is enabled (default), each synced network is matched against existing NetBox **Aggregates** and **Prefixes** and linked when a match is found. ASNs are matched against NetBox `ipam.ASN`.
 
-Synced resources appear under **RIR Manager → Resources**.
+Synced resources appear under **RIR Manager -> Resources**.

@@ -16,4 +16,4 @@ Every model and action is exposed via NetBox's REST API under `/api/plugins/rir-
 
 ## Authentication
 
-Use NetBox token auth — see the [NetBox REST API docs](https://netboxlabs.com/docs/netbox/en/stable/integrations/rest-api/).
+Use NetBox token auth -- see the [NetBox REST API docs](https://netboxlabs.com/docs/netbox/en/stable/integrations/rest-api/).

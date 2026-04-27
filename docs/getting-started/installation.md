@@ -39,4 +39,4 @@ python manage.py migrate
 
 ## 4. Restart NetBox
 
-Restart the NetBox WSGI service and the RQ worker. The exact command depends on your deployment method (systemd, Docker Compose, etc.) — see the [NetBox documentation](https://netboxlabs.com/docs/netbox/en/stable/).
+Restart the NetBox WSGI service and the RQ worker. The exact command depends on your deployment method (systemd, Docker Compose, etc.) -- see the [NetBox documentation](https://netboxlabs.com/docs/netbox/en/stable/).

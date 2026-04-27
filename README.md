@@ -11,21 +11,21 @@
 
 ## Features
 
-- **Sync RIR resources** — import organizations, contacts (POCs), networks, and ASNs from your RIR into NetBox
-- **Auto-link to IPAM** — synced networks are linked to existing NetBox Aggregates, Prefixes, and ASNs
-- **Write operations** — reassign, reallocate, remove, and delete networks directly through the plugin
-- **Ticket tracking** — monitor RIR tickets and their status
-- **Per-user API keys** — encrypted at rest
-- **Scheduled sync** — daily background jobs keep RIR data current
-- **Pluggable backend architecture** — ARIN supported today; PRs welcome for RIPE, APNIC, LACNIC, AFRINIC
-- **Full REST API** — every resource and action exposed under `/api/plugins/rir-manager/`
-- **Sync logging** — full audit trail of every sync operation
+- **Sync RIR resources** -- import organizations, contacts (POCs), networks, and ASNs from your RIR into NetBox
+- **Auto-link to IPAM** -- synced networks are linked to existing NetBox Aggregates, Prefixes, and ASNs
+- **Write operations** -- reassign, reallocate, remove, and delete networks directly through the plugin
+- **Ticket tracking** -- monitor RIR tickets and their status
+- **Per-user API keys** -- encrypted at rest
+- **Scheduled sync** -- daily background jobs keep RIR data current
+- **Pluggable backend architecture** -- ARIN supported today; PRs welcome for RIPE, APNIC, LACNIC, AFRINIC
+- **Full REST API** -- every resource and action exposed under `/api/plugins/rir-manager/`
+- **Sync logging** -- full audit trail of every sync operation
 
 ## Compatibility
 
 | Plugin version | NetBox version | Python    |
 |----------------|----------------|-----------|
-| 0.3.x          | 4.5            | 3.12–3.14 |
+| 0.3.x          | 4.5            | 3.12-3.14 |
 
 ## Installation
 
@@ -72,7 +72,7 @@ python manage.py migrate
 
 > **Warning:** the `encryption_key` (or NetBox's `SECRET_KEY` when empty) is used to encrypt stored API keys. Changing or losing it makes previously encrypted keys unrecoverable.
 
-See [Configuration → Settings](https://jsenecal.github.io/netbox-rir-manager/getting-started/configuration/) for the full reference.
+See [Configuration -> Settings](https://jsenecal.github.io/netbox-rir-manager/getting-started/configuration/) for the full reference.
 
 ## Documentation
 
@@ -86,9 +86,9 @@ Full documentation: **[jsenecal.github.io/netbox-rir-manager](https://jsenecal.g
 
 ## Contributing
 
-PRs welcome — especially for additional RIR backends (RIPE, APNIC, LACNIC, AFRINIC). The plugin uses a pluggable backend architecture; see `netbox_rir_manager/backends/base.py` for the abstract `RIRBackend` class.
+PRs welcome -- especially for additional RIR backends (RIPE, APNIC, LACNIC, AFRINIC). The plugin uses a pluggable backend architecture; see `netbox_rir_manager/backends/base.py` for the abstract `RIRBackend` class.
 
-Use conventional-commits PR titles (`feat:`, `fix:`, `chore:`, `docs:`, …) — release-drafter assembles release notes from them. Run `make setup` after cloning to install dev dependencies and the pre-commit hooks (including the AI-attribution-rejecting `commit-msg` hook).
+Use conventional-commits PR titles (`feat:`, `fix:`, `chore:`, `docs:`, ...) -- release-drafter assembles release notes from them. Run `make setup` after cloning to install dev dependencies and the pre-commit hooks (including the AI-attribution-rejecting `commit-msg` hook).
 
 ## License
 

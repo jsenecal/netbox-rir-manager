@@ -4,7 +4,7 @@ Each NetBox user attaches their own API key to an RIR Config. Keys are encrypted
 
 ## Adding a key
 
-1. Navigate to **RIR Manager → User Keys** and click **Add**.
+1. Navigate to **RIR Manager -> User Keys** and click **Add**.
 2. Select the RIR Config.
 3. Paste your RIR API key (e.g. ARIN Online API key).
 4. Save.
