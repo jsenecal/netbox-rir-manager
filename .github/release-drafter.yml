@@ -1,0 +1,52 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+template: |
+  ## What's changed
+
+  $CHANGES
+
+  **Full changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+categories:
+  - title: "🚀 Features"
+    labels: [enhancement, feat, feature]
+  - title: "🐛 Fixes"
+    labels: [bug, fix, bugfix]
+  - title: "📚 Documentation"
+    labels: [docs, documentation]
+  - title: "🔧 Maintenance"
+    labels: [chore, refactor, ci, build, test, perf, revert]
+
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+change-title-escapes: '\<*_&'
+
+autolabeler:
+  - label: feat
+    title: { prefix: "feat" }
+  - label: fix
+    title: { prefix: "fix" }
+  - label: docs
+    title: { prefix: "docs" }
+  - label: chore
+    title: { prefix: "chore" }
+  - label: refactor
+    title: { prefix: "refactor" }
+  - label: test
+    title: { prefix: "test" }
+  - label: ci
+    title: { prefix: "ci" }
+  - label: perf
+    title: { prefix: "perf" }
+  - label: build
+    title: { prefix: "build" }
+  - label: revert
+    title: { prefix: "revert" }
+
+version-resolver:
+  major:
+    labels: [major, breaking]
+  minor:
+    labels: [feat, feature, minor]
+  patch:
+    labels: [fix, bug, chore, refactor, docs, ci, build, test, perf, revert, patch]
+  default: patch

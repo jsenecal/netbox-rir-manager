@@ -1,0 +1,53 @@
+[project]
+site_name = "NetBox RIR Manager"
+site_url = "https://jsenecal.github.io/netbox-rir-manager/"
+site_description = "Manage Regional Internet Registry (RIR) resources directly from NetBox"
+site_author = "Jonathan Senecal"
+repo_url = "https://github.com/jsenecal/netbox-rir-manager"
+repo_name = "jsenecal/netbox-rir-manager"
+edit_uri = "edit/main/docs/"
+docs_dir = "."
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = [
+    { "Installation" = "getting-started/installation.md" },
+    { "Configuration" = "getting-started/configuration.md" },
+  ] },
+  { "User Guide" = [
+    { "RIR Configs" = "user-guide/rir-configs.md" },
+    { "User API Keys" = "user-guide/user-api-keys.md" },
+    { "Syncing Resources" = "user-guide/syncing.md" },
+    { "Write Operations" = "user-guide/write-operations.md" },
+  ] },
+  { "Reference" = [
+    { "REST API" = "reference/rest-api.md" },
+  ] },
+  { "Development" = [
+    { "Dev Container" = "development/dev-container.md" },
+    { "Manual Setup" = "development/manual-setup.md" },
+    { "Contributing" = "development/contributing.md" },
+  ] },
+]
+
+[project.theme]
+features = [
+  "content.action.edit",
+  "content.action.view",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"

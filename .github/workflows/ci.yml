@@ -1,4 +1,4 @@
-name: CI Tests
+name: CI
 
 on:
   push:
@@ -6,9 +6,35 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --extra dev
+      - run: uv run ruff check netbox_rir_manager tests
+      - run: uv run ruff format --check netbox_rir_manager tests
+
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # for Codecov OIDC upload
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
+        netbox: ["v4.5.0"]
 
     services:
       postgres:
@@ -16,7 +42,7 @@ jobs:
         env:
           POSTGRES_DB: netbox
           POSTGRES_USER: netbox
-          POSTGRES_PASSWORD: J5brHrAXFLQSif0K
+          POSTGRES_PASSWORD: ci-password
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -36,62 +62,53 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v4
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          enable-cache: true
+          python-version: ${{ matrix.python }}
 
-      - name: Install NetBox
+      - name: Install NetBox ${{ matrix.netbox }}
         run: |
-          git clone --depth 1 --branch v4.5.0 https://github.com/netbox-community/netbox.git /tmp/netbox
-          pip install --upgrade pip
-          pip install -r /tmp/netbox/requirements.txt
+          git clone --depth 1 --branch ${{ matrix.netbox }} \
+            https://github.com/netbox-community/netbox.git /tmp/netbox
 
       - name: Configure NetBox
         run: |
           cp .devcontainer/configuration/configuration.py /tmp/netbox/netbox/netbox/
-
           cat >> /tmp/netbox/netbox/netbox/configuration.py << 'EOF_PLUGINS'
 
           PLUGINS.append("netbox_rir_manager")
           PLUGINS_CONFIG["netbox_rir_manager"] = {}
           EOF_PLUGINS
 
-          cat >> /tmp/netbox/netbox/netbox/configuration.py << EOF
+          cat >> /tmp/netbox/netbox/netbox/configuration.py << 'EOF_DBREDIS'
 
           DATABASE = {
               'NAME': 'netbox',
               'USER': 'netbox',
-              'PASSWORD': 'J5brHrAXFLQSif0K',
+              'PASSWORD': 'ci-password',
               'HOST': 'localhost',
               'PORT': '5432',
           }
 
           REDIS = {
-              'tasks': {
-                  'HOST': 'localhost',
-                  'PORT': 6379,
-                  'PASSWORD': '',
-                  'DATABASE': 0,
-                  'SSL': False,
-              },
-              'caching': {
-                  'HOST': 'localhost',
-                  'PORT': 6379,
-                  'PASSWORD': '',
-                  'DATABASE': 1,
-                  'SSL': False,
-              }
+              'tasks':   {'HOST': 'localhost', 'PORT': 6379, 'PASSWORD': '', 'DATABASE': 0, 'SSL': False},
+              'caching': {'HOST': 'localhost', 'PORT': 6379, 'PASSWORD': '', 'DATABASE': 1, 'SSL': False},
           }
-          EOF
+          EOF_DBREDIS
 
-      - name: Install plugin
+      - name: Install plugin and NetBox dependencies
         run: |
-          pip install -e ".[dev]"
+          uv venv
+          uv pip install -r /tmp/netbox/requirements.txt
+          uv pip install -e ".[dev]"
+          # Activate the venv for all subsequent steps (uv run won't find
+          # this project from /tmp/netbox/netbox, so we use plain `python`
+          # backed by VIRTUAL_ENV + PATH).
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
 
       - name: Run migrations
         env:
@@ -103,12 +120,7 @@ jobs:
           cd /tmp/netbox/netbox
           python manage.py migrate --noinput
 
-      - name: Run linting
-        run: |
-          ruff check netbox_rir_manager/ tests/
-          ruff format --check netbox_rir_manager/ tests/
-
-      - name: Run tests with coverage
+      - name: Run pytest with coverage
         env:
           PYTHONPATH: /tmp/netbox/netbox
           DJANGO_SETTINGS_MODULE: netbox.settings
@@ -118,13 +130,13 @@ jobs:
           pytest tests/ -v --tb=short --cov=netbox_rir_manager --cov-report=xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        if: matrix.python == '3.13'
+        continue-on-error: true  # OIDC fails gracefully if codecov.io isn't linked yet
+        uses: codecov/codecov-action@v5
         with:
+          use_oidc: true
           files: ./coverage.xml
           fail_ci_if_error: false
-          verbose: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Check migrations
         env:
@@ -145,3 +157,15 @@ jobs:
         run: |
           cd /tmp/netbox/netbox
           python manage.py check
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v4
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

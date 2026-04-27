@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -47,19 +47,26 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.8",
     "pre-commit>=4.0",
+    "bumpver",
+]
+docs = [
+    "zensical",
 ]
 
 [project.urls]
 Homepage = "https://github.com/jsenecal/netbox-rir-manager"
 Source = "https://github.com/jsenecal/netbox-rir-manager"
 Tracker = "https://github.com/jsenecal/netbox-rir-manager/issues"
+Documentation = "https://jsenecal.github.io/netbox-rir-manager/"
 
 [tool.ruff]
 line-length = 120
+target-version = "py312"
+extend-exclude = ["**/migrations/*.py"]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "C90", "UP", "B", "SIM"]
-ignore = ["E203", "E266"]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "C90", "DJ", "PIE", "SIM"]
+ignore = ["E203", "E266", "E501", "N806", "S101", "DJ01"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 18
@@ -68,17 +75,22 @@ max-complexity = 18
 "__init__.py" = ["F401", "F403"]
 "**/migrations/*.py" = ["E501"]
 
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=netbox_rir_manager --cov-report=term-missing --reuse-db"
+addopts = "-v --cov=netbox_rir_manager --cov-report=term-missing --cov-report=xml --reuse-db"
 
 [tool.bumpver]
 current_version = "v0.3.1"
 version_pattern = "vMAJOR.MINOR.PATCH"
 commit_message = "chore: bump version {old_version} -> {new_version}"
+tag_message = "{new_version}"
 commit = true
 tag = true
 push = true
@@ -90,4 +102,8 @@ push = true
 ]
 "netbox_rir_manager/__init__.py" = [
     '__version__ = "{pep440_version}"',
+]
+"CHANGELOG.md" = [
+    '## \[Unreleased\]',
+    '## \[{pep440_version}\] - {now:%Y-%m-%d}',
 ]
