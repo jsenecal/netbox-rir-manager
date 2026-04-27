@@ -27,6 +27,9 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # for Codecov OIDC upload
     strategy:
       fail-fast: false
       matrix:
@@ -101,6 +104,11 @@ jobs:
           uv venv
           uv pip install -r /tmp/netbox/requirements.txt
           uv pip install -e ".[dev]"
+          # Activate the venv for all subsequent steps (uv run won't find
+          # this project from /tmp/netbox/netbox, so we use plain `python`
+          # backed by VIRTUAL_ENV + PATH).
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
 
       - name: Run migrations
         env:
@@ -110,7 +118,7 @@ jobs:
           SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
         run: |
           cd /tmp/netbox/netbox
-          uv run python manage.py migrate --noinput
+          python manage.py migrate --noinput
 
       - name: Run pytest with coverage
         env:
@@ -119,10 +127,11 @@ jobs:
           NETBOX_CONFIGURATION: netbox.configuration
           SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
         run: |
-          uv run pytest tests/ -v --tb=short --cov=netbox_rir_manager --cov-report=xml
+          pytest tests/ -v --tb=short --cov=netbox_rir_manager --cov-report=xml
 
       - name: Upload coverage to Codecov
         if: matrix.python == '3.13'
+        continue-on-error: true  # OIDC fails gracefully if codecov.io isn't linked yet
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true
@@ -137,7 +146,7 @@ jobs:
           SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
         run: |
           cd /tmp/netbox/netbox
-          uv run python manage.py makemigrations --check --dry-run
+          python manage.py makemigrations --check --dry-run
 
       - name: Django system check
         env:
@@ -147,7 +156,7 @@ jobs:
           SECRET_KEY: "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)"
         run: |
           cd /tmp/netbox/netbox
-          uv run python manage.py check
+          python manage.py check
 
   build:
     runs-on: ubuntu-latest
