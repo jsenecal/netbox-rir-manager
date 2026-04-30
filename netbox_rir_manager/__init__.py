@@ -1,6 +1,10 @@
+import logging
+
 from netbox.plugins import PluginConfig
 
 __version__ = "0.3.2"
+
+logger = logging.getLogger(__name__)
 
 
 class NetBoxRIRManagerConfig(PluginConfig):
@@ -28,6 +32,8 @@ class NetBoxRIRManagerConfig(PluginConfig):
     def ready(self):
         super().ready()
         from . import signals  # noqa: F401
+
+        logger.info("%s plugin loaded", self.name)
 
 
 config = NetBoxRIRManagerConfig
