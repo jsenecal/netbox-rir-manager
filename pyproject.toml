@@ -47,7 +47,7 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.8",
     "pre-commit>=4.0",
-    "bumpver",
+    "bump-my-version",
 ]
 docs = [
     "zensical",
@@ -86,24 +86,26 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --cov=netbox_rir_manager --cov-report=term-missing --cov-report=xml --reuse-db"
 
-[tool.bumpver]
-current_version = "v0.3.2"
-version_pattern = "vMAJOR.MINOR.PATCH"
-commit_message = "chore: bump version {old_version} -> {new_version}"
-tag_message = "{new_version}"
+[tool.bumpversion]
+current_version = "0.3.2"
 commit = true
 tag = true
-push = true
+tag_name = "v{new_version}"
+allow_dirty = false
+message = "chore: bump version {current_version} -> {new_version}"
+tag_message = "Release v{new_version}"
 
-[tool.bumpver.file_patterns]
-"pyproject.toml" = [
-    'current_version = "{version}"',
-    'version = "{pep440_version}"',
-]
-"netbox_rir_manager/__init__.py" = [
-    '__version__ = "{pep440_version}"',
-]
-"CHANGELOG.md" = [
-    '## \[Unreleased\]',
-    '## \[{pep440_version}\] - {now:%Y-%m-%d}',
-]
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'current_version = "{current_version}"'
+replace = 'current_version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "netbox_rir_manager/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
