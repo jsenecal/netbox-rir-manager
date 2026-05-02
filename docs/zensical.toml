@@ -12,19 +12,33 @@ nav = [
   { "Getting Started" = [
     { "Installation" = "getting-started/installation.md" },
     { "Configuration" = "getting-started/configuration.md" },
+    { "First Sync" = "getting-started/first-sync.md" },
   ] },
   { "User Guide" = [
     { "RIR Configs" = "user-guide/rir-configs.md" },
     { "User API Keys" = "user-guide/user-api-keys.md" },
     { "Syncing Resources" = "user-guide/syncing.md" },
     { "Write Operations" = "user-guide/write-operations.md" },
+    { "Tickets" = "user-guide/tickets.md" },
+    { "Addresses and Geocoding" = "user-guide/addresses.md" },
+    { "IPAM Integration" = "user-guide/ipam-integration.md" },
+    { "Auto-Reassignment" = "user-guide/auto-reassignment.md" },
   ] },
   { "Reference" = [
+    { "Settings" = "reference/settings.md" },
+    { "Models" = "reference/models.md" },
+    { "Permissions" = "reference/permissions.md" },
+    { "Background Jobs" = "reference/jobs.md" },
     { "REST API" = "reference/rest-api.md" },
+    { "Backends" = "reference/backends.md" },
   ] },
   { "Development" = [
+    { "Architecture" = "development/architecture.md" },
     { "Dev Container" = "development/dev-container.md" },
     { "Manual Setup" = "development/manual-setup.md" },
+    { "Testing" = "development/testing.md" },
+    { "Adding a Backend" = "development/adding-a-backend.md" },
+    { "Releasing" = "development/releasing.md" },
     { "Contributing" = "development/contributing.md" },
   ] },
 ]
