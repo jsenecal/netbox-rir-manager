@@ -3,8 +3,28 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'renovate.json'
+      - '.github/dependabot.yml'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/release-drafter.yml'
+      - '.github/workflows/pr-title.yml'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'renovate.json'
+      - '.github/dependabot.yml'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/release-drafter.yml'
+      - '.github/workflows/pr-title.yml'
 
 permissions:
   contents: read
@@ -34,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.12", "3.13", "3.14"]
-        netbox: ["v4.5.0"]
+        netbox: ["4.5.8", "4.5.10"]
 
     services:
       postgres:
@@ -69,9 +89,9 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python }}
 
-      - name: Install NetBox ${{ matrix.netbox }}
+      - name: Install NetBox v${{ matrix.netbox }}
         run: |
-          git clone --depth 1 --branch ${{ matrix.netbox }} \
+          git clone --depth 1 --branch v${{ matrix.netbox }} \
             https://github.com/netbox-community/netbox.git /tmp/netbox
 
       - name: Configure NetBox
@@ -130,7 +150,7 @@ jobs:
           pytest tests/ -v --tb=short --cov=netbox_rir_manager --cov-report=xml
 
       - name: Upload coverage to Codecov
-        if: matrix.python == '3.13'
+        if: matrix.python == '3.13' && matrix.netbox == '4.5.10'
         continue-on-error: true  # OIDC fails gracefully if codecov.io isn't linked yet
         uses: codecov/codecov-action@v5
         with:
