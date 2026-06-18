@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- ARIN backend: migrated to pyregrws 1.0.0 (pydantic v2). `_safe_serialize` now
+  serializes pyregrws models via `model_dump()` instead of the deprecated v1
+  `.dict()`. Dependency pin raised to `pyregrws>=1.0.0b6,<2`.
+
+### Fixed
+
+- ARIN backend: under a warnings-as-errors context, the deprecated `.dict()`
+  call raised `PydanticDeprecatedSince20`, which the broad `except` in
+  `_safe_serialize` swallowed -- silently collapsing every org/poc/net/customer
+  payload to an empty dict. Serializing via `model_dump()` removes the
+  deprecated path.
+
 ## [0.3.2] - 2026-04-28
 
 First release on the canonical toolkit. Behaviour and plugin code unchanged.

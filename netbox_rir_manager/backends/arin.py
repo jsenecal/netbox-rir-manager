@@ -260,8 +260,8 @@ class ARINBackend(RIRBackend):
         import json
 
         try:
-            if hasattr(obj, "dict"):
-                data = obj.dict()
+            if hasattr(obj, "model_dump"):
+                data = obj.model_dump()
             else:
                 return {}
             # Round-trip through JSON to coerce non-serializable types (e.g. IPv4Address) to strings

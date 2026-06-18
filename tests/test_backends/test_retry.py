@@ -19,7 +19,7 @@ class TestARINBackendRetry:
         mock_org.iso3166_2 = ""
         mock_org.postal_code = ""
         mock_org.iso3166_1 = None
-        mock_org.dict.return_value = {
+        mock_org.model_dump.return_value = {
             "handle": "TEST-ARIN",
             "org_name": "Test",
             "street_address": None,
@@ -61,7 +61,7 @@ class TestARINBackendRetry:
         mock_poc.city = ""
         mock_poc.postal_code = ""
         mock_poc.iso3166_1 = None
-        mock_poc.dict.return_value = {
+        mock_poc.model_dump.return_value = {
             "handle": "JD1-ARIN",
             "contact_type": "PERSON",
             "first_name": "John",
@@ -92,7 +92,7 @@ class TestARINBackendRetry:
         mock_net.org_handle = ""
         mock_net.parent_net_handle = ""
         mock_net.net_blocks = []
-        mock_net.dict.return_value = {
+        mock_net.model_dump.return_value = {
             "handle": "NET-1",
             "net_name": "TEST",
             "version": 4,

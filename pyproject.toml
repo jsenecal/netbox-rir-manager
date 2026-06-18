@@ -34,7 +34,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "pyregrws>=0.2.7",
+    "pyregrws>=1.0.0b6,<2",
     "tenacity>=8.0",
     "geopy>=2.4",
     "pycountry>=24.6",

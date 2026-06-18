@@ -1,4 +1,8 @@
+import warnings
 from unittest.mock import MagicMock, patch
+
+from regrws.models import Org
+from regrws.models.nested import Iso31661, MultiLineElement
 
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.backends.base import RIRBackend
@@ -6,6 +10,34 @@ from netbox_rir_manager.backends.base import RIRBackend
 
 def test_arin_backend_is_rir_backend():
     assert issubclass(ARINBackend, RIRBackend)
+
+
+def test_safe_serialize_uses_pydantic_v2_model_dump():
+    """_safe_serialize must serialize real pyregrws (pydantic v2) models cleanly.
+
+    Regression: the v1-era ``.dict()`` call emits ``PydanticDeprecatedSince20``
+    under pydantic v2. Combined with the broad ``except Exception`` in
+    _safe_serialize, any warnings-as-errors context silently collapses every
+    payload to ``{}`` -- i.e. orgs/pocs/nets serialize to empty dicts with no
+    error. Serializing via ``model_dump()`` avoids the deprecated path.
+    """
+    org = Org(
+        org_name="EXAMPLE-ORG",
+        street_address=[MultiLineElement(number=1, line="123 Main St")],
+        city="Anytown",
+        iso3166_1=Iso31661(code2="US"),
+        iso3166_2="CA",
+        postal_code="90210",
+        handle="ORG-1",
+        poc_links=[],
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        data = ARINBackend._safe_serialize(org)
+
+    assert data.get("org_name") == "EXAMPLE-ORG"
+    assert data.get("handle") == "ORG-1"
 
 
 def test_arin_backend_name():
@@ -106,7 +138,7 @@ def test_get_poc(mock_api_class):
     mock_poc.city = "Anytown"
     mock_poc.postal_code = "12345"
     mock_poc.iso3166_1 = MagicMock(code2="US")
-    mock_poc.dict.return_value = {
+    mock_poc.model_dump.return_value = {
         "handle": "JD123-ARIN",
         "last_name": "Doe",
         "first_name": "John",
@@ -148,7 +180,7 @@ def test_get_poc_no_country(mock_api_class):
     mock_poc.last_name = "Doe"
     mock_poc.contact_type = "PERSON"
     mock_poc.iso3166_1 = None
-    mock_poc.dict.return_value = {
+    mock_poc.model_dump.return_value = {
         "handle": "JD123-ARIN",
         "last_name": "Doe",
         "contact_type": "PERSON",
@@ -179,7 +211,7 @@ def test_get_organization(mock_api_class):
     mock_org.iso3166_2 = "VA"
     mock_org.postal_code = "12345"
     mock_org.iso3166_1 = MagicMock(code2="US")
-    mock_org.dict.return_value = {
+    mock_org.model_dump.return_value = {
         "handle": "EXAMPLE-ARIN",
         "org_name": "Example Corp",
         "street_address": None,
@@ -221,7 +253,7 @@ def test_get_organization_with_street_address(mock_api_class):
     mock_org.iso3166_2 = "VA"
     mock_org.postal_code = "12345"
     mock_org.iso3166_1 = MagicMock(code2="US")
-    mock_org.dict.return_value = {
+    mock_org.model_dump.return_value = {
         "handle": "EXAMPLE-ARIN",
         "org_name": "Example Corp",
         "street_address": [{"line": "123 Main St"}, {"line": "Suite 100"}],
@@ -250,7 +282,7 @@ def test_get_network(mock_api_class):
     mock_net.org_handle = "EXAMPLE-ARIN"
     mock_net.parent_net_handle = ""
     mock_net.net_blocks = None
-    mock_net.dict.return_value = {
+    mock_net.model_dump.return_value = {
         "handle": "NET-192-0-2-0-1",
         "net_name": "EXAMPLE-NET",
         "version": 4,
@@ -290,7 +322,7 @@ def test_get_network_with_blocks(mock_api_class):
     block.cidr_length = 24
     block.type = "A"
     mock_net.net_blocks = [block]
-    mock_net.dict.return_value = {
+    mock_net.model_dump.return_value = {
         "handle": "NET-192-0-2-0-1",
         "net_name": "EXAMPLE-NET",
         "version": 4,
@@ -417,7 +449,7 @@ def _make_mock_net(**overrides):
     mock_net = MagicMock()
     for key, value in defaults.items():
         setattr(mock_net, key, value)
-    mock_net.dict.return_value = dict(defaults)
+    mock_net.model_dump.return_value = dict(defaults)
     return mock_net
 
 
@@ -434,7 +466,7 @@ def _make_mock_ticket_request(ticket_no="TKT-001", net=None):
     mock_ticket = MagicMock()
     for key, value in ticket_data.items():
         setattr(mock_ticket, key, value)
-    mock_ticket.dict.return_value = dict(ticket_data)
+    mock_ticket.model_dump.return_value = dict(ticket_data)
 
     mock_ticket_request = MagicMock()
     mock_ticket_request.ticket = mock_ticket
@@ -868,7 +900,7 @@ def test_get_customer_success(mock_api_class):
     mock_api_class.return_value = mock_api
 
     mock_customer = MagicMock()
-    mock_customer.dict.return_value = {
+    mock_customer.model_dump.return_value = {
         "handle": "C07654321",
         "customer_name": "Acme Corp",
         "street_address": [{"line": "123 Main St"}, {"line": "Suite 200"}],
@@ -935,7 +967,7 @@ def test_create_customer_success(mock_api_class):
     mock_customer.handle = "C-TEST"
     mock_customer.customer_name = "Test Customer"
     mock_customer.parent_org_handle = "ORG-TEST"
-    mock_customer.dict.return_value = {
+    mock_customer.model_dump.return_value = {
         "handle": "C-TEST",
         "customer_name": "Test Customer",
         "parent_org_handle": "ORG-TEST",
