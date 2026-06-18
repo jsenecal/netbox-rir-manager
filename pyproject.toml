@@ -10,7 +10,7 @@ netbox_rir_manager = ["templates/**/*"]
 
 [project]
 name = "netbox-rir-manager"
-version = "0.3.2"
+version = "0.4.0"
 description = "NetBox plugin for managing RIR (ARIN, RIPE, etc.) resources"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -87,7 +87,7 @@ python_functions = ["test_*"]
 addopts = "-v --cov=netbox_rir_manager --cov-report=term-missing --cov-report=xml --reuse-db"
 
 [tool.bumpversion]
-current_version = "0.3.2"
+current_version = "0.4.0"
 commit = true
 tag = true
 tag_name = "v{new_version}"
