@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- NetBox 4.7 support: CI now also tests against NetBox 4.7.0, with
+  Renovate keeping the matrix pinned to the newest release of that
+  minor. The README compatibility matrix gains NetBox 4.7 to the
+  0.4.x row.
+
 ### Changed
 
 - CI now tests against the latest NetBox 4.5 and 4.6 releases (4.5.10

@@ -61,6 +61,7 @@ netbox-rir-manager bridges your NetBox IPAM data and the RIR's own database. Syn
 
 | Plugin version | NetBox version | Python    |
 |----------------|----------------|-----------|
+| 0.4.x          | 4.5-4.7        | 3.12-3.14 |
 | 0.3.x          | 4.5            | 3.12-3.14 |
 
 ## License
