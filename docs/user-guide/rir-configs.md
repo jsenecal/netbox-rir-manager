@@ -24,6 +24,8 @@ The model also inherits `tags`, `created`, and `last_updated` from `NetBoxModel`
 5. Set `org_handle`. Most operations need this -- ARIN's `authenticate()` short-circuits to `False` if it is empty.
 6. Save.
 
+If your resources are registered under more than one org handle at the same RIR (for example a legacy org kept alongside your current one), create one config per org handle. Aggregate sync links each aggregate only to a Net registered to the config's own org, so the configs do not overlap. See [Syncing Resources](syncing.md#3-networks-and-customers).
+
 ## Bulk operations
 
 The list view supports the standard NetBox bulk actions plus one custom action:

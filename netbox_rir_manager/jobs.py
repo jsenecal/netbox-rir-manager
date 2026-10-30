@@ -335,40 +335,86 @@ def _sync_aggregate_nets(
     log.info(f"Found {aggregates.count()} aggregates to sync")
 
     for agg in aggregates:
-        network = agg.prefix
-        start_address = str(network.network)
-        end_address = str(network.broadcast)
+        sync_log, network = sync_aggregate(backend, rir_config, agg, user_key=user_key, log=log)
+        logs.append(sync_log)
+        if network:
+            agg_nets.append((agg, network))
 
-        log.debug(f"Querying ARIN for aggregate {agg.prefix}")
-        net_data = backend.find_net(start_address, end_address)
-        if net_data is None:
-            log.warning(f"No ARIN network found for aggregate {agg.prefix}")
-            continue
+    return logs, agg_nets
 
-        parent_net, created = RIRNetwork.sync_from_arin(
-            net_data,
-            rir_config,
-            aggregate=agg,
-            user_key=user_key,
-        )
-        log.info(f"{'Created' if created else 'Updated'} network {net_data['handle']} for aggregate {agg.prefix}")
 
+def sync_aggregate(
+    backend: ARINBackend,
+    rir_config: RIRConfig,
+    agg,
+    user_key: RIRUserKey | None = None,
+    log: logging.Logger = logger,
+) -> tuple[RIRSyncLog, RIRNetwork | None]:
+    """Link an aggregate to the ARIN net registered to the config's org that covers it.
+
+    Returns (sync_log, network). network is None, and sync_log is a skipped row, unless the
+    aggregate belongs to this config's org.
+    """
+    network = agg.prefix
+    log.debug(f"Querying ARIN for aggregate {agg.prefix}")
+    found = backend.find_net(str(network.network), str(network.broadcast))
+    net_data = _resolve_owned_net(backend, found, rir_config.org_handle) if found else None
+    if net_data is None:
+        if found is None:
+            handle, message = str(agg.prefix), f"No ARIN network found for {agg.prefix}"
+        else:
+            owner = found.get("org_handle") or found.get("customer_handle") or "unknown"
+            handle = found["handle"]
+            message = f"Aggregate {agg.prefix} is not registered to {rir_config.org_handle} (owned by {owner})"
+        log.info(message)
         sync_log = RIRSyncLog.objects.create(
             rir_config=rir_config,
             operation="sync",
             object_type="network",
-            object_handle=net_data["handle"],
-            status="success",
-            message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
+            object_handle=handle,
+            status="skipped",
+            message=message,
         )
-        logs.append(sync_log)
-        agg_nets.append((agg, parent_net))
+        return sync_log, None
 
-        cust_log = _sync_customer_for_net(backend, rir_config, net_data, parent_net, user_key=user_key, log=log)
-        if cust_log:
-            logs.append(cust_log)
+    rir_network, created = RIRNetwork.sync_from_arin(
+        net_data,
+        rir_config,
+        aggregate=agg,
+        user_key=user_key,
+    )
+    log.info(f"{'Created' if created else 'Updated'} network {net_data['handle']} for aggregate {agg.prefix}")
+    sync_log = RIRSyncLog.objects.create(
+        rir_config=rir_config,
+        operation="sync",
+        object_type="network",
+        object_handle=net_data["handle"],
+        status="success",
+        message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
+    )
+    return sync_log, rir_network
 
-    return logs, agg_nets
+
+def _resolve_owned_net(backend: ARINBackend, net_data: dict, org_handle: str) -> dict | None:
+    """Walk up the parent chain from the most specific net to the one registered to org_handle.
+
+    ARIN's mostSpecificNet returns whatever net sits deepest under an address range, which is
+    often a customer reassignment beneath our allocation, or a net belonging to another org
+    entirely. Only a net registered to the config's own org can anchor the aggregate. A net
+    with an org handle never carries a customer handle, so the anchor needs no customer fetch.
+    """
+    if not org_handle:
+        return None
+    seen = set()
+    while net_data is not None:
+        if net_data.get("org_handle") == org_handle:
+            return net_data
+        seen.add(net_data["handle"])
+        parent_handle = net_data.get("parent_net_handle")
+        if not parent_handle or parent_handle in seen:
+            return None
+        net_data = backend.get_network(parent_handle)
+    return None
 
 
 class SyncRIRConfigJob(JobRunner):

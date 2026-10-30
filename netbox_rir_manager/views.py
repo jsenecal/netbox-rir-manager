@@ -666,58 +666,28 @@ class AggregateSyncView(LoginRequiredMixin, View):
     def post(self, request, pk):
         from ipam.models import Aggregate
 
+        from netbox_rir_manager.jobs import sync_aggregate
+
         aggregate = get_object_or_404(Aggregate, pk=pk)
 
-        # Find the RIR config for this aggregate's RIR
-        rir_config = RIRConfig.objects.filter(rir=aggregate.rir, is_active=True).first()
-        if not rir_config:
-            messages.error(request, "No active RIR config found for this aggregate's RIR.")
+        # Several active configs (one per org) can share an RIR; the aggregate belongs to
+        # whichever one's org it is registered to, so try each config the user holds a key for.
+        user_keys = RIRUserKey.objects.filter(
+            user=request.user, rir_config__rir=aggregate.rir, rir_config__is_active=True
+        ).select_related("rir_config")
+        if not user_keys:
+            messages.error(request, "No API key configured for an active RIR config on this aggregate's RIR.")
             return redirect(aggregate.get_absolute_url())
 
-        # Get user's API key
-        user_key = RIRUserKey.objects.filter(user=request.user, rir_config=rir_config).first()
-        if not user_key:
-            messages.error(request, "No API key configured for this RIR config.")
-            return redirect(aggregate.get_absolute_url())
+        for user_key in user_keys:
+            rir_config = user_key.rir_config
+            backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+            sync_log, net = sync_aggregate(backend, rir_config, aggregate, user_key=user_key)
+            if net:
+                messages.success(request, f"{sync_log.message} from ARIN.")
+                return redirect(aggregate.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
-
-        # Sync this specific aggregate
-        network = aggregate.prefix
-        start_address = str(network.network)
-        end_address = str(network.broadcast)
-
-        net_data = backend.find_net(start_address, end_address)
-        if net_data is None:
-            messages.warning(request, "No matching network found at ARIN for this aggregate.")
-            RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="sync",
-                object_type="network",
-                object_handle=str(aggregate.prefix),
-                status="skipped",
-                message=f"No ARIN network found for {aggregate.prefix}",
-            )
-            return redirect(aggregate.get_absolute_url())
-
-        net, created = RIRNetwork.sync_from_arin(
-            net_data,
-            rir_config,
-            aggregate=aggregate,
-            user_key=user_key,
-        )
-
-        RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="network",
-            object_handle=net_data["handle"],
-            status="success",
-            message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
-        )
-
-        action = "Created" if created else "Updated"
-        messages.success(request, f"{action} RIR network {net.handle} from ARIN.")
+        messages.warning(request, "No network registered to your RIR configs' orgs covers this aggregate at ARIN.")
         return redirect(aggregate.get_absolute_url())
 
 
@@ -726,20 +696,23 @@ class PrefixSyncView(LoginRequiredMixin, View):
     """Sync a single prefix from ARIN using mostSpecificNet."""
 
     def post(self, request, pk):
-        from ipam.models import Aggregate, Prefix
+        from ipam.models import Prefix
 
         prefix = get_object_or_404(Prefix, pk=pk)
 
-        # Find parent aggregate to determine RIR config
-        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
+        # The prefix belongs to whichever config's org holds the net anchoring its aggregate.
+        parent_network, agg = RIRNetwork.find_for_prefix(prefix)
         if not agg:
             messages.error(request, "No parent aggregate found for this prefix.")
             return redirect(prefix.get_absolute_url())
-
-        rir_config = RIRConfig.objects.filter(rir=agg.rir, is_active=True).first()
-        if not rir_config:
-            messages.error(request, "No active RIR config found for this prefix's RIR.")
+        if not parent_network or not parent_network.rir_config.is_active:
+            messages.error(
+                request,
+                f"Aggregate {agg.prefix} is not linked to an active RIR config. Sync the aggregate first.",
+            )
             return redirect(prefix.get_absolute_url())
+
+        rir_config = parent_network.rir_config
 
         user_key = RIRUserKey.objects.filter(user=request.user, rir_config=rir_config).first()
         if not user_key:
@@ -766,8 +739,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
             return redirect(prefix.get_absolute_url())
 
         # Check if this is actually a child net (not the parent aggregate's net)
-        parent_network = RIRNetwork.objects.filter(aggregate=agg).first()
-        if parent_network and net_data["handle"] == parent_network.handle:
+        if net_data["handle"] == parent_network.handle:
             messages.info(
                 request,
                 "No separate reassignment found at ARIN -- this prefix is covered by the parent allocation.",

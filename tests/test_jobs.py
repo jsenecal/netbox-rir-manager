@@ -212,7 +212,7 @@ class TestRIRSyncJob:
             "handle": "NET-192-0-2-0-1",
             "net_name": "EXAMPLE-NET",
             "version": 4,
-            "org_handle": "",
+            "org_handle": "TESTORG-ARIN",
             "parent_net_handle": "",
             "net_blocks": [
                 {"start_address": "192.0.2.0", "end_address": "192.0.2.255", "cidr_length": 24, "type": "DS"}
@@ -290,7 +290,7 @@ class TestRIRSyncJob:
             "handle": "NET-10-0-0-0-1",
             "net_name": "BIG-NET",
             "version": 4,
-            "org_handle": "",
+            "org_handle": "TESTORG-ARIN",
             "parent_net_handle": "",
             "net_blocks": [],
             "raw_data": {},
@@ -307,76 +307,105 @@ class TestRIRSyncJob:
         assert returned_net.handle == "NET-10-0-0-0-1"
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
-    def test_sync_network_with_customer_handle(self, mock_backend_class, rir_config, rir):
-        """When a network has a customer_handle, the customer is fetched and persisted."""
+    def test_sync_walks_up_to_net_owned_by_config_org(self, mock_backend_class, rir_config, rir):
+        """When the most specific net is a child, the aggregate links to our parent net instead."""
         from ipam.models import Aggregate
 
         from netbox_rir_manager.jobs import sync_rir_config
-        from netbox_rir_manager.models import RIRCustomer, RIRNetwork
+        from netbox_rir_manager.models import RIRNetwork
 
-        Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
+        agg = Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
 
         mock_backend = MagicMock()
         mock_backend.get_organization.return_value = None
         mock_backend.find_net.return_value = {
-            "handle": "NET-192-0-2-0-1",
-            "net_name": "CUSTOMER-NET",
-            "version": 4,
-            "customer_handle": "C07654321",
-            "org_handle": None,
-            "parent_net_handle": "",
-            "net_blocks": [],
+            "handle": "NET-CHILD-1",
+            "net_name": "CHILD-NET",
+            "org_handle": "OTHER-ARIN",
+            "parent_net_handle": "NET-PARENT-1",
             "raw_data": {},
         }
-        mock_backend.get_customer.return_value = {
-            "handle": "C07654321",
-            "customer_name": "Acme Corp",
-            "street_address": "123 Main St",
-            "city": "Anytown",
-            "state_province": "VA",
-            "postal_code": "12345",
-            "country": "US",
-            "registration_date": "2024-01-15",
+        mock_backend.get_network.return_value = {
+            "handle": "NET-PARENT-1",
+            "net_name": "OUR-NET",
+            "org_handle": "TESTORG-ARIN",
+            "parent_net_handle": "NET-UPSTREAM-1",
             "raw_data": {},
         }
         mock_backend_class.from_rir_config.return_value = mock_backend
 
         logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
 
-        mock_backend.get_customer.assert_called_once_with("C07654321")
-        assert RIRCustomer.objects.filter(handle="C07654321").exists()
-        customer = RIRCustomer.objects.get(handle="C07654321")
-        assert customer.customer_name == "Acme Corp"
-        assert customer.address is not None
-        assert customer.address.city == "Anytown"
-        net = RIRNetwork.objects.get(handle="NET-192-0-2-0-1")
-        assert customer.network == net
+        mock_backend.get_network.assert_called_once_with("NET-PARENT-1")
+        assert RIRNetwork.objects.get(handle="NET-PARENT-1").aggregate == agg
+        assert not RIRNetwork.objects.filter(handle="NET-CHILD-1").exists()
+        assert [net.handle for _agg, net in agg_nets] == ["NET-PARENT-1"]
 
+    @pytest.mark.parametrize(
+        "config_org, found, parent, expected_lookups, owner_in_message",
+        [
+            pytest.param(
+                "TESTORG-ARIN",
+                {"handle": "NET-CUST-1", "customer_handle": "C01234567", "parent_net_handle": "NET-THEIRS-1"},
+                {"handle": "NET-THEIRS-1", "org_handle": "OTHER-ARIN", "parent_net_handle": ""},
+                1,
+                "C01234567",
+                id="chain-owned-by-another-org",
+            ),
+            pytest.param(
+                "TESTORG-ARIN",
+                {"handle": "NET-A", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-B"},
+                {"handle": "NET-B", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-A"},
+                1,
+                "OTHER-ARIN",
+                id="parent-chain-cycle",
+            ),
+            pytest.param(
+                "TESTORG-ARIN",
+                {"handle": "NET-A", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-B"},
+                None,
+                1,
+                "OTHER-ARIN",
+                id="parent-net-unavailable",
+            ),
+            pytest.param(
+                "",
+                {"handle": "NET-A", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-B"},
+                None,
+                0,
+                "OTHER-ARIN",
+                id="config-without-org-handle",
+            ),
+            pytest.param("TESTORG-ARIN", None, None, 0, "", id="no-net-at-arin"),
+        ],
+    )
     @patch("netbox_rir_manager.jobs.ARINBackend")
-    def test_sync_network_without_customer_skips(self, mock_backend_class, rir_config, rir):
-        """Networks with org_handle (no customer_handle) should not attempt customer fetch."""
+    def test_sync_skips_aggregate_not_owned_by_config_org(
+        self, mock_backend_class, rir_config, rir, config_org, found, parent, expected_lookups, owner_in_message
+    ):
+        """An aggregate whose net chain never reaches the config org is skipped and logged, not synced."""
         from ipam.models import Aggregate
 
         from netbox_rir_manager.jobs import sync_rir_config
+        from netbox_rir_manager.models import RIRNetwork
 
+        rir_config.org_handle = config_org
+        rir_config.save()
         Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
 
         mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = None
-        mock_backend.find_net.return_value = {
-            "handle": "NET-192-0-2-0-1",
-            "net_name": "ORG-NET",
-            "version": 4,
-            "org_handle": "TESTORG-ARIN",
-            "parent_net_handle": "",
-            "net_blocks": [],
-            "raw_data": {},
-        }
+        mock_backend.find_net.return_value = found
+        mock_backend.get_network.return_value = parent
         mock_backend_class.from_rir_config.return_value = mock_backend
 
-        sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
 
+        assert agg_nets == []
+        assert not RIRNetwork.objects.exists()
         mock_backend.get_customer.assert_not_called()
+        assert [log.status for log in logs] == ["skipped"]
+        assert owner_in_message in logs[0].message
+        assert mock_backend.get_network.call_count == expected_lookups
 
 
 @pytest.mark.django_db
