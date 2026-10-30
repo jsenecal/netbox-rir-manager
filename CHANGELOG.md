@@ -20,6 +20,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and 4.6.10, previously 4.5.8 and 4.5.10), with Renovate keeping the
   matrix pinned to the newest release of each supported minor. The
   README compatibility matrix gains a 0.4.x / NetBox 4.5-4.6 row.
+- Aggregate sync now writes a `skipped` sync log row when ARIN has no Net for an
+  aggregate's range, in the scheduled and per-config sync as well as the manual
+  Aggregate **Sync** button.
+
+### Fixed
+
+- Aggregate sync no longer links an aggregate to whatever Net ARIN reports as most
+  specific for its range. The plugin now walks up the Net's parent chain to the Net
+  registered to the config's `org_handle`, and skips (with a `skipped` sync log naming
+  the owner) aggregates that belong to another org. Previously a customer reassignment
+  could anchor an aggregate in place of your own allocation, third-party space was
+  synced as if it were yours, and two configs on the same RIR overwrote each other's
+  networks.
+- The Aggregate **Sync** button now tries every active config the user holds a key
+  for on that RIR, instead of only the first config, and links the aggregate to the
+  config whose org owns it.
+- The Prefix **Sync** button now uses the config that owns the Net anchoring the
+  prefix's aggregate, instead of the first active config on the RIR, and refuses
+  prefixes whose aggregate is not linked to an active config.
 
 ## [0.4.0] - 2026-06-18
 

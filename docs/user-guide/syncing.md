@@ -44,9 +44,13 @@ The `contact_type` is one of `PERSON` or `ROLE` (per `ContactTypeChoices`).
 The plugin iterates `Aggregate.objects.filter(rir=rir_config.rir)`. For each NetBox aggregate:
 
 1. Compute the aggregate's start/end IPv4 or IPv6 addresses.
-2. Call `backend.find_net(start, end)` to locate the matching ARIN Net.
-3. Upsert an `RIRNetwork` row (by handle) and link it to the aggregate.
-4. If the Net has a `customer_handle`, fetch and upsert the matching `RIRCustomer`.
+2. Call `backend.find_net(start, end)`. ARIN returns the *most specific* Net covering the range, which may be a customer reassignment beneath your allocation or a Net registered to a different org altogether.
+3. Walk up the Net's `parent_net_handle` chain (via `backend.get_network`) until a Net registered to the config's `org_handle` is found.
+4. If one is found, upsert an `RIRNetwork` row (by handle) for it and link it to the aggregate. If the chain never reaches the config's org, write a `skipped` log row naming the owner and leave the aggregate unlinked.
+
+Only Nets registered to the config's own org anchor an aggregate. This keeps third-party space you route (customer PI blocks, upstream leases) out of the plugin, so reassign actions are never offered on space you cannot manage. It also means several configs can share one RIR, one per org handle: each aggregate is claimed by the config whose org holds it. The manual **Sync** button on an Aggregate tries every active config you hold a key for on that RIR and uses the one that owns it. The **Sync** button on a Prefix uses the config that owns the Net anchoring the prefix's aggregate, so sync the aggregate first; a prefix under an aggregate no config owns is refused.
+
+Customer reassignments beneath an aggregate are picked up by the prefix-level sync below, not here: a Net registered to an org never carries a customer handle.
 
 After the per-config job finishes, `SyncRIRConfigJob` enqueues one `SyncPrefixesJob` per `(aggregate, parent_net)` pair. That job walks every `Prefix` contained in the aggregate, calls `find_net` for each, and creates an `RIRNetwork` row whenever the result is a different handle from the parent (i.e. a real reassignment, not the parent net leaking through).
 
@@ -80,7 +84,8 @@ Browse them under **RIR Manager > Sync Logs**, filter by config or status, or re
 
 - **No API key for the requesting user**: the manual sync view shows an error and redirects without enqueueing.
 - **`backend.get_organization` returns `None`**: `RIRSyncLog` row with status `error`, `object_type=organization`. The job continues but skips contacts and networks for that config.
-- **`backend.find_net` returns `None`**: no log row by default (the aggregate has no ARIN counterpart). Manual aggregate-level sync writes a `skipped` log row in this case for traceability.
+- **`backend.find_net` returns `None`**: `skipped` log row with the aggregate's prefix as `object_handle` (the aggregate has no ARIN counterpart).
+- **Aggregate not registered to the config's org**: `skipped` log row with the most specific Net's handle and its owner. This also happens when the config has no `org_handle`, or when ARIN will not return a parent Net in the chain.
 - **Transient connection errors**: `tenacity` retries up to `api_retry_count` times with exponential backoff capped at `api_retry_backoff * api_retry_count` seconds. Permanent failures bubble up as `None` and are logged.
 
 ## See also
