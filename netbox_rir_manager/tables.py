@@ -26,6 +26,7 @@ class RIRConfigTable(NetBoxTable):
     name = tables.Column(linkify=True)
     rir = tables.Column(linkify=True)
     is_active = columns.BooleanColumn()
+    default_key = tables.Column(linkify=True)
     last_sync = columns.DateTimeColumn()
     actions = columns.ActionsColumn(
         actions=("edit", "delete", "changelog"),
@@ -34,7 +35,7 @@ class RIRConfigTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = RIRConfig
-        fields = ("pk", "id", "name", "rir", "org_handle", "is_active", "last_sync")
+        fields = ("pk", "id", "name", "rir", "org_handle", "is_active", "default_key", "last_sync")
         default_columns = ("name", "rir", "org_handle", "is_active", "last_sync")
 
 

@@ -11,6 +11,7 @@ An **RIR Config** binds the plugin to a specific RIR account. It is the parent o
 | `api_url`    | URL (lenient)              | Override the backend's default endpoint. Leave blank to use the backend's built-in URL. Hostnames without a TLD (e.g. `http://reg-mock:8080/`) are accepted. |
 | `org_handle` | string (max 50)            | Your account's primary org handle at the RIR (e.g. `EXAMPLE-1` for ARIN). Used by `authenticate()` and `sync_resources`. |
 | `is_active`  | boolean                    | The scheduled sync only iterates active configs. Inactive configs remain editable.            |
+| `default_key`| FK to `RIRUserKey`         | Optional. The key used for work no user initiated, such as the scheduled sync. Must be one of this config's keys. See [User API Keys](user-api-keys.md#which-key-an-operation-uses). |
 | `last_sync`  | datetime                   | Stamped by `sync_rir_config` on completion. Read-only.                                        |
 
 The model also inherits `tags`, `created`, and `last_updated` from `NetBoxModel`, and tracks asynchronous jobs via the `JobsMixin` (visible on the **Jobs** tab of the detail view).

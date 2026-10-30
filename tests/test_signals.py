@@ -122,7 +122,7 @@ class TestAutoLinkSignal:
 class TestPrefixDeleteSignal:
     """Tests for remove_rir_network_on_prefix_delete signal."""
 
-    def test_enqueues_removal_for_child_reassignment(self, rir_config, rir_user_key, removal_opt_in):
+    def test_enqueues_removal_for_child_reassignment(self, rir_config, default_key, removal_opt_in):
         from ipam.models import Prefix
 
         from netbox_rir_manager.models import RIRNetwork
@@ -142,7 +142,7 @@ class TestPrefixDeleteSignal:
         mock_job.enqueue.assert_called_once()
         call_kwargs = mock_job.enqueue.call_args[1]
         assert call_kwargs["network_id"] is not None
-        assert call_kwargs["user_key_id"] == rir_user_key.pk
+        assert call_kwargs["user_key_id"] == default_key.pk
 
     def test_skips_parent_allocation(self, rir_config, rir_user_key, rir):
         """RIRNetwork with both aggregate and prefix set should NOT trigger removal."""
@@ -169,7 +169,7 @@ class TestPrefixDeleteSignal:
         """Deletion proceeds but logs a warning when no API key exists."""
         from ipam.models import Prefix
 
-        from netbox_rir_manager.models import RIRNetwork
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
 
         pfx = Prefix.objects.create(prefix="10.7.0.0/24")
         RIRNetwork.objects.create(
@@ -183,7 +183,7 @@ class TestPrefixDeleteSignal:
             pfx.delete()  # Should not raise
 
         mock_logger.warning.assert_called_once()
-        assert "no API key" in mock_logger.warning.call_args[0][0]
+        assert RIRSyncLog.objects.get(operation="remove").status == "skipped"
 
     def test_no_rir_network_does_nothing(self, rir_config):
         """Deleting a prefix with no linked RIRNetwork should not trigger anything."""
@@ -224,7 +224,7 @@ class TestAutoReassignStatusGuard:
         mock_job.enqueue.assert_not_called()
 
     @pytest.mark.parametrize("config_active, expect_enqueue", [(True, True), (False, False)])
-    def test_requires_active_config(self, rir_config, rir_user_key, make_parent, config_active, expect_enqueue):
+    def test_requires_active_config(self, rir_config, default_key, make_parent, config_active, expect_enqueue):
         """An opted-in parent only triggers auto-reassign while its config is active."""
         from dcim.models import Site
         from ipam.models import Prefix
@@ -246,7 +246,7 @@ class TestAutoReassignStatusGuard:
 class TestPrefixDeactivateSignal:
     """Tests for remove_network_on_prefix_deactivate signal."""
 
-    def test_enqueues_removal_on_deactivation(self, rir_config, rir_user_key, removal_opt_in):
+    def test_enqueues_removal_on_deactivation(self, rir_config, default_key, removal_opt_in):
         """Changing prefix to deprecated should enqueue ARIN network removal."""
         from ipam.models import Prefix
 
@@ -267,7 +267,7 @@ class TestPrefixDeactivateSignal:
         mock_job.enqueue.assert_called_once()
         call_kwargs = mock_job.enqueue.call_args[1]
         assert call_kwargs["network_id"] is not None
-        assert call_kwargs["user_key_id"] == rir_user_key.pk
+        assert call_kwargs["user_key_id"] == default_key.pk
 
     def test_skips_active_prefix(self, rir_config, rir_user_key):
         """Saving a prefix that stays active should NOT trigger removal."""
@@ -324,7 +324,7 @@ class TestPrefixDeactivateSignal:
         """Deactivation logs a warning when no API key exists."""
         from ipam.models import Prefix
 
-        from netbox_rir_manager.models import RIRNetwork
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
 
         pfx = Prefix.objects.create(prefix="10.34.0.0/24", status="active")
         RIRNetwork.objects.create(
@@ -339,7 +339,7 @@ class TestPrefixDeactivateSignal:
             pfx.save()
 
         mock_logger.warning.assert_called_once()
-        assert "no API key" in mock_logger.warning.call_args[0][0]
+        assert RIRSyncLog.objects.get(operation="remove").status == "skipped"
 
 
 @pytest.mark.django_db
@@ -380,3 +380,55 @@ class TestRemovalRequiresOptIn:
         skipped = RIRSyncLog.objects.get(object_handle="NET-10-40-1-0-1")
         assert skipped.status == "skipped"
         assert skipped.operation == "remove"
+
+
+@pytest.mark.django_db
+class TestSignalKeyResolution:
+    """Signal-driven ARIN writes run as the user who edited the prefix, with that user's key first."""
+
+    def test_removal_uses_acting_users_key(self, rir_config, default_key, operator_key, removal_opt_in):
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.jobs import _changelog_context
+        from netbox_rir_manager.models import RIRNetwork
+
+        pfx = Prefix.objects.create(prefix="10.50.0.0/24", status="active")
+        RIRNetwork.objects.create(rir_config=rir_config, handle="NET-10-50-0-0-1", prefix=pfx)
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job, _changelog_context(operator_key.user):
+            pfx.status = "deprecated"
+            pfx.save()
+
+        call_kwargs = mock_job.enqueue.call_args[1]
+        assert call_kwargs["user_key_id"] == operator_key.pk
+        assert call_kwargs["user"] == operator_key.user
+
+    @pytest.mark.parametrize("acting", [True, False], ids=["editor-without-key-skipped", "no-actor-uses-default"])
+    def test_auto_reassign_key_resolution(self, rir_config, default_key, make_parent, acting):
+        """An edit by a user without a key never borrows the default key; work with no user does."""
+        from contextlib import nullcontext
+
+        from dcim.models import Site
+        from django.contrib.auth import get_user_model
+        from ipam.models import Prefix
+        from tenancy.models import Tenant
+
+        from netbox_rir_manager.jobs import _changelog_context
+        from netbox_rir_manager.models import RIRSyncLog
+
+        make_parent("10.51.0.0/16")
+        editor = get_user_model().objects.create_user("editor")
+        site = Site.objects.create(name="Site B", slug="site-b")
+        tenant = Tenant.objects.create(name="Tenant B", slug="tenant-b")
+        context = _changelog_context(editor) if acting else nullcontext()
+
+        with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job, context:
+            Prefix.objects.create(prefix="10.51.1.0/24", status="active", scope=site, tenant=tenant)
+
+        if acting:
+            mock_job.enqueue.assert_not_called()
+            assert RIRSyncLog.objects.get(operation="reassign").status == "skipped"
+        else:
+            call_kwargs = mock_job.enqueue.call_args[1]
+            assert call_kwargs["user_key_id"] == default_key.pk
+            assert call_kwargs["user"] == default_key.user

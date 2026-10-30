@@ -224,21 +224,20 @@ class RIRNetwork(NetBoxModel):
             return None
         return cls.objects.filter(aggregate=agg, auto_reassign=True, rir_config__is_active=True).first()
 
-    def enqueue_removal(self):
-        """Queue a background job to remove this network at ARIN.
+    def enqueue_removal(self, user=None):
+        """Queue a background job to remove this network at ARIN, on behalf of user if given.
 
-        Returns True if job was enqueued, False if no API key available.
+        Returns True if the job was enqueued, False if no key resolves (see RIRConfig.resolve_key).
         """
         from netbox_rir_manager.jobs import RemoveNetworkJob
-        from netbox_rir_manager.models import RIRUserKey
 
-        user_key = RIRUserKey.objects.filter(rir_config=self.rir_config).first()
+        user_key = self.rir_config.resolve_key(user)
         if not user_key:
             return False
 
         RemoveNetworkJob.enqueue(
             instance=self.rir_config,
-            user=user_key.user,
+            user=user or user_key.user,
             network_id=self.pk,
             user_key_id=user_key.pk,
         )

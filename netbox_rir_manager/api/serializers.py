@@ -28,6 +28,7 @@ class RIRConfigSerializer(NetBoxModelSerializer):
             "api_url",
             "org_handle",
             "is_active",
+            "default_key",
             "last_sync",
             "tags",
             "created",
