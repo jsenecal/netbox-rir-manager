@@ -65,7 +65,7 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     1. Prefix is scoped to a Site
     2. Prefix has a Tenant
     3. No existing RIRNetwork linked to this prefix
-    4. Parent aggregate has a linked RIRNetwork with auto_reassign=True
+    4. Parent aggregate has a linked RIRNetwork with auto_reassign=True on an active config
     5. At least one RIRUserKey exists for the RIRConfig
     """
     if raw:
@@ -75,7 +75,6 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
         return
 
     from dcim.models import Site
-    from ipam.models import Aggregate
 
     from netbox_rir_manager.models import RIRNetwork, RIRUserKey
 
@@ -96,12 +95,8 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     if RIRNetwork.objects.filter(prefix=instance).exists():
         return
 
-    # 4. Find parent aggregate with auto_reassign RIRNetwork
-    agg = Aggregate.objects.filter(prefix__net_contains_or_equals=instance.prefix).first()
-    if not agg:
-        return
-
-    parent_network = RIRNetwork.objects.filter(aggregate=agg, auto_reassign=True).first()
+    # 4. Parent allocation opted into auto-reassign on an active config
+    parent_network = RIRNetwork.auto_reassign_parent_for(instance)
     if not parent_network:
         return
 
@@ -142,17 +137,7 @@ def remove_network_on_prefix_deactivate(sender, instance, created=False, raw=Fal
     if instance.status == "active":
         return
 
-    from netbox_rir_manager.models import RIRNetwork
-
-    rir_networks = RIRNetwork.objects.filter(prefix=instance, aggregate__isnull=True)
-    for network in rir_networks:
-        if not network.enqueue_removal():
-            logger.warning(
-                "Cannot remove ARIN network %s for deactivated prefix %s: no API key for config %s",
-                network.handle,
-                instance.prefix,
-                network.rir_config.name,
-            )
+    _remove_child_networks(instance, reason="deactivated")
 
 
 @receiver(pre_delete, sender="ipam.Prefix")
@@ -160,15 +145,44 @@ def remove_rir_network_on_prefix_delete(sender, instance, **kwargs):
     """Remove ARIN reassignment when a prefix is deleted.
 
     Uses pre_delete because after deletion SET_NULL clears the FK link.
-    Only removes child reassignments (prefix-only, no aggregate).
     """
-    from netbox_rir_manager.models import RIRNetwork
+    _remove_child_networks(instance, reason="deleted")
 
-    rir_networks = RIRNetwork.objects.filter(prefix=instance, aggregate__isnull=True)
+
+def _remove_child_networks(prefix, reason):
+    """Queue ARIN removal of a prefix's child reassignments, under the same opt-in as auto-reassign.
+
+    Removal at ARIN is destructive and a prefix status change or delete is a routine IPAM edit,
+    so it only happens when the parent allocation has auto_reassign enabled and its config is
+    active. Otherwise the ARIN net is left in place and a skipped sync log records why.
+    Parent allocations (networks linked to an aggregate) are never removed this way.
+    """
+    from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+
+    rir_networks = RIRNetwork.objects.filter(prefix=prefix, aggregate__isnull=True)
+    if not rir_networks.exists():
+        return
+
+    opted_in = RIRNetwork.auto_reassign_parent_for(prefix) is not None
+
     for network in rir_networks:
-        if not network.enqueue_removal():
+        if not opted_in:
+            RIRSyncLog.objects.create(
+                rir_config=network.rir_config,
+                operation="remove",
+                object_type="network",
+                object_handle=network.handle,
+                status="skipped",
+                message=(
+                    f"Prefix {prefix.prefix} {reason}; ARIN network left in place because its parent "
+                    "allocation does not have auto-reassign enabled on an active config"
+                ),
+            )
+        elif not network.enqueue_removal():
             logger.warning(
-                "Cannot remove ARIN network %s on prefix delete: no API key for config %s",
+                "Cannot remove ARIN network %s for %s prefix %s: no API key for config %s",
                 network.handle,
+                reason,
+                prefix.prefix,
                 network.rir_config.name,
             )

@@ -40,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prefix's aggregate, instead of the first active config on the RIR, and refuses
   prefixes whose aggregate is not linked to an active config.
 
+### Fixed
+
+- Deleting a prefix, or saving it with a status other than Active, no longer removes
+  its child reassignment at the RIR unless the parent allocation has `auto_reassign`
+  enabled and its config is active -- the same opt-in automatic reassignment already
+  required. Previously every synced child network was removed on any such IPAM edit.
+  Without the opt-in the network is left in place and a `skipped` sync log is written.
+- Automatic reassignment no longer fires for prefixes under an allocation whose RIR
+  config is inactive; both automatic reassignment and removal now resolve the
+  opted-in parent through one `RIRNetwork.auto_reassign_parent_for()` check.
+
 ## [0.4.0] - 2026-06-18
 
 ### Changed

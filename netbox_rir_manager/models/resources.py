@@ -212,6 +212,18 @@ class RIRNetwork(NetBoxModel):
         network = cls.objects.filter(aggregate=agg).first()
         return network, agg
 
+    @classmethod
+    def auto_reassign_parent_for(cls, prefix):
+        """Return the parent allocation opted into automatic reassignment and removal, or None.
+
+        The opt-in is the auto_reassign flag on the network linked to the prefix's aggregate,
+        and it only counts while that network's config is active.
+        """
+        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
+        if not agg:
+            return None
+        return cls.objects.filter(aggregate=agg, auto_reassign=True, rir_config__is_active=True).first()
+
     def enqueue_removal(self):
         """Queue a background job to remove this network at ARIN.
 
