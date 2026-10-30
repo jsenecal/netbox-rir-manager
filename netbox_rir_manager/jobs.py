@@ -424,12 +424,15 @@ class SyncRIRConfigJob(JobRunner):
         name = "RIR Sync"
 
     def run(self, *args, **kwargs):
-        from netbox_rir_manager.models import RIRConfig, RIRUserKey
+        from netbox_rir_manager.models import RIRConfig
 
         rir_config = RIRConfig.objects.get(pk=self.job.object_id)
-        user_id = kwargs.get("user_id") or (args[0] if args else None)
-
-        user_key = RIRUserKey.objects.get(user_id=user_id, rir_config=rir_config)
+        user_key = rir_config.resolve_key(self.job.user)
+        if not user_key:
+            self.logger.error(f"No API key resolves for config {rir_config.name}; nothing synced")
+            self.job.data = {"rir_config": rir_config.name, "status": "error", "message": "No API key"}
+            self.job.save()
+            return
 
         self.job.data = {"rir_config": rir_config.name}
         self.job.save()

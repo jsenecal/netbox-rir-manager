@@ -243,11 +243,27 @@ class TestRIRSyncJob:
 
         runner = make_runner(SyncRIRConfigJob)
         runner.job.object_id = rir_config.pk
+        runner.job.user = admin_user
 
-        runner.run(user_id=admin_user.pk)
+        runner.run()
 
         # Verify the job data was updated
         assert "rir_config" in runner.job.data
+        mock_backend_class.from_rir_config.assert_called_once_with(rir_config, api_key="job-key")
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_job_without_users_key_does_nothing(self, mock_backend_class, rir_config, default_key, make_user):
+        """A user-triggered sync never borrows the default key."""
+        from netbox_rir_manager.jobs import SyncRIRConfigJob
+
+        runner = make_runner(SyncRIRConfigJob)
+        runner.job.object_id = rir_config.pk
+        runner.job.user = make_user("keyless")
+
+        runner.run()
+
+        mock_backend_class.from_rir_config.assert_not_called()
+        assert runner.job.data["status"] == "error"
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_returns_agg_nets(self, mock_backend_class, rir_config, rir):
@@ -733,7 +749,7 @@ class TestChangelogEntries:
         runner.job.object_id = rir_config.pk
         runner.job.user = admin_user
 
-        runner.run(user_id=admin_user.pk)
+        runner.run()
 
         assert RIROrganization.objects.filter(handle="CHANGELOG-ARIN").exists()
         org = RIROrganization.objects.get(handle="CHANGELOG-ARIN")
@@ -745,8 +761,8 @@ class TestChangelogEntries:
         assert changes.first().user == admin_user
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
-    def test_sync_no_changelog_without_user(self, mock_backend_class, rir_config, rir_user_key):
-        """When job.user is a MagicMock (no real user), no ObjectChange is created."""
+    def test_sync_no_changelog_without_user(self, mock_backend_class, rir_config, default_key):
+        """A sync with no user runs with the default key and creates no ObjectChange."""
         from core.models import ObjectChange
 
         from netbox_rir_manager.jobs import SyncRIRConfigJob
@@ -768,10 +784,10 @@ class TestChangelogEntries:
 
         runner = make_runner(SyncRIRConfigJob)
         runner.job.object_id = rir_config.pk
-        # runner.job.user is MagicMock (default from make_runner)
+        runner.job.user = None
 
         initial_count = ObjectChange.objects.count()
-        runner.run(user_id=rir_user_key.user_id)
+        runner.run()
 
         # No ObjectChange should be created since user is not a real User
         assert ObjectChange.objects.count() == initial_count

@@ -21,6 +21,18 @@ def make_parent(rir_config, rir):
 
 
 @pytest.fixture
+def tenant_site(db):
+    """A site and tenant, the two things that make an active prefix eligible for auto-reassign."""
+    from dcim.models import Site
+    from tenancy.models import Tenant
+
+    return {
+        "scope": Site.objects.create(name="Site A", slug="site-a"),
+        "tenant": Tenant.objects.create(name="Tenant A", slug="tenant-a"),
+    }
+
+
+@pytest.fixture
 def removal_opt_in(make_parent):
     """A parent allocation covering the 10/8 test prefixes, opted into automatic reassignment."""
     return make_parent("10.0.0.0/8")
@@ -224,20 +236,18 @@ class TestAutoReassignStatusGuard:
         mock_job.enqueue.assert_not_called()
 
     @pytest.mark.parametrize("config_active, expect_enqueue", [(True, True), (False, False)])
-    def test_requires_active_config(self, rir_config, default_key, make_parent, config_active, expect_enqueue):
+    def test_requires_active_config(
+        self, rir_config, default_key, make_parent, tenant_site, config_active, expect_enqueue
+    ):
         """An opted-in parent only triggers auto-reassign while its config is active."""
-        from dcim.models import Site
         from ipam.models import Prefix
-        from tenancy.models import Tenant
 
         rir_config.is_active = config_active
         rir_config.save()
         make_parent("10.22.0.0/16")
-        site = Site.objects.create(name="Site A", slug="site-a")
-        tenant = Tenant.objects.create(name="Tenant A", slug="tenant-a")
 
         with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job:
-            Prefix.objects.create(prefix="10.22.1.0/24", status="active", scope=site, tenant=tenant)
+            Prefix.objects.create(prefix="10.22.1.0/24", status="active", **tenant_site)
 
         assert mock_job.enqueue.called is expect_enqueue
 
@@ -404,26 +414,20 @@ class TestSignalKeyResolution:
         assert call_kwargs["user"] == operator_key.user
 
     @pytest.mark.parametrize("acting", [True, False], ids=["editor-without-key-skipped", "no-actor-uses-default"])
-    def test_auto_reassign_key_resolution(self, rir_config, default_key, make_parent, acting):
+    def test_auto_reassign_key_resolution(self, rir_config, default_key, make_parent, make_user, tenant_site, acting):
         """An edit by a user without a key never borrows the default key; work with no user does."""
         from contextlib import nullcontext
 
-        from dcim.models import Site
-        from django.contrib.auth import get_user_model
         from ipam.models import Prefix
-        from tenancy.models import Tenant
 
         from netbox_rir_manager.jobs import _changelog_context
         from netbox_rir_manager.models import RIRSyncLog
 
         make_parent("10.51.0.0/16")
-        editor = get_user_model().objects.create_user("editor")
-        site = Site.objects.create(name="Site B", slug="site-b")
-        tenant = Tenant.objects.create(name="Tenant B", slug="tenant-b")
-        context = _changelog_context(editor) if acting else nullcontext()
+        context = _changelog_context(make_user("editor")) if acting else nullcontext()
 
         with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job, context:
-            Prefix.objects.create(prefix="10.51.1.0/24", status="active", scope=site, tenant=tenant)
+            Prefix.objects.create(prefix="10.51.1.0/24", status="active", **tenant_site)
 
         if acting:
             mock_job.enqueue.assert_not_called()

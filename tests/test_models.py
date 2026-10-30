@@ -640,15 +640,13 @@ class TestRIRConfigResolveKey:
             pytest.param(None, False, None, id="no-acting-user-no-default"),
         ],
     )
-    def test_resolution_order(self, rir_config, rir_user_key, operator_key, actor, has_default, expected):
-        from django.contrib.auth import get_user_model
-
+    def test_resolution_order(self, rir_config, rir_user_key, operator_key, make_user, actor, has_default, expected):
         if has_default:
             rir_config.default_key = rir_user_key
             rir_config.save()
         users = {
             "operator": operator_key.user,
-            "stranger": get_user_model().objects.create_user("stranger"),
+            "stranger": make_user("stranger"),
             None: None,
         }
         keys = {"operator": operator_key, "default": rir_user_key, None: None}
