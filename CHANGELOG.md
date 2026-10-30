@@ -13,9 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Renovate keeping the matrix pinned to the newest release of that
   minor. The README compatibility matrix gains NetBox 4.7 to the
   0.4.x row.
+- Optional per-config **default key** (`RIRConfig.default_key`), the only key used for
+  work no user initiated, such as the scheduled sync. A migration sets it on every
+  config that has exactly one key, so single-key installs keep syncing; configs with
+  several keys need one chosen.
 
 ### Changed
 
+- **Breaking:** RIR operations a user initiates, including the automatic
+  reassignment and removal an IPAM edit triggers, now run only with that user's own
+  key, and the job runs as that user. Previously the automatic paths used the first
+  key on the config, whoever owned it. Without a key nothing is sent and a `skipped`
+  sync log is written.
+- **Breaking:** the scheduled sync now uses only the config's default key, once per
+  config. Previously it ran once per key that had ever synced the config.
 - CI now tests against the latest NetBox 4.5 and 4.6 releases (4.5.10
   and 4.6.10, previously 4.5.8 and 4.5.10), with Renovate keeping the
   matrix pinned to the newest release of each supported minor. The

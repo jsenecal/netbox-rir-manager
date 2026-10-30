@@ -19,8 +19,8 @@ From the `RIRConfig` list view, select rows and choose **Sync Selected**. The pl
 `ScheduledRIRSyncJob` is registered as a NetBox system job at the daily interval. On each run it:
 
 1. Iterates `RIRConfig.objects.filter(is_active=True)`.
-2. For each config, picks the most-recently-used `RIRUserKey` (by checking which keys have synced-by relationships on `RIROrganization`, `RIRContact`, or `RIRNetwork`); falls back to the lowest-pk key for that config if no synced-by data exists.
-3. Calls `sync_rir_config` with that key.
+2. For each config, uses its **default key**. No user initiated the run, so no user's own key is borrowed; a config without a default key is skipped with a warning.
+3. Calls `sync_rir_config` once with that key.
 4. Logs failures per config and continues -- one failing config does not abort the rest.
 
 Inspect or trigger it manually from **System > Background Jobs**.

@@ -66,7 +66,7 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     2. Prefix has a Tenant
     3. No existing RIRNetwork linked to this prefix
     4. Parent aggregate has a linked RIRNetwork with auto_reassign=True on an active config
-    5. At least one RIRUserKey exists for the RIRConfig
+    5. A key resolves for the user who saved the prefix (see RIRConfig.resolve_key)
     """
     if raw:
         return
@@ -76,7 +76,7 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
 
     from dcim.models import Site
 
-    from netbox_rir_manager.models import RIRNetwork, RIRUserKey
+    from netbox_rir_manager.models import RIRNetwork
 
     # 1. Check for site - Prefix.scope is a GenericFK via CachedScopeMixin
     site = getattr(instance, "_site", None)
@@ -100,13 +100,15 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     if not parent_network:
         return
 
-    # 5. Find a user key for the RIR config
-    user_key = RIRUserKey.objects.filter(rir_config=parent_network.rir_config).first()
+    # 5. Resolve the key for whoever saved the prefix
+    rir_config = parent_network.rir_config
+    user = _acting_user()
+    user_key = rir_config.resolve_key(user)
     if not user_key:
-        logger.warning(
-            "Auto-reassign skipped for prefix %s: no API key for config %s",
-            instance.prefix,
-            parent_network.rir_config.name,
+        reason = _no_key_reason(rir_config, user)
+        logger.warning("Auto-reassign skipped for prefix %s: %s", instance.prefix, reason)
+        _log_skipped(
+            rir_config, "reassign", str(instance.prefix), f"Auto-reassign of {instance.prefix} skipped: {reason}"
         )
         return
 
@@ -121,8 +123,8 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     )
 
     ReassignJob.enqueue(
-        instance=parent_network.rir_config,
-        user=user_key.user,
+        instance=rir_config,
+        user=user or user_key.user,
         prefix_id=instance.pk,
         user_key_id=user_key.pk,
     )
@@ -157,32 +159,59 @@ def _remove_child_networks(prefix, reason):
     active. Otherwise the ARIN net is left in place and a skipped sync log records why.
     Parent allocations (networks linked to an aggregate) are never removed this way.
     """
-    from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+    from netbox_rir_manager.models import RIRNetwork
 
     rir_networks = RIRNetwork.objects.filter(prefix=prefix, aggregate__isnull=True)
     if not rir_networks.exists():
         return
 
     opted_in = RIRNetwork.auto_reassign_parent_for(prefix) is not None
+    user = _acting_user()
 
     for network in rir_networks:
         if not opted_in:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="remove",
-                object_type="network",
-                object_handle=network.handle,
-                status="skipped",
-                message=(
-                    f"Prefix {prefix.prefix} {reason}; ARIN network left in place because its parent "
-                    "allocation does not have auto-reassign enabled on an active config"
-                ),
-            )
-        elif not network.enqueue_removal():
-            logger.warning(
-                "Cannot remove ARIN network %s for %s prefix %s: no API key for config %s",
+            _log_skipped(
+                network.rir_config,
+                "remove",
                 network.handle,
-                reason,
-                prefix.prefix,
-                network.rir_config.name,
+                f"Prefix {prefix.prefix} {reason}; ARIN network left in place because its parent "
+                "allocation does not have auto-reassign enabled on an active config",
             )
+        elif not network.enqueue_removal(user=user):
+            no_key = _no_key_reason(network.rir_config, user)
+            logger.warning(
+                "Cannot remove ARIN network %s for %s prefix %s: %s", network.handle, reason, prefix.prefix, no_key
+            )
+            _log_skipped(
+                network.rir_config,
+                "remove",
+                network.handle,
+                f"Prefix {prefix.prefix} {reason}; ARIN network left in place: {no_key}",
+            )
+
+
+def _acting_user():
+    """The authenticated user behind the current request or job, if any."""
+    from netbox.context import current_request
+
+    user = getattr(current_request.get(), "user", None)
+    return user if user is not None and user.is_authenticated else None
+
+
+def _no_key_reason(rir_config, user):
+    if user is not None:
+        return f"{user} has no API key for RIR config {rir_config}"
+    return f"RIR config {rir_config} has no default key"
+
+
+def _log_skipped(rir_config, operation, handle, message):
+    from netbox_rir_manager.models import RIRSyncLog
+
+    RIRSyncLog.objects.create(
+        rir_config=rir_config,
+        operation=operation,
+        object_type="network",
+        object_handle=handle,
+        status="skipped",
+        message=message,
+    )

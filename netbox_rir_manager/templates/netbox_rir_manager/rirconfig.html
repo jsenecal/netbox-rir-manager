@@ -38,6 +38,10 @@
                     <td>{% checkmark object.is_active %}</td>
                 </tr>
                 <tr>
+                    <th scope="row">Default Key</th>
+                    <td>{{ object.default_key|linkify|placeholder }}</td>
+                </tr>
+                <tr>
                     <th scope="row">Last Sync</th>
                     <td>{{ object.last_sync|placeholder }}</td>
                 </tr>

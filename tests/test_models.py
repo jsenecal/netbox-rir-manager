@@ -628,6 +628,46 @@ class TestRIRNetworkFindForPrefix:
 
 
 @pytest.mark.django_db
+class TestRIRConfigResolveKey:
+    """User-initiated operations need the user's own key; only work with no user uses the default."""
+
+    @pytest.mark.parametrize(
+        "actor, has_default, expected",
+        [
+            pytest.param("operator", True, "operator", id="acting-user-uses-own-key"),
+            pytest.param("stranger", True, None, id="acting-user-without-key-never-borrows-default"),
+            pytest.param(None, True, "default", id="no-acting-user-uses-default"),
+            pytest.param(None, False, None, id="no-acting-user-no-default"),
+        ],
+    )
+    def test_resolution_order(self, rir_config, rir_user_key, operator_key, actor, has_default, expected):
+        from django.contrib.auth import get_user_model
+
+        if has_default:
+            rir_config.default_key = rir_user_key
+            rir_config.save()
+        users = {
+            "operator": operator_key.user,
+            "stranger": get_user_model().objects.create_user("stranger"),
+            None: None,
+        }
+        keys = {"operator": operator_key, "default": rir_user_key, None: None}
+
+        assert rir_config.resolve_key(users[actor]) == keys[expected]
+
+    def test_default_key_must_belong_to_config(self, rir, rir_config, rir_user_key):
+        from django.core.exceptions import ValidationError
+
+        from netbox_rir_manager.models import RIRConfig
+
+        other = RIRConfig.objects.create(rir=rir, name="Other", org_handle="OTHER-ARIN")
+        other.default_key = rir_user_key
+
+        with pytest.raises(ValidationError, match="default_key"):
+            other.full_clean()
+
+
+@pytest.mark.django_db
 class TestRIRNetworkEnqueueRemoval:
     @pytest.fixture
     def child_network(self, rir_config):
@@ -640,17 +680,45 @@ class TestRIRNetworkEnqueueRemoval:
             rir_config=rir_config, handle="NET-CHILD-RM-1", net_name="CHILD-RM", prefix=pfx
         )
 
-    def test_enqueues_job_when_key_exists(self, child_network, rir_user_key):
+    def test_runs_as_acting_user_with_their_key(self, child_network, default_key, operator_key):
+        from unittest.mock import patch
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
+            result = child_network.enqueue_removal(user=operator_key.user)
+
+        assert result is True
+        call_kwargs = mock_job.enqueue.call_args[1]
+        assert call_kwargs["network_id"] == child_network.pk
+        assert call_kwargs["user_key_id"] == operator_key.pk
+        assert call_kwargs["user"] == operator_key.user
+
+    def test_returns_false_without_resolvable_key(self, child_network, rir_user_key):
+        """A key that is neither the acting user's nor the default is never borrowed."""
         from unittest.mock import patch
 
         with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
             result = child_network.enqueue_removal()
-        assert result is True
-        mock_job.enqueue.assert_called_once()
-        call_kwargs = mock_job.enqueue.call_args[1]
-        assert call_kwargs["network_id"] == child_network.pk
-        assert call_kwargs["user_key_id"] == rir_user_key.pk
 
-    def test_returns_false_when_no_key(self, child_network):
-        result = child_network.enqueue_removal()
         assert result is False
+        mock_job.enqueue.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestDefaultKeyMigration:
+    def test_sets_default_only_where_a_single_key_exists(self, rir, rir_config, rir_user_key, operator_key):
+        import importlib
+
+        from django.apps import apps
+
+        from netbox_rir_manager.models import RIRConfig, RIRUserKey
+
+        migration = importlib.import_module("netbox_rir_manager.migrations.0018_rirconfig_default_key")
+        single = RIRConfig.objects.create(rir=rir, name="Single", org_handle="SINGLE-ARIN")
+        single_key = RIRUserKey.objects.create(user=rir_user_key.user, rir_config=single, api_key="single-key")
+
+        migration.default_single_keys(apps, None)
+
+        rir_config.refresh_from_db()
+        single.refresh_from_db()
+        assert rir_config.default_key is None  # two keys: an administrator must choose
+        assert single.default_key == single_key

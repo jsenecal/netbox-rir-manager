@@ -22,15 +22,27 @@ from netbox_rir_manager.models import (
 
 class RIRConfigForm(NetBoxModelForm):
     rir = DynamicModelChoiceField(queryset=RIR.objects.all())
+    default_key = forms.ModelChoiceField(
+        queryset=RIRUserKey.objects.none(),
+        required=False,
+        help_text="Key used for work no user initiated, such as the scheduled sync. "
+        "User-initiated operations always need the user's own key.",
+    )
 
     fieldsets = (
-        FieldSet("rir", "name", "api_url", "org_handle", "is_active", name="RIR Config"),
+        FieldSet("rir", "name", "api_url", "org_handle", "is_active", "default_key", name="RIR Config"),
         FieldSet("tags", name="Tags"),
     )
 
     class Meta:
         model = RIRConfig
-        fields = ("rir", "name", "api_url", "org_handle", "is_active", "tags")
+        fields = ("rir", "name", "api_url", "org_handle", "is_active", "default_key", "tags")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only this config's own keys can be its default; a new config has none yet.
+        if self.instance.pk:
+            self.fields["default_key"].queryset = RIRUserKey.objects.filter(rir_config=self.instance)
 
 
 class RIRConfigFilterForm(NetBoxModelFilterSetForm):

@@ -165,6 +165,23 @@ if _netbox_available:
         )
 
     @pytest.fixture
+    def default_key(rir_config, rir_user_key):
+        """Make the admin user's key the config's default key."""
+        rir_config.default_key = rir_user_key
+        rir_config.save()
+        return rir_user_key
+
+    @pytest.fixture
+    def operator_key(db, rir_config):
+        """A second user with their own key on the same config."""
+        from django.contrib.auth import get_user_model
+
+        from netbox_rir_manager.models import RIRUserKey
+
+        operator = get_user_model().objects.create_user("operator", "operator@example.com", "password")
+        return RIRUserKey.objects.create(user=operator, rir_config=rir_config, api_key="operator-key")
+
+    @pytest.fixture
     def rir_ticket(db, rir_config):
         """Create a test RIR ticket."""
         from django.utils import timezone

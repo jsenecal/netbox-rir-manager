@@ -833,7 +833,7 @@ class ScheduledRIRSyncJob(JobRunner):
         name = "Scheduled RIR Sync"
 
     def run(self, *args, **kwargs):
-        from netbox_rir_manager.models import RIRConfig, RIRUserKey
+        from netbox_rir_manager.models import RIRConfig
 
         configs = RIRConfig.objects.filter(is_active=True)
         total_logs = 0
@@ -843,33 +843,20 @@ class ScheduledRIRSyncJob(JobRunner):
             for config in configs:
                 self.logger.info(f"Syncing config: {config.name}")
 
-                # Collect distinct keys that have synced objects for this config
-                synced_key_ids = set()
-                for model_class in (RIROrganization, RIRContact, RIRNetwork):
-                    synced_key_ids.update(
-                        model_class.objects.filter(rir_config=config, synced_by__isnull=False)
-                        .values_list("synced_by_id", flat=True)
-                        .distinct()
-                    )
-
-                if synced_key_ids:
-                    user_keys = RIRUserKey.objects.filter(pk__in=synced_key_ids)
-                else:
-                    user_keys = RIRUserKey.objects.filter(rir_config=config).order_by("pk")[:1]
-
-                if not user_keys.exists():
-                    self.logger.warning(f"No API keys for config {config.name}, skipping")
+                # No user initiated this run, so only the config's default key may be used.
+                user_key = config.resolve_key()
+                if not user_key:
+                    self.logger.warning(f"No default key for config {config.name}, skipping")
                     continue
 
-                for user_key in user_keys:
-                    self.logger.info(f"Using API key {user_key.pk} for config {config.name}")
-                    try:
-                        logs, _agg_nets = sync_rir_config(
-                            config, api_key=user_key.api_key, user_key=user_key, log=self.logger
-                        )
-                        total_logs += len(logs)
-                    except Exception:
-                        self.logger.exception(f"Scheduled sync failed for config {config.name} with key {user_key.pk}")
+                self.logger.info(f"Using default key {user_key.pk} for config {config.name}")
+                try:
+                    logs, _agg_nets = sync_rir_config(
+                        config, api_key=user_key.api_key, user_key=user_key, log=self.logger
+                    )
+                    total_logs += len(logs)
+                except Exception:
+                    self.logger.exception(f"Scheduled sync failed for config {config.name}")
 
         self.logger.info(f"Scheduled sync complete: {configs.count()} configs, {total_logs} logs")
         self.job.data = {"configs_synced": len(configs), "total_logs": total_logs}
