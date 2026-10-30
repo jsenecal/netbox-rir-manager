@@ -72,20 +72,13 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
     serializer_class = RIRNetworkSerializer
     filterset_class = RIRNetworkFilterSet
 
-    def _get_user_key(self, request, network):
-        """Get the user's API key for this network's RIR config."""
-        return RIRUserKey.objects.filter(
-            user=request.user,
-            rir_config=network.rir_config,
-        ).first()
-
     @action(detail=True, methods=["post"], url_path="reassign")
     def reassign(self, request, pk=None):
         network = self.get_object()
         serializer = NetworkReassignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_key = self._get_user_key(request, network)
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
                 {"detail": "No API key configured for this RIR config."},
@@ -174,7 +167,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         serializer = NetworkReallocateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_key = self._get_user_key(request, network)
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
                 {"detail": "No API key configured for this RIR config."},
@@ -230,7 +223,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
     @action(detail=True, methods=["post"], url_path="remove")
     def remove_net(self, request, pk=None):
         network = self.get_object()
-        user_key = self._get_user_key(request, network)
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
                 {"detail": "No API key configured for this RIR config."},
@@ -269,7 +262,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
     @action(detail=True, methods=["post"], url_path="delete-arin")
     def delete_arin(self, request, pk=None):
         network = self.get_object()
-        user_key = self._get_user_key(request, network)
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
                 {"detail": "No API key configured for this RIR config."},

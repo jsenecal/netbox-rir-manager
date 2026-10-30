@@ -137,11 +137,11 @@ class RIRConfigBulkSyncView(LoginRequiredMixin, View):
             synced = []
             skipped = []
             for config in configs:
-                user_key = RIRUserKey.objects.filter(user=request.user, rir_config=config).first()
+                user_key = config.resolve_key(request.user)
                 if not user_key:
                     skipped.append(config.name)
                     continue
-                SyncRIRConfigJob.enqueue(instance=config, user=request.user, user_id=request.user.pk)
+                SyncRIRConfigJob.enqueue(instance=config, user=request.user)
                 synced.append(config.name)
 
             if synced:
@@ -328,19 +328,14 @@ class RIRConfigSyncView(LoginRequiredMixin, View):
 
     def post(self, request, pk):
         from netbox_rir_manager.jobs import SyncRIRConfigJob
-        from netbox_rir_manager.models import RIRUserKey as RIRUserKeyModel
 
         rir_config = get_object_or_404(RIRConfig, pk=pk)
 
-        if not RIRUserKeyModel.objects.filter(user=request.user, rir_config=rir_config).exists():
+        if not rir_config.resolve_key(request.user):
             messages.error(request, "You don't have an API key configured for this RIR config.")
             return redirect(rir_config.get_absolute_url())
 
-        SyncRIRConfigJob.enqueue(
-            instance=rir_config,
-            user=request.user,
-            user_id=request.user.pk,
-        )
+        SyncRIRConfigJob.enqueue(instance=rir_config, user=request.user)
         messages.success(request, f"Sync job queued for {rir_config.name}.")
         return_url = request.GET.get("return_url") or request.POST.get("return_url")
         return redirect(return_url or rir_config.get_absolute_url())
@@ -383,10 +378,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
                 },
             )
 
-        user_key = RIRUserKey.objects.filter(
-            user=request.user,
-            rir_config=network.rir_config,
-        ).first()
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, "No API key configured for this RIR config.")
             return redirect(network.get_absolute_url())
@@ -506,10 +498,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
                 },
             )
 
-        user_key = RIRUserKey.objects.filter(
-            user=request.user,
-            rir_config=network.rir_config,
-        ).first()
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, "No API key configured for this RIR config.")
             return redirect(network.get_absolute_url())
@@ -569,10 +558,7 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
 
     def post(self, request, pk):
         network = get_object_or_404(RIRNetwork, pk=pk)
-        user_key = RIRUserKey.objects.filter(
-            user=request.user,
-            rir_config=network.rir_config,
-        ).first()
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, "No API key configured for this RIR config.")
             return redirect(network.get_absolute_url())
@@ -615,10 +601,7 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
 
     def post(self, request, pk):
         network = get_object_or_404(RIRNetwork, pk=pk)
-        user_key = RIRUserKey.objects.filter(
-            user=request.user,
-            rir_config=network.rir_config,
-        ).first()
+        user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, "No API key configured for this RIR config.")
             return redirect(network.get_absolute_url())
@@ -672,9 +655,8 @@ class AggregateSyncView(LoginRequiredMixin, View):
 
         # Several active configs (one per org) can share an RIR; the aggregate belongs to
         # whichever one's org it is registered to, so try each config the user holds a key for.
-        user_keys = RIRUserKey.objects.filter(
-            user=request.user, rir_config__rir=aggregate.rir, rir_config__is_active=True
-        ).select_related("rir_config")
+        configs = RIRConfig.objects.filter(rir=aggregate.rir, is_active=True)
+        user_keys = [key for key in (config.resolve_key(request.user) for config in configs) if key]
         if not user_keys:
             messages.error(request, "No API key configured for an active RIR config on this aggregate's RIR.")
             return redirect(aggregate.get_absolute_url())
@@ -714,7 +696,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
 
         rir_config = parent_network.rir_config
 
-        user_key = RIRUserKey.objects.filter(user=request.user, rir_config=rir_config).first()
+        user_key = rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, "No API key configured for this RIR config.")
             return redirect(prefix.get_absolute_url())
@@ -856,10 +838,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
             messages.error(request, "No parent RIR network found for this prefix.")
             return redirect(prefix.get_absolute_url())
 
-        user_key = RIRUserKey.objects.filter(
-            user=request.user,
-            rir_config=parent_network.rir_config,
-        ).first()
+        user_key = parent_network.rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, "No API key configured for this RIR config.")
             return redirect(prefix.get_absolute_url())

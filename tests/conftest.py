@@ -172,14 +172,18 @@ if _netbox_available:
         return rir_user_key
 
     @pytest.fixture
-    def operator_key(db, rir_config):
-        """A second user with their own key on the same config."""
+    def make_user(db):
+        """Create a plain (non-admin) user by username."""
         from django.contrib.auth import get_user_model
 
+        return lambda username: get_user_model().objects.create_user(username)
+
+    @pytest.fixture
+    def operator_key(rir_config, make_user):
+        """A second user with their own key on the same config."""
         from netbox_rir_manager.models import RIRUserKey
 
-        operator = get_user_model().objects.create_user("operator", "operator@example.com", "password")
-        return RIRUserKey.objects.create(user=operator, rir_config=rir_config, api_key="operator-key")
+        return RIRUserKey.objects.create(user=make_user("operator"), rir_config=rir_config, api_key="operator-key")
 
     @pytest.fixture
     def rir_ticket(db, rir_config):
