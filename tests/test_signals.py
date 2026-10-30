@@ -3,6 +3,29 @@ from unittest.mock import patch
 import pytest
 
 
+@pytest.fixture
+def make_parent(rir_config, rir):
+    """Build a parent allocation (aggregate plus linked RIRNetwork) for a prefix range."""
+    from ipam.models import Aggregate
+
+    from netbox_rir_manager.models import RIRNetwork
+
+    def _make(prefix, auto_reassign=True):
+        agg = Aggregate.objects.create(prefix=prefix, rir=rir)
+        handle = "NET-" + prefix.replace(".", "-").replace("/", "-")
+        return RIRNetwork.objects.create(
+            rir_config=rir_config, handle=handle, aggregate=agg, auto_reassign=auto_reassign
+        )
+
+    return _make
+
+
+@pytest.fixture
+def removal_opt_in(make_parent):
+    """A parent allocation covering the 10/8 test prefixes, opted into automatic reassignment."""
+    return make_parent("10.0.0.0/8")
+
+
 @pytest.mark.django_db
 class TestAutoLinkSignal:
     def test_auto_links_aggregate_on_save(self, rir_config, rir):
@@ -99,7 +122,7 @@ class TestAutoLinkSignal:
 class TestPrefixDeleteSignal:
     """Tests for remove_rir_network_on_prefix_delete signal."""
 
-    def test_enqueues_removal_for_child_reassignment(self, rir_config, rir_user_key):
+    def test_enqueues_removal_for_child_reassignment(self, rir_config, rir_user_key, removal_opt_in):
         from ipam.models import Prefix
 
         from netbox_rir_manager.models import RIRNetwork
@@ -142,7 +165,7 @@ class TestPrefixDeleteSignal:
 
         mock_job.enqueue.assert_not_called()
 
-    def test_warns_when_no_api_key(self, rir_config):
+    def test_warns_when_no_api_key(self, rir_config, removal_opt_in):
         """Deletion proceeds but logs a warning when no API key exists."""
         from ipam.models import Prefix
 
@@ -178,52 +201,52 @@ class TestPrefixDeleteSignal:
 class TestAutoReassignStatusGuard:
     """Tests that auto_reassign_prefix only fires for active prefixes."""
 
-    def test_skips_deprecated_prefix(self, rir_config, rir_user_key, rir):
+    def test_skips_deprecated_prefix(self, rir_user_key, make_parent):
         """A deprecated prefix with site+tenant should NOT trigger reassignment."""
-        from ipam.models import Aggregate, Prefix
+        from ipam.models import Prefix
 
-        from netbox_rir_manager.models import RIRNetwork
-
-        agg = Aggregate.objects.create(prefix="10.20.0.0/16", rir=rir)
-        RIRNetwork.objects.create(
-            rir_config=rir_config,
-            handle="NET-10-20-0-0-1",
-            net_name="PARENT-NET",
-            aggregate=agg,
-            auto_reassign=True,
-        )
+        make_parent("10.20.0.0/16")
 
         with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job:
             Prefix.objects.create(prefix="10.20.1.0/24", status="deprecated")
 
         mock_job.enqueue.assert_not_called()
 
-    def test_skips_reserved_prefix(self, rir_config, rir_user_key, rir):
+    def test_skips_reserved_prefix(self, rir_user_key, make_parent):
         """A reserved prefix should NOT trigger reassignment."""
-        from ipam.models import Aggregate, Prefix
+        from ipam.models import Prefix
 
-        from netbox_rir_manager.models import RIRNetwork
-
-        agg = Aggregate.objects.create(prefix="10.21.0.0/16", rir=rir)
-        RIRNetwork.objects.create(
-            rir_config=rir_config,
-            handle="NET-10-21-0-0-1",
-            net_name="PARENT-NET-2",
-            aggregate=agg,
-            auto_reassign=True,
-        )
+        make_parent("10.21.0.0/16")
 
         with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job:
             Prefix.objects.create(prefix="10.21.1.0/24", status="reserved")
 
         mock_job.enqueue.assert_not_called()
 
+    @pytest.mark.parametrize("config_active, expect_enqueue", [(True, True), (False, False)])
+    def test_requires_active_config(self, rir_config, rir_user_key, make_parent, config_active, expect_enqueue):
+        """An opted-in parent only triggers auto-reassign while its config is active."""
+        from dcim.models import Site
+        from ipam.models import Prefix
+        from tenancy.models import Tenant
+
+        rir_config.is_active = config_active
+        rir_config.save()
+        make_parent("10.22.0.0/16")
+        site = Site.objects.create(name="Site A", slug="site-a")
+        tenant = Tenant.objects.create(name="Tenant A", slug="tenant-a")
+
+        with patch("netbox_rir_manager.jobs.ReassignJob") as mock_job:
+            Prefix.objects.create(prefix="10.22.1.0/24", status="active", scope=site, tenant=tenant)
+
+        assert mock_job.enqueue.called is expect_enqueue
+
 
 @pytest.mark.django_db
 class TestPrefixDeactivateSignal:
     """Tests for remove_network_on_prefix_deactivate signal."""
 
-    def test_enqueues_removal_on_deactivation(self, rir_config, rir_user_key):
+    def test_enqueues_removal_on_deactivation(self, rir_config, rir_user_key, removal_opt_in):
         """Changing prefix to deprecated should enqueue ARIN network removal."""
         from ipam.models import Prefix
 
@@ -297,7 +320,7 @@ class TestPrefixDeactivateSignal:
 
         mock_job.enqueue.assert_not_called()
 
-    def test_warns_when_no_api_key(self, rir_config):
+    def test_warns_when_no_api_key(self, rir_config, removal_opt_in):
         """Deactivation logs a warning when no API key exists."""
         from ipam.models import Prefix
 
@@ -317,3 +340,43 @@ class TestPrefixDeactivateSignal:
 
         mock_logger.warning.assert_called_once()
         assert "no API key" in mock_logger.warning.call_args[0][0]
+
+
+@pytest.mark.django_db
+class TestRemovalRequiresOptIn:
+    """Prefix delete/deactivate only removes at ARIN under the parent's auto_reassign opt-in."""
+
+    @pytest.mark.parametrize("change", ["delete", "deactivate"])
+    @pytest.mark.parametrize(
+        "auto_reassign, config_active",
+        [
+            pytest.param(False, True, id="parent-not-opted-in"),
+            pytest.param(True, False, id="config-inactive"),
+            pytest.param(None, True, id="no-parent-network"),
+        ],
+    )
+    def test_leaves_arin_net_in_place(
+        self, rir_config, rir_user_key, make_parent, change, auto_reassign, config_active
+    ):
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+
+        rir_config.is_active = config_active
+        rir_config.save()
+        if auto_reassign is not None:
+            make_parent("10.40.0.0/16", auto_reassign=auto_reassign)
+        pfx = Prefix.objects.create(prefix="10.40.1.0/24", status="active")
+        RIRNetwork.objects.create(rir_config=rir_config, handle="NET-10-40-1-0-1", prefix=pfx)
+
+        with patch("netbox_rir_manager.jobs.RemoveNetworkJob") as mock_job:
+            if change == "delete":
+                pfx.delete()
+            else:
+                pfx.status = "deprecated"
+                pfx.save()
+
+        mock_job.enqueue.assert_not_called()
+        skipped = RIRSyncLog.objects.get(object_handle="NET-10-40-1-0-1")
+        assert skipped.status == "skipped"
+        assert skipped.operation == "remove"
