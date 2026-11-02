@@ -13,6 +13,7 @@ from utilities.request import NetBoxFakeRequest, apply_request_processors
 
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.models import RIRAddress, RIRContact, RIRCustomer, RIRNetwork, RIROrganization, RIRSyncLog
+from netbox_rir_manager.net_names import build_net_name
 
 if TYPE_CHECKING:
     from netbox_rir_manager.models import RIRConfig, RIRUserKey
@@ -628,18 +629,18 @@ class ReassignJob(JobRunner):
 
             self.logger.info(f"Reassignment type: {'detailed' if rir_org else 'simple'}")
 
+            net_data = {
+                "net_name": build_net_name(tenant.name, prefix.prefix),
+                "start_address": start_address,
+                "end_address": end_address,
+            }
             if rir_org:
                 # Detailed reassignment - tenant has a known RIR org
                 self.job.data["reassignment_type"] = "detailed"
                 self.job.data["org_handle"] = rir_org.handle
                 self.job.save()
 
-                net_data = {
-                    "org_handle": rir_org.handle,
-                    "net_name": f"{tenant.name}-{prefix.prefix}",
-                    "start_address": start_address,
-                    "end_address": end_address,
-                }
+                net_data["org_handle"] = rir_org.handle
             else:
                 # Simple reassignment - create customer from site address
                 self.job.data["reassignment_type"] = "simple"
@@ -714,12 +715,7 @@ class ReassignJob(JobRunner):
                     created_date=timezone.now(),
                 )
 
-                net_data = {
-                    "customer_handle": customer_result["handle"],
-                    "net_name": f"{tenant.name}-{prefix.prefix}",
-                    "start_address": start_address,
-                    "end_address": end_address,
-                }
+                net_data["customer_handle"] = customer_result["handle"]
 
             # Perform the reassignment
             self.logger.info(f"Submitting reassignment to ARIN for {prefix.prefix}")

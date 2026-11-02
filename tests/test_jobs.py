@@ -670,6 +670,8 @@ class TestReassignJobPreFlight:
 
         # Pre-flight should NOT have short-circuited
         mock_backend.reassign_network.assert_called_once()
+        _parent_handle, net_data = mock_backend.reassign_network.call_args[0]
+        assert net_data["net_name"] == "TEST-TENANT-10-0-1-0-29"
 
 
 @pytest.mark.django_db

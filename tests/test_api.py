@@ -318,6 +318,28 @@ class TestRIRNetworkAPIActions:
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    @pytest.mark.parametrize("action", ["reassign", "reallocate"])
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_rejects_net_name_arin_would_refuse(
+        self, mock_backend_cls, admin_api_client, rir_network, rir_user_key, action
+    ):
+        url = reverse(f"plugins-api:netbox_rir_manager-api:rirnetwork-{action}", args=[rir_network.pk])
+        response = admin_api_client.post(
+            url,
+            {
+                "reassignment_type": "detailed",
+                "org_handle": "CUST-ARIN",
+                "net_name": "Customer Inc.-192.0.2.0/28",
+                "start_address": "192.0.2.0",
+                "end_address": "192.0.2.15",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "net_name" in response.json()
+        mock_backend_cls.from_rir_config.assert_not_called()
+
     @patch("netbox_rir_manager.api.views.ARINBackend")
     def test_reallocate_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
         mock_backend = MagicMock()
