@@ -63,6 +63,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error, a `400` in the REST API, without contacting ARIN, and the network is
   checked before the customer is created, so a refused network no longer leaves an
   orphan customer at ARIN.
+- ARIN's reason for refusing a write is no longer discarded (#65). Customer
+  create, reassign, reallocate, remove and delete now append it to the usual
+  message, in the UI error, the REST API `detail` and the `error` sync log, for
+  example `Failed to create customer at ARIN: iso3166-1: A valid country code is
+  required.` A write ARIN cannot be reached for keeps the old message. The
+  **ARIN Remove** job now records the same message instead of "ARIN removal
+  failed".
+- A simple reassignment's customer country is now checked against ISO 3166-1
+  before anything is sent, so an unknown code such as `XX` is a `400` in the REST
+  API (and an error in the UI) instead of a round trip to ARIN and a `502`.
 - The daily **Scheduled RIR Sync** never ran: its module was only imported lazily, so the
   `@system_job` registration had not happened when `rqworker` scheduled system jobs at
   startup. The plugin now imports its jobs when it loads (#54).

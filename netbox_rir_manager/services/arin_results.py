@@ -120,3 +120,15 @@ def data_error(rir_config, operation, object_type, handle, exc, error_cls=ARINDa
     """Log a request-data problem the backend reported (RIRDataError) and wrap it for the caller."""
     sync_log(rir_config, operation, object_type, handle, "error", str(exc))
     return error_cls(str(exc))
+
+
+def write_failure(rir_config, operation, object_type, handle, message, *, log=None, refusal=None, error_cls=None):
+    """Log a write ARIN failed or refused and wrap it for the caller.
+
+    message is the user's message without its final period ("Reallocation failed at ARIN"); log
+    is the sync log's wording, message by default. refusal is ARIN's reason (an RIRRequestError)
+    when it refused the write, appended to both; without it ARIN could not be reached.
+    """
+    detail = f": {refusal}" if refusal else ""
+    sync_log(rir_config, operation, object_type, handle, "error", f"{log or message}{detail}")
+    return (error_cls or ARINWriteError)(f"{message}{detail or '.'}")

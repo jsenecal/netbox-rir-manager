@@ -75,3 +75,32 @@ def test_net_refused_at_submission_is_a_data_error(mock_api_class, rir_network, 
         submit_reassignment(backend, rir_network, rir_user_key, NET, org_handle="ORG-X")
 
     assert RIRSyncLog.objects.get(status="error").operation == "reassign"
+
+
+@pytest.mark.django_db
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_customer_refused_by_arin_reports_arins_reason(mock_api_class, rir_network, rir_user_key):
+    """ARIN's reason for refusing the customer reaches the error and the sync log; nothing is stored."""
+    from netbox_rir_manager.backends.base import RIRRequestError
+    from netbox_rir_manager.models import RIRCustomer, RIRSyncLog
+    from netbox_rir_manager.services.reassignment import ReassignmentError, submit_reassignment
+
+    backend = ARINBackend(api_key="test-key")
+    reason = "iso3166-1: A valid country code is required."
+
+    with (
+        patch.object(backend, "create_customer", side_effect=RIRRequestError(reason)),
+        patch.object(backend, "reassign_network") as reassign,
+        pytest.raises(ReassignmentError) as excinfo,
+    ):
+        submit_reassignment(backend, rir_network, rir_user_key, NET, customer={"customer_name": "Cust"})
+
+    assert str(excinfo.value) == f"Failed to create customer at ARIN: {reason}"
+    error = RIRSyncLog.objects.get(status="error")
+    assert (error.operation, error.object_type, error.message) == (
+        "create",
+        "customer",
+        f"Failed to create customer for 192.0.2.0: {reason}",
+    )
+    reassign.assert_not_called()
+    assert not RIRCustomer.objects.exists()

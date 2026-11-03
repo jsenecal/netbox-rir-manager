@@ -13,6 +13,8 @@ Operations that require RIR-side approval create a ticket. Tickets are visible u
 
 ARIN processes some operations immediately and opens no ticket -- NET deletes and simple reassignments, for example. Those create no ticket: the result is recorded as a `success` sync log under **RIR Manager -> Sync Logs**, any new child network is still linked, and you return to the network (or prefix) page with a message saying ARIN processed the change immediately.
 
+When ARIN refuses an operation, its reason follows the usual message, in the error you see, the REST API `detail` and the `error` sync log, for example `Reassignment failed at ARIN: startAddress: IP range overlaps with existing network(s).` When ARIN cannot be reached at all, the message stays as it was (`Reassignment failed at ARIN.`).
+
 If NetBox cannot record a change ARIN has already accepted, you get a warning that the change succeeded at ARIN but was not recorded, the error is written to the NetBox log and, when possible, to an `error` sync log. Do not resubmit: the change is already in place at ARIN.
 
 ### REST API responses
@@ -33,7 +35,7 @@ The `reassign`, `reallocate` and `delete-arin` actions on `/api/plugins/rir-mana
 
     `net` is the child network NetBox linked (reassignments only), otherwise `null`. `recorded` is `false` when ARIN made the change but NetBox could not record it; `detail` then says so.
 
-A failure at ARIN returns `502 Bad Gateway` with a `detail` message, as before.
+A failure at ARIN returns `502 Bad Gateway` with a `detail` message, which carries ARIN's reason when ARIN refused the write.
 
 ## Reassigning a prefix
 
@@ -49,7 +51,7 @@ Edit anything before submitting: the reassignment is sent to the RIR immediately
 
 ARIN accepts customer payloads in ASCII only. Accented letters in the customer name, street address, city and postal code are sent without their accents (an accented "Montreal" is sent as plain `Montreal`); NetBox keeps the original spelling. Each line of the street address becomes a numbered address line at ARIN, and blank lines are dropped.
 
-The country must be an ISO 3166-1 two-letter code (`CA`) and the state/province an ISO 3166-2 subdivision code of up to three characters (`QC`, not `Quebec`). ARIN also requires the state/province and postal code for customers in the United States and Canada. When the details cannot form a valid ARIN payload, nothing is sent: the form shows the problem, the REST API returns `400` with it in `detail`, and the automatic job records it as its error. A refusal from ARIN itself is still a `502` in the API.
+The country must be an ISO 3166-1 alpha-2 code ARIN recognises (`CA`; `XX`, or `UK` for the United Kingdom, are refused before anything is sent) and the state/province an ISO 3166-2 subdivision code of up to three characters (`QC`, not `Quebec`). ARIN also requires the state/province and postal code for customers in the United States and Canada. When the details cannot form a valid ARIN payload, nothing is sent: the form shows the problem, the REST API returns `400` with it in `detail`, and the automatic job records it as its error. A refusal from ARIN itself is still a `502` in the API.
 
 ## Automatic reassignment and removal
 

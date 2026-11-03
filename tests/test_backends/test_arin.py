@@ -6,7 +6,8 @@ from regrws.models import Org
 from regrws.models.nested import Iso31661, MultiLineElement
 
 from netbox_rir_manager.backends.arin import ARINBackend
-from netbox_rir_manager.backends.base import RIRBackend
+from netbox_rir_manager.backends.base import RIRBackend, RIRRequestError
+from tests.arin_payloads import NOT_FOUND, OVERLAP, arin_error
 
 # The plugin's flat net data for a child net; CHILD_NET adds the recipient handle ARIN requires.
 NET = {"net_name": "CUST-192-0-2-0-28", "start_address": "192.0.2.0", "end_address": "192.0.2.15"}
@@ -425,21 +426,6 @@ def test_backend_registered(mock_api_class):
     assert get_backend("ARIN") is ARINBackend
 
 
-# ------------------------------------------------------------------
-# Helper to create a mock Error that passes isinstance checks
-# ------------------------------------------------------------------
-
-
-def _make_mock_error():
-    """Create a MagicMock that passes ``isinstance(x, Error)``."""
-    from netbox_rir_manager.backends import arin as arin_mod
-
-    error_cls = arin_mod.Error
-    mock_error = MagicMock(spec=error_cls)
-    mock_error.__class__ = error_cls
-    return mock_error
-
-
 def _make_mock_net(**overrides):
     """Create a MagicMock that looks like a pyregrws Net."""
     defaults = {
@@ -530,7 +516,7 @@ def test_update_network_error_on_fetch(mock_api_class):
     """update_network should return None when the fetch returns an Error."""
     mock_api = MagicMock()
     mock_api_class.return_value = mock_api
-    mock_api.net.from_handle.return_value = _make_mock_error()
+    mock_api.net.from_handle.return_value = arin_error("not_found")
 
     backend = ARINBackend(api_key="test-key")
     result = backend.update_network("NET-BAD", {"net_name": "X"})
@@ -545,7 +531,7 @@ def test_update_network_error_on_save(mock_api_class):
     mock_api_class.return_value = mock_api
 
     mock_net = _make_mock_net()
-    mock_net.save.return_value = _make_mock_error()
+    mock_net.save.return_value = arin_error("not_found")
     mock_api.net.from_handle.return_value = mock_net
 
     backend = ARINBackend(api_key="test-key")
@@ -616,35 +602,6 @@ def test_reassign_network_with_net_in_response(mock_api_class):
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
-def test_reassign_network_error_on_parent_fetch(mock_api_class):
-    """reassign_network should return None when parent fetch fails."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-    mock_api.net.from_handle.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.reassign_network("NET-BAD", CHILD_NET)
-
-    assert result is None
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_reassign_network_error_on_reassign(mock_api_class):
-    """reassign_network should return None when reassign call returns Error."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-
-    mock_parent = _make_mock_net(handle="NET-PARENT")
-    mock_api.net.from_handle.return_value = mock_parent
-    mock_api.net.reassign.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.reassign_network("NET-PARENT", CHILD_NET)
-
-    assert result is None
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
 def test_reassign_network_none_on_parent_fetch(mock_api_class):
     """reassign_network should return None when parent fetch returns None."""
     mock_api = MagicMock()
@@ -683,35 +640,6 @@ def test_reallocate_network_success(mock_api_class):
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
-def test_reallocate_network_error_on_parent_fetch(mock_api_class):
-    """reallocate_network should return None when parent fetch fails."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-    mock_api.net.from_handle.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.reallocate_network("NET-BAD", CHILD_NET)
-
-    assert result is None
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_reallocate_network_error_on_reallocate(mock_api_class):
-    """reallocate_network should return None when reallocate call returns Error."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-
-    mock_parent = _make_mock_net(handle="NET-PARENT")
-    mock_api.net.from_handle.return_value = mock_parent
-    mock_api.net.reallocate.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.reallocate_network("NET-PARENT", CHILD_NET)
-
-    assert result is None
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
 def test_reallocate_network_none_on_parent_fetch(mock_api_class):
     """reallocate_network should return None when parent fetch returns None."""
     mock_api = MagicMock()
@@ -745,35 +673,6 @@ def test_remove_network_success(mock_api_class):
 
     assert result is True
     mock_api.net.remove.assert_called_once_with(mock_net)
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_remove_network_error_on_fetch(mock_api_class):
-    """remove_network should return False when the fetch returns an Error."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-    mock_api.net.from_handle.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.remove_network("NET-BAD")
-
-    assert result is False
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_remove_network_error_on_remove(mock_api_class):
-    """remove_network should return False when the remove call returns an Error."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-
-    mock_net = _make_mock_net(handle="NET-TEST")
-    mock_api.net.from_handle.return_value = mock_net
-    mock_api.net.remove.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.remove_network("NET-TEST")
-
-    assert result is False
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -828,35 +727,6 @@ def test_delete_network_success(mock_api_class):
     assert result["ticket_number"] == "TKT-DEL-001"
     assert result["ticket_status"] == "PENDING_REVIEW"
     mock_net.delete.assert_called_once()
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_delete_network_error_on_fetch(mock_api_class):
-    """delete_network should return None when the fetch returns an Error."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-    mock_api.net.from_handle.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.delete_network("NET-BAD")
-
-    assert result is None
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_delete_network_error_on_delete(mock_api_class):
-    """delete_network should return None when delete returns an Error."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-
-    mock_net = _make_mock_net(handle="NET-TEST")
-    mock_net.delete.return_value = _make_mock_error()
-    mock_api.net.from_handle.return_value = mock_net
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.delete_network("NET-TEST")
-
-    assert result is None
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -930,7 +800,7 @@ def test_get_customer_error_returns_none(mock_api_class):
     """get_customer should return None when the API returns an Error."""
     mock_api = MagicMock()
     mock_api_class.return_value = mock_api
-    mock_api.customer.from_handle.return_value = _make_mock_error()
+    mock_api.customer.from_handle.return_value = arin_error("not_found")
 
     backend = ARINBackend(api_key="test-key")
     result = backend.get_customer("C-NONEXISTENT")
@@ -993,35 +863,6 @@ def test_create_customer_success(mock_api_class):
     assert result["customer_name"] == "Test Customer"
     assert result["parent_org_handle"] == "ORG-TEST"
     assert "raw_data" in result
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_create_customer_error_on_parent_fetch(mock_api_class):
-    """create_customer should return None when parent fetch fails."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-    mock_api.net.from_handle.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.create_customer("NET-BAD", CUSTOMER)
-
-    assert result is None
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_create_customer_error_on_create(mock_api_class):
-    """create_customer should return None when create_for_net returns Error."""
-    mock_api = MagicMock()
-    mock_api_class.return_value = mock_api
-
-    mock_parent = _make_mock_net(handle="NET-PARENT")
-    mock_api.net.from_handle.return_value = mock_parent
-    mock_api.customer.create_for_net.return_value = _make_mock_error()
-
-    backend = ARINBackend(api_key="test-key")
-    result = backend.create_customer("NET-PARENT", CUSTOMER)
-
-    assert result is None
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -1238,3 +1079,94 @@ def test_net_payload_builds_real_pyregrws_net(
     assert block.type == block_type
     assert block.start_address == ip_address(net_data["start_address"])
     assert block.end_address == ip_address(net_data["end_address"])
+
+
+# ------------------------------------------------------------------
+# ARIN refusing a write
+# ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        pytest.param("bad_country", "iso3166-1: A valid country code is required.", id="one-component"),
+        pytest.param(
+            "two_components",
+            "postalCode: Postal code not in the correct format for country selected. "
+            "iso3166-2: Value is required if the country selected is US or Canada.",
+            id="two-components",
+        ),
+        pytest.param("authentication", "The API key specified was missing or invalid.", id="no-components"),
+    ],
+)
+def test_error_detail_prefers_components_over_the_generic_message(name, expected):
+    from netbox_rir_manager.backends.arin import error_detail
+
+    assert error_detail(arin_error(name)) == expected
+
+
+def test_error_detail_appends_additional_info():
+    from regrws.models import Error
+
+    from netbox_rir_manager.backends.arin import error_detail
+
+    error = Error(message="Request failed.", code="E_UNSPECIFIED", additional_info=["Try again later."])
+    assert error_detail(error) == "Request failed. Try again later."
+
+
+def _refusing_api(mock_api_class, step, error):
+    """An Api mock whose parent lookup, or the write itself (step "write"), returns error."""
+    mock_api = MagicMock()
+    mock_api_class.return_value = mock_api
+    net = _make_mock_net(handle="NET-PARENT")
+    mock_api.net.from_handle.return_value = error if step == "lookup" else net
+    if step == "write":
+        mock_api.net.reassign.return_value = error
+        mock_api.net.reallocate.return_value = error
+        mock_api.net.remove.return_value = error
+        net.delete.return_value = error
+        mock_api.customer.create_for_net.return_value = error
+    return mock_api
+
+
+WRITES = {
+    "reassign": lambda backend: backend.reassign_network("NET-PARENT", CHILD_NET),
+    "reallocate": lambda backend: backend.reallocate_network("NET-PARENT", CHILD_NET),
+    "remove": lambda backend: backend.remove_network("NET-PARENT"),
+    "delete": lambda backend: backend.delete_network("NET-PARENT"),
+    "create_customer": lambda backend: backend.create_customer("NET-PARENT", CUSTOMER),
+}
+
+
+@pytest.mark.parametrize("write", WRITES)
+@pytest.mark.parametrize(
+    "step, name, detail", [("lookup", "not_found", NOT_FOUND), ("write", "overlap", OVERLAP)], ids=["lookup", "write"]
+)
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_write_refused_by_arin_raises_its_reason(mock_api_class, write, step, name, detail):
+    """An Error from ARIN, on the parent lookup or the write itself, raises RIRRequestError with ARIN's reason."""
+    _refusing_api(mock_api_class, step, arin_error(name))
+
+    with pytest.raises(RIRRequestError) as excinfo:
+        WRITES[write](ARINBackend(api_key="test-key"))
+
+    assert str(excinfo.value) == detail
+
+
+@pytest.mark.parametrize("country", ["XX", "XK", "uk"])
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_create_customer_rejects_unknown_country_before_calling_arin(mock_api_class, country):
+    """A two-letter code that is not ISO 3166-1 alpha-2 is a data error, not a round trip to ARIN."""
+    from netbox_rir_manager.backends.base import RIRDataError
+
+    mock_api = MagicMock()
+    mock_api_class.return_value = mock_api
+
+    with pytest.raises(RIRDataError) as excinfo:
+        ARINBackend(api_key="test-key").create_customer("NET-PARENT", {**CUSTOMER, "country": country})
+
+    assert str(excinfo.value) == (
+        f"Invalid Customer details for ARIN: iso3166_1.code2: {country.upper()} is not an ISO 3166-1 "
+        "alpha-2 country code"
+    )
+    mock_api.net.from_handle.assert_not_called()
