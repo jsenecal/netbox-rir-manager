@@ -3,12 +3,14 @@
 {% load plugins %}
 
 {% block extra_controls %}
+{% if can_sync %}
 <form method="post" action="{% url 'plugins:netbox_rir_manager:rirconfig_sync' object.pk %}" class="d-inline">
     {% csrf_token %}
     <button type="submit" class="btn btn-info">
         <i class="mdi mdi-sync" aria-hidden="true"></i> Sync Now
     </button>
 </form>
+{% endif %}
 {% endblock extra_controls %}
 
 {% block content %}

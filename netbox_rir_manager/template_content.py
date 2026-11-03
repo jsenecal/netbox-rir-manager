@@ -1,6 +1,10 @@
 from netbox.plugins import PluginTemplateExtension
 
-from netbox_rir_manager.models import RIRAddress, RIRNetwork
+from netbox_rir_manager.models import RIRAddress, RIRConfig, RIRNetwork
+
+
+def _user(context):
+    return context["request"].user
 
 
 class RIRAggregateExtension(PluginTemplateExtension):
@@ -11,14 +15,14 @@ class RIRAggregateExtension(PluginTemplateExtension):
     def right_page(self):
         obj = self.context["object"]
         rir_networks = RIRNetwork.objects.filter(aggregate=obj)
-        from netbox_rir_manager.models import RIRConfig
 
-        has_rir_config = RIRConfig.objects.filter(rir=obj.rir, is_active=True).exists()
+        # The Sync view tries the active configs for this RIR that the user may sync (add_rirconfig).
+        can_sync = RIRConfig.objects.restrict(_user(self.context), "add").filter(rir=obj.rir, is_active=True).exists()
         return self.render(
             "netbox_rir_manager/inc/rir_network_panel.html",
             extra_context={
                 "rir_networks": rir_networks,
-                "show_sync_button": has_rir_config,
+                "show_sync_button": can_sync,
                 "aggregate_pk": obj.pk,
             },
         )
@@ -31,18 +35,16 @@ class RIRPrefixExtension(PluginTemplateExtension):
 
     def right_page(self):
         obj = self.context["object"]
-        from ipam.models import Aggregate
-
-        from netbox_rir_manager.models import RIRConfig
-
         rir_networks = RIRNetwork.objects.filter(prefix=obj)
 
-        # Determine if sync button should be shown:
-        # Parent aggregate must have an active RIR config
-        show_sync_button = False
-        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=obj.prefix).first()
-        if agg and RIRConfig.objects.filter(rir=agg.rir, is_active=True).exists():
-            show_sync_button = True
+        # The Sync view uses the active config that owns the parent network, and needs
+        # add_rirconfig on it.
+        parent_network, _agg = RIRNetwork.find_for_prefix(obj)
+        show_sync_button = bool(
+            parent_network
+            and parent_network.rir_config.is_active
+            and _user(self.context).has_perm("netbox_rir_manager.add_rirconfig", parent_network.rir_config)
+        )
 
         return self.render(
             "netbox_rir_manager/inc/rir_network_panel.html",
@@ -55,16 +57,14 @@ class RIRPrefixExtension(PluginTemplateExtension):
 
     def buttons(self):
         obj = self.context["object"]
-        # Show reassign button if:
-        # - Parent aggregate has a linked RIRNetwork
-        # - This prefix doesn't already have a linked RIRNetwork
-        from ipam.models import Aggregate
-
+        # Offer Reassign when the prefix has no RIRNetwork of its own yet, and the user may
+        # reassign from the parent network (add_rirnetwork), as the Reassign view requires.
         can_reassign = False
         if not RIRNetwork.objects.filter(prefix=obj).exists():
-            agg = Aggregate.objects.filter(prefix__net_contains_or_equals=obj.prefix).first()
-            if agg and RIRNetwork.objects.filter(aggregate=agg).exists():
-                can_reassign = True
+            parent_network, _agg = RIRNetwork.find_for_prefix(obj)
+            can_reassign = bool(
+                parent_network and _user(self.context).has_perm("netbox_rir_manager.add_rirnetwork", parent_network)
+            )
 
         return self.render(
             "netbox_rir_manager/inc/rir_prefix_buttons.html",
@@ -79,11 +79,17 @@ class RIRSiteExtension(PluginTemplateExtension):
 
     def right_page(self):
         obj = self.context["object"]
+        user = _user(self.context)
         site_address = RIRAddress.get_for_site(obj)
 
         return self.render(
             "netbox_rir_manager/inc/rir_site_address_panel.html",
-            extra_context={"site_address": site_address},
+            extra_context={
+                "site_address": site_address,
+                "can_resolve": user.has_perm("netbox_rir_manager.add_riraddress"),
+                "can_edit_address": bool(site_address)
+                and user.has_perm("netbox_rir_manager.change_riraddress", site_address),
+            },
         )
 
 
