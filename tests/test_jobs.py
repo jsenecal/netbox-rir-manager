@@ -14,6 +14,23 @@ def make_runner(cls):
     return runner
 
 
+def wire_owned_net(mock_backend_class, org_handle, handle="NET-10-0-0-0-1"):
+    """Make every ARIN lookup return one net registered to org_handle, with no organization."""
+    mock_backend = MagicMock()
+    mock_backend.get_organization.return_value = None
+    mock_backend.find_net.return_value = {
+        "handle": handle,
+        "net_name": "BIG-NET",
+        "version": 4,
+        "org_handle": org_handle,
+        "parent_net_handle": "",
+        "net_blocks": [],
+        "raw_data": {},
+    }
+    mock_backend_class.from_rir_config.return_value = mock_backend
+    return mock_backend
+
+
 @pytest.mark.django_db
 class TestScheduledSyncJob:
     @patch("netbox_rir_manager.jobs.ARINBackend")
@@ -80,18 +97,7 @@ class TestScheduledSyncJob:
         from netbox_rir_manager.jobs import ScheduledRIRSyncJob
 
         agg = Aggregate.objects.create(prefix="10.0.0.0/8", rir=rir)
-        mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = None
-        mock_backend.find_net.return_value = {
-            "handle": "NET-10-0-0-0-1",
-            "net_name": "BIG-NET",
-            "version": 4,
-            "org_handle": rir_config.org_handle,
-            "parent_net_handle": "",
-            "net_blocks": [],
-            "raw_data": {},
-        }
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        wire_owned_net(mock_backend_class, rir_config.org_handle)
 
         make_runner(ScheduledRIRSyncJob).run()
 
@@ -287,6 +293,32 @@ class TestRIRSyncJob:
         assert "rir_config" in runner.job.data
         mock_backend_class.from_rir_config.assert_called_once_with(rir_config, api_key="job-key")
 
+    @patch("netbox_rir_manager.jobs.SyncPrefixesJob")
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_job_queues_prefix_discovery_with_users_key(
+        self, mock_backend_class, mock_prefix_job, rir_config, default_key, operator_key, rir
+    ):
+        """A manual sync queues one prefix sync per owned aggregate, with the requesting user's own key."""
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.jobs import SyncRIRConfigJob
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/8", rir=rir)
+        wire_owned_net(mock_backend_class, rir_config.org_handle)
+
+        runner = make_runner(SyncRIRConfigJob)
+        runner.job.object_id = rir_config.pk
+        runner.job.user = operator_key.user
+        runner.run()
+
+        mock_prefix_job.enqueue.assert_called_once_with(
+            instance=rir_config,
+            user=operator_key.user,
+            aggregate_id=agg.pk,
+            parent_handle="NET-10-0-0-0-1",
+            user_key_id=operator_key.pk,
+        )
+
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_job_without_users_key_does_nothing(self, mock_backend_class, rir_config, default_key, make_user):
         """A user-triggered sync never borrows the default key."""
@@ -310,19 +342,7 @@ class TestRIRSyncJob:
         from netbox_rir_manager.models import RIRNetwork
 
         agg = Aggregate.objects.create(prefix="10.0.0.0/8", rir=rir)
-
-        mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = None
-        mock_backend.find_net.return_value = {
-            "handle": "NET-10-0-0-0-1",
-            "net_name": "BIG-NET",
-            "version": 4,
-            "org_handle": "TESTORG-ARIN",
-            "parent_net_handle": "",
-            "net_blocks": [],
-            "raw_data": {},
-        }
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        wire_owned_net(mock_backend_class, rir_config.org_handle)
 
         logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
 
