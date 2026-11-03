@@ -10,7 +10,7 @@ netbox-rir-manager bridges your NetBox IPAM data and the RIR's own database. Syn
 - **Auto-link to IPAM**: synced networks are matched to existing NetBox `Aggregate` and `Prefix` objects via `auto_link_networks`.
 - **Write operations**: reassign, reallocate, remove, and delete networks directly from the plugin or the parent Prefix detail page.
 - **Auto-reassign on prefix changes**: when a NetBox `Prefix` gains a Site and Tenant, a background reassignment can be queued automatically.
-- **Ticket tracking**: every reassignment, reallocation, and deletion creates an `RIRTicket` whose status follows the RIR.
+- **Ticket tracking**: reassignments, reallocations, and deletions that need RIR-side approval create an `RIRTicket` whose status follows the RIR; writes the RIR processes immediately are recorded as a `success` sync log, with no ticket.
 - **Per-user API keys**: encrypted at rest with HKDF-derived Fernet, scoped to a single `RIRConfig`.
 - **Scheduled sync**: a daily system job (`ScheduledRIRSyncJob`) keeps RIR data current.
 - **Pluggable backend architecture**: ARIN supported today via `pyregrws`; PRs welcome for RIPE, APNIC, LACNIC, AFRINIC.

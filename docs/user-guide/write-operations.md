@@ -33,7 +33,7 @@ The `reassign`, `reallocate` and `delete-arin` actions on `/api/plugins/rir-mana
     }
     ```
 
-    `net` is the child network NetBox linked (reassignments only), otherwise `null`. `recorded` is `false` when ARIN made the change but NetBox could not record it; `detail` then says so.
+    `net` is the child network NetBox linked from a reassignment or reallocation, otherwise `null`. `recorded` is `false` when ARIN made the change but NetBox could not record it; `detail` then says so.
 
 A failure at ARIN returns `502 Bad Gateway` with a `detail` message, which carries ARIN's reason when ARIN refused the write.
 

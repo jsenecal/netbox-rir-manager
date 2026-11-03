@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.urls import reverse
 
+from netbox_rir_manager.constants import NO_API_KEY_MESSAGE
 from tests.arin_payloads import (
     DETAILED,
     EXISTING_TICKET,
@@ -192,6 +193,7 @@ class TestRIRConfigSyncView:
         url = reverse("plugins:netbox_rir_manager:rirconfig_sync", args=[rir_config.pk])
         response = admin_client.post(url)
         assert response.status_code == 302  # redirect back
+        assert _messages(response) == [("danger", NO_API_KEY_MESSAGE)]  # NetBox tags error messages "danger"
 
     def test_sync_requires_post(self, admin_client, rir_config):
         url = reverse("plugins:netbox_rir_manager:rirconfig_sync", args=[rir_config.pk])
@@ -255,12 +257,18 @@ class TestRIRNetworkActionViews:
         assert response.url == ticket.get_absolute_url()
         assert ticket.ticket_type == "IPV4_SIMPLE_REASSIGN"
 
+    @pytest.mark.parametrize(
+        "action, data",
+        [("reassign", DETAILED), ("reallocate", REALLOCATION), ("remove", {}), ("delete_arin", {})],
+    )
     @patch("netbox_rir_manager.views.ARINBackend")
-    def test_reassign_no_api_key(self, mock_backend_cls, admin_client, rir_network):
-        """Reassign without an API key should redirect with error."""
-        response = admin_client.post(_action_url("reassign", rir_network), DETAILED)
+    def test_action_without_key_shows_shared_message(self, mock_backend_cls, admin_client, rir_network, action, data):
+        response = admin_client.post(_action_url(action, rir_network), data)
+
         assert response.status_code == 302
         assert response.url == rir_network.get_absolute_url()
+        assert _messages(response) == [("danger", NO_API_KEY_MESSAGE)]
+        mock_backend_cls.from_rir_config.assert_not_called()
 
     @patch("netbox_rir_manager.views.ARINBackend")
     def test_remove_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
@@ -456,6 +464,28 @@ class TestPrefixSyncView:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    "view, data",
+    [
+        ("prefix_sync", {}),
+        ("prefix_reassign", {**DETAILED, "start_address": "198.51.100.16", "end_address": "198.51.100.31"}),
+    ],
+)
+@patch("netbox_rir_manager.views.ARINBackend")
+def test_prefix_action_without_key_shows_shared_message(
+    mock_backend_cls, admin_client, prefix_under_parent, view, data
+):
+    prefix = prefix_under_parent("198.51.100.0/24", "198.51.100.16/28", "NET-198-51-100-0-1")["prefix"]
+
+    response = admin_client.post(reverse(f"plugins:netbox_rir_manager:{view}", args=[prefix.pk]), data)
+
+    assert response.status_code == 302
+    assert response.url == prefix.get_absolute_url()
+    assert _messages(response) == [("danger", NO_API_KEY_MESSAGE)]
+    mock_backend_cls.from_rir_config.assert_not_called()
+
+
+@pytest.mark.django_db
 class TestPrefixReassignView:
     """A manual reassignment from a prefix submits exactly what the form says, now."""
 
@@ -628,16 +658,22 @@ class TestImmediateResultViews:
         assert RIRNetwork.objects.filter(handle="NET-CHILD-1").exists()
 
     @patch("netbox_rir_manager.views.ARINBackend")
-    def test_reallocate_without_ticket(self, mock_backend_cls, admin_client, networks):
-        from netbox_rir_manager.models import RIRTicket
+    def test_reallocate_without_ticket_links_child_net(self, mock_backend_cls, admin_client, networks):
+        from netbox_rir_manager.models import RIRNetwork, RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result()
+        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result(
+            "NET-REALLOC-1"
+        )
 
         response = admin_client.post(_action_url("reallocate", networks[0]), REALLOCATION)
 
         assert response.status_code == 302
         assert response.url == networks[0].get_absolute_url()
+        [(level, text)] = _messages(response)
+        assert level == "success"
+        assert "immediately" in text
         assert not RIRTicket.objects.exists()
+        assert RIRNetwork.objects.filter(handle="NET-REALLOC-1").count() == 1
 
     @patch("netbox_rir_manager.views.ARINBackend")
     def test_prefix_reassign_without_ticket_returns_to_prefix(

@@ -18,6 +18,7 @@ from netbox_rir_manager.api.serializers import (
     RIRUserKeySerializer,
 )
 from netbox_rir_manager.backends.arin import ARINBackend
+from netbox_rir_manager.constants import NO_API_KEY_MESSAGE
 from netbox_rir_manager.filtersets import (
     RIRAddressFilterSet,
     RIRConfigFilterSet,
@@ -84,7 +85,7 @@ class RIRConfigViewSet(NetBoxModelViewSet):
         rir_config = self.get_object()
         if not rir_config.resolve_key(request.user):
             return Response(
-                {"detail": "No API key configured for this RIR config."},
+                {"detail": NO_API_KEY_MESSAGE},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -127,7 +128,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
-                {"detail": "No API key configured for this RIR config."},
+                {"detail": NO_API_KEY_MESSAGE},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -151,7 +152,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
-                {"detail": "No API key configured for this RIR config."},
+                {"detail": NO_API_KEY_MESSAGE},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -171,7 +172,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
-                {"detail": "No API key configured for this RIR config."},
+                {"detail": NO_API_KEY_MESSAGE},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -188,7 +189,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             return Response(
-                {"detail": "No API key configured for this RIR config."},
+                {"detail": NO_API_KEY_MESSAGE},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

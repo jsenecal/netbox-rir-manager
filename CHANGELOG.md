@@ -48,6 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The RIR config **Sync** button now reports a missing key as "No API key configured
+  for this RIR config.", the same wording as every other UI action and the REST API,
+  which now all read it from one shared constant (#69).
+- The daily **Scheduled RIR Sync** now also queues the per-aggregate prefix sync,
+  as the manual **Sync** does, so reassignments made outside NetBox are discovered on
+  the schedule. Those prefix jobs use the config's default key and run as its owner (#66).
+- A config sync fetched and synced a POC once for each role it holds on the org (for
+  example a NOC that is also the Tech contact), writing duplicate sync log rows and
+  making extra ARIN calls. Each POC is now synced once per run; the org still records
+  every role link (#68).
 - Reassign and reallocate now reach ARIN (#57). Their network payloads never
   validated against pyregrws (no IP version, and the range was not in a net
   block), so every request failed with a server error before anything was sent.
@@ -93,6 +103,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the error is logged (and written to an `error` sync log when possible) and the
   caller is told the change succeeded at ARIN. Tickets with an empty number left
   by earlier versions are harmless and can be deleted or renamed.
+- Reallocations now link the new child network ARIN returns, as reassignments do.
+  The `reallocate` API action answered a result ARIN processed immediately with
+  `"net": null`, and NetBox had no record of the child network until a later prefix
+  sync found it at ARIN (#67).
 - The Prefix **Reassign** form now submits exactly what it shows, immediately, with
   the user's own key. It used to discard the form, queue the automatic reassign job
   (which derived its own values), and fail unless the parent allocation had

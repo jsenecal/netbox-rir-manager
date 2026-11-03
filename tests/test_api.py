@@ -5,6 +5,7 @@ import pytest
 from django.urls import reverse
 from rest_framework import status
 
+from netbox_rir_manager.constants import NO_API_KEY_MESSAGE
 from tests.arin_payloads import (
     DETAILED,
     EXISTING_TICKET,
@@ -491,15 +492,20 @@ class TestAPIImmediateResults:
         assert not RIRTicket.objects.exists()
 
     @patch("netbox_rir_manager.api.views.ARINBackend")
-    def test_reallocate_without_ticket(self, mock_backend_cls, admin_api_client, networks):
-        from netbox_rir_manager.models import RIRTicket
+    def test_reallocate_without_ticket_returns_child_net(self, mock_backend_cls, admin_api_client, networks):
+        from netbox_rir_manager.models import RIRNetwork, RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result()
+        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result(
+            "NET-REALLOC-1"
+        )
 
         response = admin_api_client.post(_action_url("reallocate", networks[0]), REALLOCATION, format="json")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["ticket"] is None
+        body = response.json()
+        assert body["ticket"] is None
+        assert body["net"]["handle"] == "NET-REALLOC-1"
+        assert body["net"]["id"] == RIRNetwork.objects.get(handle="NET-REALLOC-1").pk
         assert not RIRTicket.objects.exists()
 
     @patch("netbox_rir_manager.api.views.ARINBackend")
@@ -560,5 +566,5 @@ class TestRIRConfigSyncAPI:
         response = admin_api_client.post(self._url(rir_config), format="json")
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert response.json()["detail"] == "No API key configured for this RIR config."
+        assert response.json()["detail"] == NO_API_KEY_MESSAGE
         mock_job_cls.enqueue.assert_not_called()
