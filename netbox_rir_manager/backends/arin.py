@@ -30,6 +30,15 @@ def error_detail(error: Error) -> str:
     return " ".join([*parts, *error.additional_info])
 
 
+def _data_error(model_cls, *problems) -> RIRDataError:
+    """An RIRDataError for data pyregrws' model_cls cannot take.
+
+    Each problem is (loc, msg): loc is the field path as a tuple, empty for the whole model.
+    """
+    text = "; ".join(f"{'.'.join(map(str, loc))}: {msg}" if loc else msg for loc, msg in problems)
+    return RIRDataError(f"Invalid {model_cls.__name__} details for ARIN: {text}")
+
+
 @register_backend
 class ARINBackend(RIRBackend):
     """ARIN Reg-RWS backend using pyregrws."""
@@ -69,7 +78,11 @@ class ARINBackend(RIRBackend):
             return None
 
     def _write_call(self, func, *args, **kwargs):
-        """_call_with_retry for a write path: None if ARIN cannot be reached, RIRRequestError if it refuses."""
+        """_call_with_retry for a write path.
+
+        Returns None if ARIN cannot be reached, and raises RIRRequestError when ARIN refuses the
+        request, including a lookup it answers with an error such as E_OBJECT_NOT_FOUND.
+        """
         result = self._call_with_retry(func, *args, **kwargs)
         if isinstance(result, Error):
             raise RIRRequestError(error_detail(result))
@@ -169,7 +182,8 @@ class ARINBackend(RIRBackend):
         """Create a recipient customer under the parent net.
 
         Raises RIRDataError when the customer details cannot form a valid Reg-RWS payload,
-        before anything is sent to ARIN, and RIRRequestError when ARIN refuses the customer.
+        before anything is sent to ARIN, and RIRRequestError when ARIN refuses the request
+        (the parent net lookup or the customer).
         """
         payload = self._customer_payload(data)
         parent = self._write_call(self.api.net.from_handle, parent_net_handle)
@@ -200,7 +214,7 @@ class ARINBackend(RIRBackend):
         try:
             version = ip_address(start).version
         except ValueError as exc:
-            raise RIRDataError(f"Invalid Net details for ARIN: start_address: {exc}") from exc
+            raise _data_error(Net, (("start_address",), exc)) from exc
         payload = {
             "version": version,
             "net_name": net_data.get("net_name") or None,
@@ -217,10 +231,7 @@ class ARINBackend(RIRBackend):
         try:
             return model_cls(**data)
         except ValidationError as exc:
-            problems = "; ".join(
-                f"{'.'.join(map(str, err['loc']))}: {err['msg']}" if err["loc"] else err["msg"] for err in exc.errors()
-            )
-            raise RIRDataError(f"Invalid {model_cls.__name__} details for ARIN: {problems}") from exc
+            raise _data_error(model_cls, *((err["loc"], err["msg"]) for err in exc.errors())) from exc
 
     @classmethod
     def _customer_payload(cls, data: dict[str, Any]) -> dict[str, Any]:
@@ -229,7 +240,8 @@ class ARINBackend(RIRBackend):
         Reg-RWS payloads are ASCII-only (only comments may carry accented letters), so the
         free-text fields are transliterated. Empty optional fields become None, which pyregrws
         omits from the XML. pyregrws only checks the country code's length, so it is also
-        looked up in ISO 3166-1, which ARIN requires.
+        looked up in ISO 3166-1, which ARIN requires. The lookup must follow the model build:
+        pyregrws refuses a missing code there, and pycountry raises LookupError for None.
         """
         lines = [to_ascii(line).strip() for line in (data.get("street_address") or "").splitlines()]
         payload = {
@@ -243,8 +255,8 @@ class ARINBackend(RIRBackend):
         customer = cls._build_model(Customer, payload)
         country = customer.iso3166_1.code2
         if pycountry.countries.get(alpha_2=country) is None:
-            raise RIRDataError(
-                f"Invalid Customer details for ARIN: iso3166_1.code2: {country} is not an ISO 3166-1 alpha-2 country code"
+            raise _data_error(
+                Customer, (("iso3166_1", "code2"), f"{country} is not an ISO 3166-1 alpha-2 country code")
             )
         return payload
 

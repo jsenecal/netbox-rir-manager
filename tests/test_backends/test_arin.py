@@ -7,7 +7,7 @@ from regrws.models.nested import Iso31661, MultiLineElement
 
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.backends.base import RIRBackend, RIRRequestError
-from tests.arin_payloads import NOT_FOUND, OVERLAP, arin_error
+from tests.arin_payloads import BAD_COUNTRY, NOT_FOUND, OVERLAP, arin_error
 
 # The plugin's flat net data for a child net; CHILD_NET adds the recipient handle ARIN requires.
 NET = {"net_name": "CUST-192-0-2-0-28", "start_address": "192.0.2.0", "end_address": "192.0.2.15"}
@@ -1089,7 +1089,7 @@ def test_net_payload_builds_real_pyregrws_net(
 @pytest.mark.parametrize(
     "name, expected",
     [
-        pytest.param("bad_country", "iso3166-1: A valid country code is required.", id="one-component"),
+        pytest.param("bad_country", BAD_COUNTRY, id="one-component"),
         pytest.param(
             "two_components",
             "postalCode: Postal code not in the correct format for country selected. "

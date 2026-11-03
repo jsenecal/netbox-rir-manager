@@ -74,6 +74,7 @@ ARIN_ERRORS = {
     "authentication": _error_xml("E_AUTHENTICATION", "The API key specified was missing or invalid."),
 }
 
+BAD_COUNTRY = "iso3166-1: A valid country code is required."
 OVERLAP = "startAddress: IP range overlaps with existing network(s)."
 NOT_FOUND = "handle: The referenced object does not exist."
 
@@ -102,6 +103,17 @@ class WriteFailure:
     refused_log: str
     data: dict = field(default_factory=dict)
     returns: object = None
+
+    def arrange(self, backend, refused):
+        """Make backend's write method fail (refused, or ARIN unreachable); return the expected (detail, log)."""
+        from netbox_rir_manager.backends.base import RIRRequestError
+
+        method = getattr(backend, self.method)
+        if refused:
+            method.side_effect = RIRRequestError(self.refusal)
+            return self.refused_detail, (self.log[0], self.refused_log)
+        method.return_value = self.returns
+        return self.detail, self.log
 
 
 WRITE_FAILURES = {

@@ -316,17 +316,10 @@ class TestRIRNetworkActionViews:
     def test_arin_failure_shows_error_and_logs(
         self, mock_backend_cls, admin_client, rir_network, rir_user_key, failure, action, refused
     ):
-        from netbox_rir_manager.backends.base import RIRRequestError
         from netbox_rir_manager.models import RIRSyncLog, RIRTicket
 
         failure = WRITE_FAILURES[failure]
-        method = getattr(mock_backend_cls.from_rir_config.return_value, failure.method)
-        if refused:
-            method.side_effect = RIRRequestError(failure.refusal)
-            detail, log = failure.refused_detail, (failure.log[0], failure.refused_log)
-        else:
-            method.return_value = failure.returns
-            detail, log = failure.detail, failure.log
+        detail, log = failure.arrange(mock_backend_cls.from_rir_config.return_value, refused)
 
         response = admin_client.post(_action_url(action, rir_network), failure.data)
 
