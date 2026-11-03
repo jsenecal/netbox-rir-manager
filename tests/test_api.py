@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -413,3 +414,40 @@ class TestRIRNetworkAPIActions:
         url = reverse("plugins-api:netbox_rir_manager-api:rirticket-refresh", args=[rir_ticket.pk])
         response = admin_api_client.post(url, format="json")
         assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
+class TestRIRConfigSyncAPI:
+    """POST /configs/<pk>/sync/ queues a sync job for automation."""
+
+    @staticmethod
+    def _url(config):
+        return reverse("plugins-api:netbox_rir_manager-api:rirconfig-sync", args=[config.pk])
+
+    @patch("netbox_rir_manager.api.views.SyncRIRConfigJob")
+    def test_queues_job_as_requester_and_returns_it(
+        self, mock_job_cls, admin_api_client, admin_user, rir_config, rir_user_key
+    ):
+        from core.models import Job
+
+        job = Job.objects.create(name="RIR Sync", object=rir_config, user=admin_user, job_id=uuid.uuid4())
+        mock_job_cls.enqueue.return_value = job
+
+        response = admin_api_client.post(self._url(rir_config), format="json")
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        mock_job_cls.enqueue.assert_called_once_with(instance=rir_config, user=admin_user)
+        body = response.json()
+        assert body["id"] == job.pk
+        assert body["url"].endswith(f"/api/core/jobs/{job.pk}/")
+
+    @patch("netbox_rir_manager.api.views.SyncRIRConfigJob")
+    def test_refuses_without_requesters_own_key(self, mock_job_cls, admin_api_client, rir_config, operator_key):
+        rir_config.default_key = operator_key
+        rir_config.save()
+
+        response = admin_api_client.post(self._url(rir_config), format="json")
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["detail"] == "No API key configured for this RIR config."
+        mock_job_cls.enqueue.assert_not_called()
