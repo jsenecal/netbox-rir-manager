@@ -11,6 +11,16 @@ From a **Network** detail view, you can act against the RIR directly:
 
 Operations that require RIR-side approval create a ticket. Tickets are visible under **RIR Manager -> Tickets** and update as the RIR transitions them through their states.
 
+## Reassigning a prefix
+
+A Prefix detail page has a **Reassign** button for prefixes under an aggregate linked to an RIR network. The form is pre-filled from the prefix:
+
+- **Type**: detailed, with the org handle, when the prefix's tenant is linked to an RIR Organization; simple otherwise.
+- **Customer**: the tenant's name and the site's address (for a simple reassignment).
+- **Net name**: generated from the tenant and the prefix (see [Network names](#network-names)).
+
+Edit anything before submitting: the reassignment is sent to the RIR immediately with exactly the values in the form, using your own key. It does not require **Auto reassign** on the parent; that flag only controls the automatic path below. The new child network is linked to the prefix, and the ticket opens on success.
+
 ## Automatic reassignment and removal
 
 Both are opt-in per parent allocation: set **Auto reassign** on the `RIRNetwork` linked to the aggregate. The flag only takes effect while that network's RIR config is active.

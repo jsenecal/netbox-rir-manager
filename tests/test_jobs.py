@@ -560,30 +560,15 @@ class TestReassignJobPreFlight:
     """Tests for the pre-flight check in ReassignJob that detects existing ARIN reassignments."""
 
     @pytest.fixture
-    def reassign_setup(self, rir_config, rir_user_key, rir, rir_organization):
-        """Set up common objects for reassign tests.
+    def reassign_setup(self, rir_user_key, rir_organization, prefix_under_parent):
+        """An opted-in parent with a child prefix whose tenant is linked to an RIROrganization.
 
-        Creates a parent aggregate/network and a child prefix with a tenant
-        linked to an RIROrganization (for the detailed reassignment path).
+        The linked org makes the job take the detailed reassignment path.
         """
-        from ipam.models import Aggregate, Prefix
-        from tenancy.models import Tenant
-
-        from netbox_rir_manager.models import RIRNetwork
-
-        agg = Aggregate.objects.create(prefix="10.0.0.0/20", rir=rir)
-        parent = RIRNetwork.objects.create(
-            rir_config=rir_config,
-            handle="NET-PARENT-20",
-            net_name="PARENT-NET",
-            aggregate=agg,
-            auto_reassign=True,
-        )
-        tenant = Tenant.objects.create(name="Test Tenant", slug="test-tenant")
-        rir_organization.tenant = tenant
+        setup = prefix_under_parent("10.0.0.0/20", "10.0.1.0/29", "NET-PARENT-20", auto_reassign=True)
+        rir_organization.tenant = setup["tenant"]
         rir_organization.save()
-        pfx = Prefix.objects.create(prefix="10.0.1.0/29", tenant=tenant)
-        return {"agg": agg, "parent": parent, "prefix": pfx}
+        return setup
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_preflight_syncs_existing_reassignment(self, mock_backend_class, reassign_setup, rir_config, rir_user_key):
@@ -672,6 +657,44 @@ class TestReassignJobPreFlight:
         mock_backend.reassign_network.assert_called_once()
         _parent_handle, net_data = mock_backend.reassign_network.call_args[0]
         assert net_data["net_name"] == "TEST-TENANT-10-0-1-0-29"
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_refuses_parent_not_opted_in(self, mock_backend_class, reassign_setup, rir_user_key):
+        """The job is the automatic path, so it only runs under the parent's auto_reassign opt-in."""
+        from netbox_rir_manager.jobs import ReassignJob
+
+        reassign_setup["parent"].auto_reassign = False
+        reassign_setup["parent"].save()
+
+        runner = make_runner(ReassignJob)
+        runner.run(prefix_id=reassign_setup["prefix"].pk, user_key_id=rir_user_key.pk)
+
+        assert runner.job.data["status"] == "error"
+        mock_backend_class.from_rir_config.assert_not_called()
+
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_simple_reassignment_without_site_reports_error(
+        self, mock_backend_class, reassign_setup, rir_organization, rir_user_key
+    ):
+        """A prefix with no site scope stops cleanly instead of treating Prefix.site as a Site."""
+        from netbox_rir_manager.jobs import ReassignJob
+
+        rir_organization.tenant = None  # no linked org, so the simple path runs
+        rir_organization.save()
+        mock_backend = MagicMock()
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        runner = make_runner(ReassignJob)
+        runner.run(prefix_id=reassign_setup["prefix"].pk, user_key_id=rir_user_key.pk)
+
+        assert runner.job.data == {
+            "prefix": "10.0.1.0/29",
+            "status": "error",
+            "message": "Prefix has no site",
+            "reassignment_type": "simple",
+        }
+        mock_backend.reassign_network.assert_not_called()
 
 
 @pytest.mark.django_db

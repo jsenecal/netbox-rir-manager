@@ -245,6 +245,26 @@ class TestRIRNetworkActionViews:
         assert ticket.ticket_type == "IPV4_SIMPLE_REASSIGN"
 
     @patch("netbox_rir_manager.views.ARINBackend")
+    def test_reassign_failure_shows_error(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.reassign_network.return_value = None
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins:netbox_rir_manager:rirnetwork_reassign", args=[rir_network.pk])
+        response = admin_client.post(
+            url,
+            {
+                "reassignment_type": "detailed",
+                "org_handle": "CUST-ARIN",
+                "start_address": "192.0.2.0",
+                "end_address": "192.0.2.15",
+            },
+        )
+
+        assert response.status_code == 302
+        assert response.url == rir_network.get_absolute_url()
+
+    @patch("netbox_rir_manager.views.ARINBackend")
     def test_reassign_no_api_key(self, mock_backend_cls, admin_client, rir_network):
         """Reassign without an API key should redirect with error."""
         url = reverse("plugins:netbox_rir_manager:rirnetwork_reassign", args=[rir_network.pk])
@@ -455,3 +475,131 @@ class TestPrefixSyncView:
 
         mock_backend_cls.from_rir_config.assert_not_called()
         assert not RIRNetwork.objects.exists()
+
+
+@pytest.mark.django_db
+class TestPrefixReassignView:
+    """A manual reassignment from a prefix submits exactly what the form says, now."""
+
+    @pytest.fixture
+    def setup(self, rir_user_key, prefix_under_parent):
+        # The parent is deliberately not opted into auto_reassign: that flag gates only the automatic path.
+        return prefix_under_parent(
+            "198.51.100.0/24", "198.51.100.16/28", "NET-198-51-100-0-1", tenant_name="Tenant Name"
+        )
+
+    def _post(self, client, prefix, **fields):
+        data = {"start_address": "198.51.100.16", "end_address": "198.51.100.31", **fields}
+        return client.post(reverse("plugins:netbox_rir_manager:prefix_reassign", args=[prefix.pk]), data)
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_detailed_submits_form_values(self, mock_backend_cls, admin_client, setup):
+        from netbox_rir_manager.models import RIRNetwork, RIRTicket
+
+        mock_backend = MagicMock()
+        mock_backend.reassign_network.return_value = {
+            "ticket_number": "TKT-PFX-1",
+            "ticket_status": "PENDING_REVIEW",
+            "net": {"handle": "NET-198-51-100-16-1", "net_name": "TYPED-NAME", "raw_data": {}},
+            "raw_data": {},
+        }
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        response = self._post(
+            admin_client, setup["prefix"], reassignment_type="detailed", org_handle="CUST-ARIN", net_name="TYPED-NAME"
+        )
+
+        mock_backend.reassign_network.assert_called_once_with(
+            "NET-198-51-100-0-1",
+            {
+                "net_name": "TYPED-NAME",
+                "start_address": "198.51.100.16",
+                "end_address": "198.51.100.31",
+                "org_handle": "CUST-ARIN",
+            },
+        )
+        ticket = RIRTicket.objects.get(ticket_number="TKT-PFX-1")
+        assert response.status_code == 302
+        assert response.url == ticket.get_absolute_url()
+        assert RIRNetwork.objects.get(handle="NET-198-51-100-16-1").prefix == setup["prefix"]
+
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_simple_creates_customer_from_form(self, mock_backend_cls, admin_client, setup):
+        from netbox_rir_manager.models import RIRCustomer
+
+        mock_backend = MagicMock()
+        mock_backend.create_customer.return_value = {"handle": "C0000001"}
+        mock_backend.reassign_network.return_value = {"ticket_number": "TKT-PFX-2", "raw_data": {}}
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        self._post(
+            admin_client,
+            setup["prefix"],
+            reassignment_type="simple",
+            customer_name="Typed Customer",
+            city="Montreal",
+            country="CA",
+        )
+
+        customer_data = mock_backend.create_customer.call_args[0][1]
+        assert customer_data["customer_name"] == "Typed Customer"
+        assert mock_backend.reassign_network.call_args[0][1]["customer_handle"] == "C0000001"
+        customer = RIRCustomer.objects.get(handle="C0000001")
+        assert customer.tenant == setup["tenant"]
+        assert customer.network == setup["parent"]
+
+    @pytest.mark.parametrize(
+        "customer_result, reassign_result, expected_log",
+        [
+            pytest.param(None, None, ("create", "customer"), id="customer-creation-fails"),
+            pytest.param({"handle": "C0000002"}, None, ("reassign", "network"), id="arin-refuses-reassignment"),
+        ],
+    )
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_failure_returns_to_prefix_and_logs(
+        self, mock_backend_cls, admin_client, setup, customer_result, reassign_result, expected_log
+    ):
+        from netbox_rir_manager.models import RIRSyncLog, RIRTicket
+
+        mock_backend = MagicMock()
+        mock_backend.create_customer.return_value = customer_result
+        mock_backend.reassign_network.return_value = reassign_result
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        response = self._post(
+            admin_client, setup["prefix"], reassignment_type="simple", customer_name="Cust", city="Laval", country="CA"
+        )
+
+        assert response.status_code == 302
+        assert response.url == setup["prefix"].get_absolute_url()
+        assert not RIRTicket.objects.exists()
+        error = RIRSyncLog.objects.get(status="error")
+        assert (error.operation, error.object_type) == expected_log
+
+    def test_form_prefills_customer_address_from_site(self, admin_client, setup):
+        from dcim.models import Site
+
+        from netbox_rir_manager.models import RIRAddress
+
+        site = Site.objects.create(name="Site P", slug="site-p")
+        RIRAddress.objects.create(site=site, street_address="1 Rue A", city="Montreal", country="CA")
+        prefix = setup["prefix"]
+        prefix.scope = site
+        prefix.save()
+
+        response = admin_client.get(reverse("plugins:netbox_rir_manager:prefix_reassign", args=[prefix.pk]))
+
+        initial = response.context["form"].initial
+        assert (initial["customer_name"], initial["street_address"], initial["city"], initial["country"]) == (
+            "Tenant Name",
+            "1 Rue A",
+            "Montreal",
+            "CA",
+        )
+
+    def test_form_prefills_arin_net_name(self, admin_client, setup):
+        response = admin_client.get(reverse("plugins:netbox_rir_manager:prefix_reassign", args=[setup["prefix"].pk]))
+
+        assert response.status_code == 200
+        assert response.context["form"].initial["net_name"] == "TENANT-NAME-198-51-100-16-28"
+        assert response.context["parent_network"] == setup["parent"]

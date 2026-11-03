@@ -186,6 +186,26 @@ if _netbox_available:
         return RIRUserKey.objects.create(user=make_user("operator"), rir_config=rir_config, api_key="operator-key")
 
     @pytest.fixture
+    def prefix_under_parent(rir, rir_config):
+        """Build an aggregate with its parent RIRNetwork, and a tenanted prefix inside it."""
+        from django.utils.text import slugify
+        from ipam.models import Aggregate, Prefix
+        from tenancy.models import Tenant
+
+        from netbox_rir_manager.models import RIRNetwork
+
+        def _make(aggregate, prefix, handle, tenant_name="Test Tenant", auto_reassign=False):
+            agg = Aggregate.objects.create(prefix=aggregate, rir=rir)
+            parent = RIRNetwork.objects.create(
+                rir_config=rir_config, handle=handle, aggregate=agg, auto_reassign=auto_reassign
+            )
+            tenant = Tenant.objects.create(name=tenant_name, slug=slugify(tenant_name))
+            pfx = Prefix.objects.create(prefix=prefix, tenant=tenant)
+            return {"agg": agg, "parent": parent, "tenant": tenant, "prefix": pfx}
+
+        return _make
+
+    @pytest.fixture
     def rir_ticket(db, rir_config):
         """Create a test RIR ticket."""
         from django.utils import timezone

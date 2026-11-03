@@ -64,6 +64,12 @@ from netbox_rir_manager.models import (
     RIRUserKey,
 )
 from netbox_rir_manager.net_names import build_net_name
+from netbox_rir_manager.services.reassignment import (
+    ReassignmentError,
+    prefix_site,
+    reassignment_request,
+    submit_reassignment,
+)
 from netbox_rir_manager.tables import (
     RIRAddressTable,
     RIRConfigTable,
@@ -385,88 +391,13 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-
-        rtype = form.cleaned_data["reassignment_type"]
-        if rtype == "simple":
-            customer_data = {
-                "customer_name": form.cleaned_data["customer_name"],
-                "street_address": form.cleaned_data.get("street_address", ""),
-                "city": form.cleaned_data["city"],
-                "state_province": form.cleaned_data.get("state_province", ""),
-                "postal_code": form.cleaned_data.get("postal_code", ""),
-                "country": form.cleaned_data["country"],
-            }
-            customer_result = backend.create_customer(network.handle, customer_data)
-            if customer_result is None:
-                messages.error(request, "Failed to create customer at ARIN.")
-                RIRSyncLog.objects.create(
-                    rir_config=network.rir_config,
-                    operation="create",
-                    object_type="customer",
-                    object_handle=network.handle,
-                    status="error",
-                    message="Failed to create customer",
-                )
-                return redirect(network.get_absolute_url())
-
-            addr = RIRAddress.objects.create(
-                street_address=customer_data.get("street_address", ""),
-                city=customer_data.get("city", ""),
-                state_province=customer_data.get("state_province", ""),
-                postal_code=customer_data.get("postal_code", ""),
-                country=customer_data.get("country", ""),
-            )
-            RIRCustomer.objects.create(
-                rir_config=network.rir_config,
-                handle=customer_result["handle"],
-                customer_name=customer_data["customer_name"],
-                address=addr,
-                network=network,
-                raw_data=customer_result,
-                created_date=timezone.now(),
-            )
-
-        net_data = {
-            "net_name": form.cleaned_data.get("net_name", ""),
-            "start_address": str(form.cleaned_data["start_address"]),
-            "end_address": str(form.cleaned_data["end_address"]),
-        }
-        if rtype == "simple":
-            net_data["customer_handle"] = customer_result["handle"]
-        else:
-            net_data["org_handle"] = form.cleaned_data["org_handle"]
-
-        result = backend.reassign_network(network.handle, net_data)
-        if result is None:
-            messages.error(request, "Reassignment failed at ARIN.")
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="reassign",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Reassignment failed",
-            )
+        net, customer, org_handle = reassignment_request(form.cleaned_data)
+        try:
+            ticket = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
+        except ReassignmentError as exc:
+            messages.error(request, str(exc))
             return redirect(network.get_absolute_url())
 
-        ticket = RIRTicket.objects.create(
-            rir_config=network.rir_config,
-            ticket_number=result.get("ticket_number", ""),
-            ticket_type=result.get("ticket_type", "IPV4_SIMPLE_REASSIGN"),
-            status=normalize_ticket_status(result.get("ticket_status", "")),
-            network=network,
-            submitted_by=user_key,
-            created_date=timezone.now(),
-            raw_data=result.get("raw_data", {}),
-        )
-        RIRSyncLog.objects.create(
-            rir_config=network.rir_config,
-            operation="reassign",
-            object_type="network",
-            object_handle=network.handle,
-            status="success",
-            message=f"Reassignment submitted, ticket {ticket.ticket_number}",
-        )
         messages.success(request, f"Reassignment submitted. Ticket: {ticket.ticket_number}")
         return redirect(ticket.get_absolute_url())
 
@@ -755,13 +686,11 @@ class PrefixReassignView(LoginRequiredMixin, View):
     """Reassign a prefix at ARIN from the Prefix detail page."""
 
     def get(self, request, pk):
-        from ipam.models import Aggregate, Prefix
+        from ipam.models import Prefix
 
         prefix = get_object_or_404(Prefix, pk=pk)
 
-        # Find parent RIRNetwork
-        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
-        parent_network = RIRNetwork.objects.filter(aggregate=agg).first() if agg else None
+        parent_network, _agg = RIRNetwork.find_for_prefix(prefix)
 
         # Pre-fill form
         network = ipaddress.ip_network(str(prefix.prefix), strict=False)
@@ -781,22 +710,11 @@ class PrefixReassignView(LoginRequiredMixin, View):
                 initial["org_handle"] = rir_org.handle
 
         # Pre-fill from site address
-        site = getattr(prefix, "_site", None) or getattr(prefix, "site", None)
-        if site is None:
-            from dcim.models import Site
-
-            scope = getattr(prefix, "scope", None)
-            if isinstance(scope, Site):
-                site = scope
-
+        site = prefix_site(prefix)
         if site:
             site_address = RIRAddress.get_for_site(site)
             if site_address:
-                initial["street_address"] = site_address.street_address
-                initial["city"] = site_address.city
-                initial["state_province"] = site_address.state_province
-                initial["postal_code"] = site_address.postal_code
-                initial["country"] = site_address.country
+                initial.update(site_address.address_fields())
 
         if prefix.tenant:
             initial["net_name"] = build_net_name(prefix.tenant.name, prefix.prefix)
@@ -814,14 +732,12 @@ class PrefixReassignView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        from ipam.models import Aggregate, Prefix
+        from ipam.models import Prefix
 
         prefix = get_object_or_404(Prefix, pk=pk)
         form = RIRNetworkReassignForm(request.POST)
 
-        # Find parent RIRNetwork
-        agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
-        parent_network = RIRNetwork.objects.filter(aggregate=agg).first() if agg else None
+        parent_network, _agg = RIRNetwork.find_for_prefix(prefix)
 
         if not form.is_valid():
             return render(
@@ -843,18 +759,25 @@ class PrefixReassignView(LoginRequiredMixin, View):
             messages.error(request, "No API key configured for this RIR config.")
             return redirect(prefix.get_absolute_url())
 
-        # Enqueue as background job
-        from netbox_rir_manager.jobs import ReassignJob
+        backend = ARINBackend.from_rir_config(parent_network.rir_config, api_key=user_key.api_key)
+        net, customer, org_handle = reassignment_request(form.cleaned_data)
+        try:
+            ticket = submit_reassignment(
+                backend,
+                parent_network,
+                user_key,
+                net,
+                customer=customer,
+                org_handle=org_handle,
+                tenant=prefix.tenant,
+                prefix=prefix,
+            )
+        except ReassignmentError as exc:
+            messages.error(request, str(exc))
+            return redirect(prefix.get_absolute_url())
 
-        ReassignJob.enqueue(
-            instance=parent_network.rir_config,
-            user=request.user,
-            prefix_id=prefix.pk,
-            user_key_id=user_key.pk,
-        )
-
-        messages.success(request, f"Reassignment job queued for prefix {prefix.prefix}.")
-        return redirect(prefix.get_absolute_url())
+        messages.success(request, f"Reassignment of {prefix.prefix} submitted. Ticket: {ticket.ticket_number}")
+        return redirect(ticket.get_absolute_url())
 
 
 # --- Site Address Resolve Views ---

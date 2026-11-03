@@ -41,6 +41,7 @@ from netbox_rir_manager.models import (
     RIRTicket,
     RIRUserKey,
 )
+from netbox_rir_manager.services.reassignment import ReassignmentError, reassignment_request, submit_reassignment
 
 
 class RIRConfigViewSet(NetBoxModelViewSet):
@@ -86,76 +87,12 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             )
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-        data = serializer.validated_data
-        rtype = data["reassignment_type"]
+        net, customer, org_handle = reassignment_request(serializer.validated_data)
+        try:
+            ticket = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
+        except ReassignmentError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        if rtype == "simple":
-            customer_data = {
-                "customer_name": data["customer_name"],
-                "street_address": data.get("street_address", ""),
-                "city": data["city"],
-                "state_province": data.get("state_province", ""),
-                "postal_code": data.get("postal_code", ""),
-                "country": data["country"],
-            }
-            customer_result = backend.create_customer(network.handle, customer_data)
-            if customer_result is None:
-                RIRSyncLog.objects.create(
-                    rir_config=network.rir_config,
-                    operation="create",
-                    object_type="customer",
-                    object_handle=network.handle,
-                    status="error",
-                    message="Failed to create customer",
-                )
-                return Response(
-                    {"detail": "Failed to create customer at ARIN."},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-
-        net_data = {
-            "net_name": data.get("net_name", ""),
-            "start_address": str(data["start_address"]),
-            "end_address": str(data["end_address"]),
-        }
-        if rtype == "simple":
-            net_data["customer_handle"] = customer_result["handle"]
-        else:
-            net_data["org_handle"] = data["org_handle"]
-
-        result = backend.reassign_network(network.handle, net_data)
-        if result is None:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="reassign",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Reassignment failed",
-            )
-            return Response(
-                {"detail": "Reassignment failed at ARIN."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        ticket = RIRTicket.objects.create(
-            rir_config=network.rir_config,
-            ticket_number=result.get("ticket_number", ""),
-            ticket_type=result.get("ticket_type", "IPV4_SIMPLE_REASSIGN"),
-            status=normalize_ticket_status(result.get("ticket_status", "")),
-            network=network,
-            submitted_by=user_key,
-            created_date=timezone.now(),
-            raw_data=result.get("raw_data", {}),
-        )
-        RIRSyncLog.objects.create(
-            rir_config=network.rir_config,
-            operation="reassign",
-            object_type="network",
-            object_handle=network.handle,
-            status="success",
-            message=f"Reassignment submitted, ticket {ticket.ticket_number}",
-        )
         return Response(
             RIRTicketSerializer(ticket, context={"request": request}).data,
             status=status.HTTP_201_CREATED,

@@ -37,6 +37,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Prefix **Reassign** form now submits exactly what it shows, immediately, with
+  the user's own key. It used to discard the form, queue the automatic reassign job
+  (which derived its own values), and fail unless the parent allocation had
+  `auto_reassign` enabled; that flag now only gates the automatic path.
+- The Prefix **Reassign** page no longer fails with a server error for prefixes not
+  scoped to a site, and the automatic reassign job reports "Prefix has no site"
+  instead of crashing. Both read `Prefix.site`, which on current NetBox is a reverse
+  relation rather than the prefix's site.
+- Reassignments from the Network page and the REST API now link the new child
+  network ARIN returns, and the API records the customer it creates for a simple
+  reassignment, as the other paths already did. All reassignment paths share one
+  implementation.
 - Generated net names now follow ARIN's rules (up to 50 ASCII letters, numbers and
   hyphens). The automatic reassignment job and the prefix Reassign form built names
   like `Test Tenant-10.0.1.0/29`, which ARIN rejects; they now produce
