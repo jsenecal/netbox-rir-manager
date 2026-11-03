@@ -154,6 +154,21 @@ if _netbox_available:
         )
 
     @pytest.fixture
+    def make_network(db, rir_config):
+        """Return a factory for RIRNetworks on the test config; each needs its own handle."""
+        from netbox_rir_manager.models import RIRNetwork
+
+        def _make(handle, **fields):
+            return RIRNetwork.objects.create(rir_config=rir_config, handle=handle, **fields)
+
+        return _make
+
+    @pytest.fixture
+    def networks(make_network):
+        """Two RIRNetworks whose handles differ from rir_network's."""
+        return [make_network("NET-198-51-100-0-1"), make_network("NET-198-51-100-16-1")]
+
+    @pytest.fixture
     def rir_user_key(db, admin_user, rir_config):
         """Create a test RIR user key."""
         from netbox_rir_manager.models import RIRUserKey
@@ -211,10 +226,11 @@ if _netbox_available:
         from django.utils import timezone
 
         from netbox_rir_manager.models import RIRTicket
+        from tests.arin_payloads import EXISTING_TICKET
 
         return RIRTicket.objects.create(
             rir_config=rir_config,
-            ticket_number="TKT-TEST-001",
+            ticket_number=EXISTING_TICKET,
             ticket_type="IPV4_SIMPLE_REASSIGN",
             status="pending_review",
             created_date=timezone.now(),

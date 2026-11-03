@@ -1,4 +1,3 @@
-from django.utils import timezone
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import status
 from rest_framework.decorators import action
@@ -18,7 +17,6 @@ from netbox_rir_manager.api.serializers import (
     RIRUserKeySerializer,
 )
 from netbox_rir_manager.backends.arin import ARINBackend
-from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
     RIRAddressFilterSet,
     RIRConfigFilterSet,
@@ -41,7 +39,33 @@ from netbox_rir_manager.models import (
     RIRTicket,
     RIRUserKey,
 )
-from netbox_rir_manager.services.reassignment import ReassignmentError, reassignment_request, submit_reassignment
+from netbox_rir_manager.services.arin_results import ARINWriteError
+from netbox_rir_manager.services.net_writes import (
+    reallocation_request,
+    submit_net_delete,
+    submit_net_remove,
+    submit_reallocation,
+)
+from netbox_rir_manager.services.reassignment import reassignment_request, submit_reassignment
+
+
+def arin_outcome_response(request, outcome):
+    """The response to a write ARIN accepted.
+
+    With a ticket: 201 and the serialized ticket, as before. Without one (ARIN processed the
+    write immediately, or NetBox could not record it): 200 and
+    {"detail", "recorded", "ticket": null, "net"}, where net is the linked child network or null.
+    """
+    if outcome.ticket is not None:
+        return Response(
+            RIRTicketSerializer(outcome.ticket, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+    net = RIRNetworkSerializer(outcome.net, context={"request": request}).data if outcome.net else None
+    return Response(
+        {"detail": outcome.message, "recorded": outcome.recorded, "ticket": None, "net": net},
+        status=status.HTTP_200_OK,
+    )
 
 
 class RIRConfigViewSet(NetBoxModelViewSet):
@@ -89,14 +113,11 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
         net, customer, org_handle = reassignment_request(serializer.validated_data)
         try:
-            ticket = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
-        except ReassignmentError as exc:
+            outcome = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
+        except ARINWriteError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        return Response(
-            RIRTicketSerializer(ticket, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        return arin_outcome_response(request, outcome)
 
     @action(detail=True, methods=["post"], url_path="reallocate")
     def reallocate(self, request, pk=None):
@@ -112,50 +133,12 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             )
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-        data = serializer.validated_data
-        net_data = {
-            "org_handle": data["org_handle"],
-            "net_name": data.get("net_name", ""),
-            "start_address": str(data["start_address"]),
-            "end_address": str(data["end_address"]),
-        }
-        result = backend.reallocate_network(network.handle, net_data)
-        if result is None:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="reallocate",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Reallocation failed",
-            )
-            return Response(
-                {"detail": "Reallocation failed at ARIN."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        ticket = RIRTicket.objects.create(
-            rir_config=network.rir_config,
-            ticket_number=result.get("ticket_number", ""),
-            ticket_type=result.get("ticket_type", "IPV4_REALLOCATE"),
-            status=normalize_ticket_status(result.get("ticket_status", "")),
-            network=network,
-            submitted_by=user_key,
-            created_date=timezone.now(),
-            raw_data=result.get("raw_data", {}),
-        )
-        RIRSyncLog.objects.create(
-            rir_config=network.rir_config,
-            operation="reallocate",
-            object_type="network",
-            object_handle=network.handle,
-            status="success",
-            message=f"Reallocation submitted, ticket {ticket.ticket_number}",
-        )
-        return Response(
-            RIRTicketSerializer(ticket, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        net = reallocation_request(serializer.validated_data)
+        try:
+            outcome = submit_reallocation(backend, network, user_key, net)
+        except ARINWriteError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return arin_outcome_response(request, outcome)
 
     @action(detail=True, methods=["post"], url_path="remove")
     def remove_net(self, request, pk=None):
@@ -168,33 +151,11 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             )
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-        success = backend.remove_network(network.handle)
-        if success:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="remove",
-                object_type="network",
-                object_handle=network.handle,
-                status="success",
-                message=f"Removed network {network.handle} from ARIN",
-            )
-            return Response(
-                {"detail": f"Network {network.handle} removed."},
-                status=status.HTTP_200_OK,
-            )
-        else:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="remove",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Failed to remove network from ARIN",
-            )
-            return Response(
-                {"detail": "Failed to remove network from ARIN."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        try:
+            submit_net_remove(backend, network)
+        except ARINWriteError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({"detail": f"Network {network.handle} removed."}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="delete-arin")
     def delete_arin(self, request, pk=None):
@@ -207,43 +168,11 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
             )
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-        result = backend.delete_network(network.handle)
-        if result is None:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="delete",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Failed to delete network at ARIN",
-            )
-            return Response(
-                {"detail": "Failed to delete network at ARIN."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        ticket = RIRTicket.objects.create(
-            rir_config=network.rir_config,
-            ticket_number=result.get("ticket_number", ""),
-            ticket_type="NET_DELETE_REQUEST",
-            status=normalize_ticket_status(result.get("ticket_status", "")),
-            network=network,
-            submitted_by=user_key,
-            created_date=timezone.now(),
-            raw_data=result.get("raw_data", {}),
-        )
-        RIRSyncLog.objects.create(
-            rir_config=network.rir_config,
-            operation="delete",
-            object_type="network",
-            object_handle=network.handle,
-            status="success",
-            message=f"Delete request submitted, ticket {ticket.ticket_number}",
-        )
-        return Response(
-            RIRTicketSerializer(ticket, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        try:
+            outcome = submit_net_delete(backend, network, user_key)
+        except ARINWriteError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return arin_outcome_response(request, outcome)
 
 
 class RIRAddressViewSet(NetBoxModelViewSet):
