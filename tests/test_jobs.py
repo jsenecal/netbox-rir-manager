@@ -859,3 +859,27 @@ class TestReassignJobOutcome:
         assert runner.job.data["status"] == "success"
         assert expected_message in runner.job.data["message"]
         assert runner.job.data.get("ticket_number") == expected_ticket
+
+
+def test_plugin_ready_registers_scheduled_sync(monkeypatch):
+    """Loading the plugin registers the daily sync, not only once something imports jobs.py.
+
+    rqworker schedules system jobs from the registry at startup, before any view or signal
+    handler has imported the jobs module lazily.
+    """
+    import sys
+
+    from django.apps import apps
+    from netbox.registry import registry
+
+    import netbox_rir_manager
+    import netbox_rir_manager.jobs  # noqa: F401 -- loaded first so monkeypatch can restore it
+
+    monkeypatch.delitem(sys.modules, "netbox_rir_manager.jobs")
+    monkeypatch.delattr(netbox_rir_manager, "jobs")
+
+    with patch.dict(registry["system_jobs"], clear=True), patch("netbox.plugins.PluginConfig.ready"):
+        apps.get_app_config("netbox_rir_manager").ready()
+        registered = [cls.__name__ for cls in registry["system_jobs"]]
+
+    assert registered == ["ScheduledRIRSyncJob"]
