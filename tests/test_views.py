@@ -669,7 +669,7 @@ class TestSiteAddressResolve:
 
         assert response.status_code == 200
         assert response.headers["HX-Retarget"] == "#site-address-resolve-error"
-        assert self.MESSAGE in response.content.decode()
+        assert "is not an ISO 3166-2 subdivision code" in response.content.decode()
         assert list(RIRAddress.objects.filter(site=site)) == [existing]
 
 

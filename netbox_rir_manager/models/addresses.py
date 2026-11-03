@@ -7,6 +7,9 @@ from netbox.models import NetBoxModel
 class RIRAddress(NetBoxModel):
     """Structured address for RIR records, optionally linked to a NetBox Site and/or Location."""
 
+    # An ISO 3166-2 subdivision code is at most three characters after the country prefix.
+    STATE_PROVINCE_MAX_LENGTH = 10
+
     site = models.ForeignKey(
         "dcim.Site",
         on_delete=models.CASCADE,
@@ -24,7 +27,7 @@ class RIRAddress(NetBoxModel):
     street_address = models.TextField(blank=True, default="")
     city = models.CharField(max_length=100, blank=True, default="")
     state_province = models.CharField(
-        max_length=10,
+        max_length=STATE_PROVINCE_MAX_LENGTH,
         blank=True,
         default="",
         help_text="ISO-3166-2 subdivision code (e.g. NY, QC)",
@@ -84,7 +87,7 @@ class RIRAddress(NetBoxModel):
         """
         exclude = set(exclude or ())
         errors = {}
-        max_length = self._meta.get_field("state_province").max_length
+        max_length = self.STATE_PROVINCE_MAX_LENGTH
         if "state_province" not in exclude and len(self.state_province or "") > max_length:
             errors["state_province"] = [
                 f"'{self.state_province}' is not an ISO 3166-2 subdivision code. Enter the code without "

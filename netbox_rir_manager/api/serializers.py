@@ -239,7 +239,7 @@ class NetworkReassignSerializer(serializers.Serializer):
     street_address = serializers.CharField(required=False, allow_blank=True, default="")
     city = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
     state_province = serializers.CharField(
-        max_length=RIRAddress._meta.get_field("state_province").max_length,
+        max_length=RIRAddress.STATE_PROVINCE_MAX_LENGTH,
         required=False,
         allow_blank=True,
         default="",

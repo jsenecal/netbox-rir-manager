@@ -677,7 +677,16 @@ class ReassignJob(JobRunner):
                     try:
                         site_address = resolve_site_address(site)
                     except SubdivisionCodeError as exc:
-                        self._fail_without_customer(rir_config, parent_network, prefix, str(exc))
+                        # Stop before anything is sent to ARIN: the customer's address is unusable.
+                        RIRSyncLog.record(
+                            rir_config,
+                            "reassign",
+                            "customer",
+                            parent_network.handle,
+                            "error",
+                            f"{prefix.prefix}: {exc}",
+                        )
+                        self._fail(prefix, str(exc))
                         return
 
                 if not site_address:
@@ -701,10 +710,7 @@ class ReassignJob(JobRunner):
                     prefix=prefix,
                 )
             except ReassignmentError as exc:
-                self.logger.error(f"{prefix.prefix}: {exc}")
-                self.job.data["status"] = "error"
-                self.job.data["message"] = str(exc)
-                self.job.save()
+                self._fail(prefix, str(exc))
                 return
 
             if outcome.recorded:
@@ -717,17 +723,9 @@ class ReassignJob(JobRunner):
                 self.job.data["ticket_number"] = outcome.ticket.ticket_number
             self.job.save()
 
-    def _fail_without_customer(self, rir_config, parent_network, prefix, message):
-        """Stop before anything is sent to ARIN because the customer's address is unusable."""
+    def _fail(self, prefix, message):
+        """Log message against the prefix and end the job with it as its error."""
         self.logger.error(f"{prefix.prefix}: {message}")
-        RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="reassign",
-            object_type="customer",
-            object_handle=parent_network.handle,
-            status="error",
-            message=f"{prefix.prefix}: {message}",
-        )
         self.job.data["status"] = "error"
         self.job.data["message"] = message
         self.job.save()

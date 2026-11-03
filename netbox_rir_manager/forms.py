@@ -282,7 +282,7 @@ class RIRNetworkReassignForm(forms.Form):
     street_address = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False)
     city = forms.CharField(max_length=100, required=False)
     state_province = forms.CharField(
-        max_length=RIRAddress._meta.get_field("state_province").max_length,
+        max_length=RIRAddress.STATE_PROVINCE_MAX_LENGTH,
         required=False,
         help_text="ISO 3166-2 subdivision code without the country prefix (e.g. NY, QC)",
     )

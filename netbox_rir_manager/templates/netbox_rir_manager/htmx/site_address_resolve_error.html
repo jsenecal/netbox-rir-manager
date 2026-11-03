@@ -1,3 +1,5 @@
 <div class="alert alert-danger">
-    <i class="mdi mdi-alert"></i> {{ message }}
+    {% for error in errors %}
+    <div><i class="mdi mdi-alert"></i> {{ error }}</div>
+    {% endfor %}
 </div>
