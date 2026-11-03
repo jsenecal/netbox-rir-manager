@@ -36,7 +36,7 @@ Inspect or trigger it manually from **System > Background Jobs**.
 
 ### 2. Contacts (POCs)
 
-For every `poc_link` in the org's raw payload, `backend.get_poc(handle)` is called. Each POC becomes an `RIRContact` row (upserted by handle), linked back to the org. Contact addresses are also normalised into `RIRAddress` rows.
+Each POC handle in the org's `poc_links` is fetched once per run with `backend.get_poc(handle)`, even when the POC holds several roles on the org (one link per role). The role links themselves stay in the org's raw payload. Each POC becomes an `RIRContact` row (upserted by handle), linked back to the org. Contact addresses are also normalised into `RIRAddress` rows.
 
 The `contact_type` is one of `PERSON` or `ROLE` (per `ContactTypeChoices`).
 

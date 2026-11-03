@@ -2,14 +2,30 @@
 
 from django.utils import timezone
 
+from netbox_rir_manager.backends.base import RIRDataError
 from netbox_rir_manager.models import RIRAddress, RIRCustomer
-from netbox_rir_manager.services.arin_results import ARINWriteError, net_request, record_arin_result, sync_log
+from netbox_rir_manager.services.arin_results import (
+    ARINDataError,
+    ARINWriteError,
+    data_error,
+    net_request,
+    record_arin_result,
+    sync_log,
+)
 
 CUSTOMER_FIELDS = ("customer_name", *RIRAddress.ADDRESS_FIELDS)
 
 
 class ReassignmentError(ARINWriteError):
     """ARIN refused or failed a step of the reassignment; the message is safe to show a user."""
+
+
+class ReassignmentDataError(ReassignmentError, ARINDataError):
+    """Reassignment data that cannot be sent to ARIN.
+
+    A ReassignmentError so the existing UI and job handlers catch it, and an ARINDataError so
+    the API answers 400.
+    """
 
 
 def reassignment_request(data):
@@ -46,13 +62,25 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
     or org_handle for a detailed one. The child net ARIN returns is linked to prefix.
 
     Returns the ARINOutcome of record_arin_result (its ticket is None when ARIN processed the
-    reassignment immediately), or raises ReassignmentError after logging the failure.
+    reassignment immediately), or raises ReassignmentError after logging the failure
+    (ReassignmentDataError when the request's own data cannot be sent to ARIN).
     """
     rir_config = parent.rir_config
     net_data = dict(net)
+    if customer is None:
+        net_data["org_handle"] = org_handle
+
+    # Validate the net first so a refused net never leaves a customer behind at ARIN.
+    try:
+        backend.validate_reassignment(net_data)
+    except RIRDataError as exc:
+        raise data_error(rir_config, "reassign", "network", parent.handle, exc, ReassignmentDataError) from exc
 
     if customer is not None:
-        customer_result = backend.create_customer(parent.handle, customer)
+        try:
+            customer_result = backend.create_customer(parent.handle, customer)
+        except RIRDataError as exc:
+            raise data_error(rir_config, "create", "customer", parent.handle, exc, ReassignmentDataError) from exc
         if customer_result is None:
             sync_log(
                 rir_config,
@@ -75,10 +103,11 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
             created_date=timezone.now(),
         )
         net_data["customer_handle"] = customer_result["handle"]
-    else:
-        net_data["org_handle"] = org_handle
 
-    result = backend.reassign_network(parent.handle, net_data)
+    try:
+        result = backend.reassign_network(parent.handle, net_data)
+    except RIRDataError as exc:
+        raise data_error(rir_config, "reassign", "network", parent.handle, exc, ReassignmentDataError) from exc
     if result is None:
         sync_log(
             rir_config, "reassign", "network", parent.handle, "error", f"Reassignment of {net['start_address']} failed"

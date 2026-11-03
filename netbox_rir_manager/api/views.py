@@ -41,7 +41,7 @@ from netbox_rir_manager.models import (
     RIRTicket,
     RIRUserKey,
 )
-from netbox_rir_manager.services.arin_results import ARINWriteError
+from netbox_rir_manager.services.arin_results import ARINDataError, ARINWriteError
 from netbox_rir_manager.services.net_writes import (
     reallocation_request,
     submit_net_delete,
@@ -135,6 +135,8 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         net, customer, org_handle = reassignment_request(serializer.validated_data)
         try:
             outcome = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
+        except ARINDataError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except ARINWriteError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -157,6 +159,8 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
         net = reallocation_request(serializer.validated_data)
         try:
             outcome = submit_reallocation(backend, network, user_key, net)
+        except ARINDataError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except ARINWriteError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         return arin_outcome_response(request, outcome)
