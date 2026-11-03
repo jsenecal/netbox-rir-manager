@@ -34,4 +34,4 @@ class TestSubmitNetRemove:
             submit_net_remove(backend, rir_network)
 
         log = RIRSyncLog.objects.get(operation="remove")
-        assert (log.status, log.message) == ("error", "Failed to remove network from ARIN")
+        assert (log.status, log.message) == ("error", "Failed to remove network from ARIN.")
