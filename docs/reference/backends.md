@@ -39,7 +39,7 @@ For the write methods, `None` (or `False` from `remove_network`) means the RIR c
 
 `ARINBackend` (`netbox_rir_manager/backends/arin.py`) registers itself under the name `ARIN`.
 
-- **Connection**: `ARINBackend.from_rir_config(rir_config, api_key)` builds a `pyregrws` client with the given key and, when set, the config's **API URL** in place of the `pyregrws` default.
+- **Connection**: `ARINBackend.for_user_key(user_key)` builds a `pyregrws` client with the key's API key and, when set, the key's config's **API URL** in place of the `pyregrws` default.
 - **Retries**: every call is retried on `ConnectionError`, `OSError` and `TimeoutError`, as set by `api_retry_count` and `api_retry_backoff` (see [Settings](settings.md)). An error response from ARIN is not retried.
 - **Reads** return `None` when the call fails or ARIN answers with an error.
 - **Writes** raise `RIRRequestError` with ARIN's reason when ARIN answers with an error, and raise `RIRDataError` when `pyregrws` rejects the payload or the customer's country is not an ISO 3166-1 alpha-2 code. Customer details are converted to ASCII before they are sent.
