@@ -134,16 +134,28 @@ class ARINBackend(RIRBackend):
     # Write operations
     # ------------------------------------------------------------------
 
-    def update_network(self, handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
+    def _on_net(self, handle: str, action, convert=None):
+        """Look up the net handle at ARIN, then write action(net) and return its result.
+
+        convert, if given, maps the result to what the caller returns. Returns None if ARIN
+        cannot be reached for either call, and raises RIRRequestError when ARIN refuses either,
+        as _write_call does.
+        """
         net = self._write_call(self.api.net.from_handle, handle)
         if net is None:
             return None
-        if "net_name" in data:
-            net.net_name = data["net_name"]
-        result = self._write_call(net.save)
+        result = self._write_call(action, net)
         if result is None:
             return None
-        return self._net_to_dict(result)
+        return convert(result) if convert else result
+
+    def update_network(self, handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
+        def save(net):
+            if "net_name" in data:
+                net.net_name = data["net_name"]
+            return net.save()
+
+        return self._on_net(handle, save, self._net_to_dict)
 
     def reassign_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
         return self._write_child_net(parent_handle, net_data, "S", self.api.net.reassign)
@@ -154,28 +166,13 @@ class ARINBackend(RIRBackend):
     def _write_child_net(self, parent_handle: str, net_data: dict[str, Any], block_type: str, submit):
         """Build the child net (raising RIRDataError before any call), then submit it under the parent."""
         child_net = self._build_net(net_data, block_type, parent_handle)
-        parent = self._write_call(self.api.net.from_handle, parent_handle)
-        if parent is None:
-            return None
-        result = self._write_call(submit, parent, child_net)
-        if result is None:
-            return None
-        return self._ticket_request_to_dict(result)
+        return self._on_net(parent_handle, lambda parent: submit(parent, child_net), self._ticket_request_to_dict)
 
     def remove_network(self, handle: str) -> bool:
-        net = self._write_call(self.api.net.from_handle, handle)
-        if net is None:
-            return False
-        return self._write_call(self.api.net.remove, net) is not None
+        return self._on_net(handle, self.api.net.remove) is not None
 
     def delete_network(self, handle: str) -> dict[str, Any] | None:
-        net = self._write_call(self.api.net.from_handle, handle)
-        if net is None:
-            return None
-        result = self._write_call(net.delete)
-        if result is None:
-            return None
-        return self._ticket_request_to_dict(result)
+        return self._on_net(handle, lambda net: net.delete(), self._ticket_request_to_dict)
 
     def get_customer(self, handle: str) -> dict[str, Any] | None:
         result = self._call_with_retry(self.api.customer.from_handle, handle)
@@ -191,13 +188,11 @@ class ARINBackend(RIRBackend):
         (the parent net lookup or the customer).
         """
         payload = self._customer_payload(data)
-        parent = self._write_call(self.api.net.from_handle, parent_net_handle)
-        if parent is None:
-            return None
-        result = self._write_call(self.api.customer.create_for_net, parent, **payload)
-        if result is None:
-            return None
-        return self._customer_to_dict(result)
+        return self._on_net(
+            parent_net_handle,
+            lambda parent: self.api.customer.create_for_net(parent, **payload),
+            self._customer_to_dict,
+        )
 
     def validate_reassignment(self, net_data: dict[str, Any]) -> None:
         """Raise RIRDataError if reassign_network would refuse net_data, without contacting ARIN."""
