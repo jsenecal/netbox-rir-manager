@@ -170,10 +170,9 @@ class NominatimGeocoder(GeocodingService):
 
 def _get_geocoding_service() -> GeocodingService:
     """Get the configured geocoding service."""
-    from django.conf import settings
+    from netbox.plugins import get_plugin_config
 
-    plugin_config = settings.PLUGINS_CONFIG.get("netbox_rir_manager", {})
-    provider = plugin_config.get("geocoding_provider", "nominatim")
+    provider = get_plugin_config("netbox_rir_manager", "geocoding_provider")
 
     if provider == "nominatim":
         return NominatimGeocoder()

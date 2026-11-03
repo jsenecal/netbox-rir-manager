@@ -755,7 +755,7 @@ def scheduled_sync_interval() -> int:
 
     NetBox reads a system job's interval when the class is registered, so this runs once, at import.
     """
-    hours = get_plugin_config("netbox_rir_manager", "sync_interval_hours", 24)
+    hours = get_plugin_config("netbox_rir_manager", "sync_interval_hours")
     # bool is a subclass of int, but True is not a meaningful number of hours.
     if type(hours) is not int or hours < 1:
         raise ImproperlyConfigured(
