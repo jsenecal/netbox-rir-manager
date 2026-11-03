@@ -16,12 +16,12 @@ From the `RIRConfig` list view, select rows and choose **Sync Selected**. The pl
 
 ### Scheduled
 
-`ScheduledRIRSyncJob` is registered as a NetBox system job at the daily interval. On each run it:
+`ScheduledRIRSyncJob` is registered as a NetBox system job that runs every [`sync_interval_hours`](../reference/settings.md#sync_interval_hours) hours, daily by default. On each run it:
 
 1. Iterates `RIRConfig.objects.filter(is_active=True)`.
 2. For each config, uses its **default key**. No user initiated the run, so no user's own key is borrowed; a config without a default key is skipped with a warning.
 3. Calls `sync_rir_config` once with that key.
-4. Queues the same per-aggregate prefix discovery as the manual sync (see [Networks](#3-networks-and-customers)), so reassignments made outside NetBox are picked up daily. Each `SyncPrefixesJob` uses the default key and runs as that key's owner.
+4. Queues the same per-aggregate prefix discovery as the manual sync (see [Networks](#3-networks-and-customers)), so reassignments made outside NetBox are picked up on the next run. Each `SyncPrefixesJob` uses the default key and runs as that key's owner.
 5. Logs failures per config and continues -- one failing config does not abort the rest.
 
 Inspect or trigger it manually from **System > Background Jobs**.

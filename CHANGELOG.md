@@ -53,8 +53,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of <address> failed" wording, and an unreachable ARIN is logged with the final
   period the user sees (#77).
 
+### Removed
+
+- The `enabled_backends` and `google_geocoding_api_key` settings. Neither was ever read:
+  ARIN is the only backend and the views, REST API and jobs use it directly, and
+  `geocoding_provider` only supports Nominatim. NetBox ignores unknown
+  `PLUGINS_CONFIG` keys, so configurations that still set them keep working.
+
 ### Fixed
 
+- The `top_level_menu` and `sync_interval_hours` settings now take effect. With
+  `top_level_menu` set to `False`, the plugin's pages are listed under NetBox's shared
+  **Plugins** menu instead of a top-level **RIR Manager** menu. `sync_interval_hours`
+  sets the hours between runs of the **Scheduled RIR Sync** (24 by default); a value
+  that is not a whole number of hours, at least 1, stops NetBox from starting with an
+  `ImproperlyConfigured` error. Restart NetBox and the RQ worker after changing either.
 - Documentation: every page in the navigation now exists. New reference pages cover
   settings, models, permissions, background jobs and backends, plus a user guide page
   for addresses and geocoding; nav entries whose content already lives on other pages

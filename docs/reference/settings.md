@@ -6,21 +6,29 @@ For a minimal setup and how to rotate the encryption key, see [Configuration](..
 
 ## Summary
 
-| Setting                    | Default       | Read by the plugin |
-|----------------------------|---------------|--------------------|
-| `auto_link_networks`       | `True`        | Yes                |
-| `encryption_key`           | `""`          | Yes                |
-| `api_retry_count`          | `3`           | Yes                |
-| `api_retry_backoff`        | `2`           | Yes                |
-| `geocoding_provider`       | `"nominatim"` | Yes                |
-| `top_level_menu`           | `True`        | No                 |
-| `sync_interval_hours`      | `24`          | No                 |
-| `enabled_backends`         | `["ARIN"]`    | No                 |
-| `google_geocoding_api_key` | `""`          | No                 |
+| Setting               | Default       |
+|-----------------------|---------------|
+| `top_level_menu`      | `True`        |
+| `sync_interval_hours` | `24`          |
+| `auto_link_networks`  | `True`        |
+| `encryption_key`      | `""`          |
+| `api_retry_count`     | `3`           |
+| `api_retry_backoff`   | `2`           |
+| `geocoding_provider`  | `"nominatim"` |
 
-The settings marked "No" are declared but no code reads them. Changing them has no effect in this release.
+## Settings
 
-## Settings in use
+### `top_level_menu`
+
+Default: `True`. Read by `netbox_rir_manager/navigation.py` when NetBox loads the plugin.
+
+With `True`, the plugin registers its own top-level **RIR Manager** menu, with its items grouped under **Configs**, **Resources** and **Operations**. With `False`, the same items are listed, without the groups, under the **RIR Manager** section of NetBox's shared **Plugins** menu. Restart NetBox after changing it.
+
+### `sync_interval_hours`
+
+Default: `24`. Read by `netbox_rir_manager/jobs.py` when the plugin loads, to register `ScheduledRIRSyncJob` as a NetBox system job.
+
+The number of hours between two runs of the scheduled sync. It must be a whole number of hours, at least `1`; any other value stops NetBox from starting with an `ImproperlyConfigured` error. The RQ worker schedules the job when it starts, so restart it after changing the value. If a run is already scheduled at the old interval, the worker replaces it with one at the new interval. See [Background Jobs](jobs.md#scheduled-rir-sync).
 
 ### `auto_link_networks`
 
@@ -53,21 +61,3 @@ Increase `api_retry_count` if transient network errors interrupt scheduled syncs
 Default: `"nominatim"`. Read by `_get_geocoding_service` in `netbox_rir_manager/services/geocoding.py`.
 
 `"nominatim"` selects OpenStreetMap Nominatim through `geopy`. It is the only provider implemented, and any other value also falls back to Nominatim. See [Addresses and Geocoding](../user-guide/addresses.md).
-
-## Declared but unused
-
-### `top_level_menu`
-
-Default: `True`. Not read. The plugin always registers **RIR Manager** as its own top-level menu (`netbox_rir_manager/navigation.py`).
-
-### `sync_interval_hours`
-
-Default: `24`. Not read. `ScheduledRIRSyncJob` is registered with a fixed daily interval; see [Background Jobs](jobs.md).
-
-### `enabled_backends`
-
-Default: `["ARIN"]`. Not read. Views and jobs construct the ARIN backend directly; see [Backends](backends.md).
-
-### `google_geocoding_api_key`
-
-Default: `""`. Not read. There is no Google geocoding provider.

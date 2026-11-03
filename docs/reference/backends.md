@@ -8,7 +8,7 @@ The plugin is laid out for several backends, but only ARIN is wired in:
 
 - `netbox_rir_manager/backends/base.py` defines the abstract `RIRBackend` interface.
 - `netbox_rir_manager/backends/__init__.py` keeps a registry: the `@register_backend` decorator adds a class to `BACKENDS` under its `name`, and `get_backend(name)` looks one up.
-- The views, REST API actions and jobs construct `ARINBackend` directly. Nothing looks a backend up from the registry or from the RIR of a config, and the `enabled_backends` setting is not read.
+- The views, REST API actions and jobs construct `ARINBackend` directly. Nothing looks a backend up from the registry or from the RIR of a config, and there is no setting to choose backends.
 
 Adding another RIR therefore takes more than a new `RIRBackend` subclass: the call sites must also choose the backend for each config. The sync also relies on `find_net`, which `ARINBackend` provides but `RIRBackend` does not declare.
 

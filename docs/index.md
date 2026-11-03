@@ -12,7 +12,7 @@ netbox-rir-manager bridges your NetBox IPAM data and the RIR's own database. Syn
 - **Auto-reassign on prefix changes**: when a NetBox `Prefix` gains a Site and Tenant, a background reassignment can be queued automatically.
 - **Ticket tracking**: reassignments, reallocations, and deletions that need RIR-side approval create an `RIRTicket` recording the ticket number, type and the status the RIR returned; writes the RIR processes immediately are recorded as a `success` sync log, with no ticket.
 - **Per-user API keys**: encrypted at rest with HKDF-derived Fernet, scoped to a single `RIRConfig`.
-- **Scheduled sync**: a daily system job (`ScheduledRIRSyncJob`) keeps RIR data current.
+- **Scheduled sync**: a recurring system job (`ScheduledRIRSyncJob`, daily by default) keeps RIR data current.
 - **Backend interface**: ARIN supported today via `pyregrws`, behind an abstract `RIRBackend` class; PRs welcome for RIPE, APNIC, LACNIC, AFRINIC.
 - **Address geocoding**: Site addresses are normalised into structured `RIRAddress` records using OpenStreetMap Nominatim.
 - **Full REST API** under `/api/plugins/rir-manager/` with custom action endpoints for write operations.

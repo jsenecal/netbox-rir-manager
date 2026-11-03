@@ -1,6 +1,6 @@
 # RIR Configs
 
-An **RIR Config** binds the plugin to a specific RIR account. It is the parent object every other plugin model hangs off of: user keys, synced organisations and contacts, networks, customers, sync logs, tickets, and the daily scheduled job all point at one `RIRConfig`.
+An **RIR Config** binds the plugin to a specific RIR account. It is the parent object every other plugin model hangs off of: user keys, synced organisations and contacts, networks, customers, sync logs, tickets, and the scheduled sync job all point at one `RIRConfig`.
 
 ## Fields
 

@@ -49,7 +49,7 @@ You can configure plugin behaviour at the same time. See [Configuration](configu
 ```python
 PLUGINS_CONFIG = {
     "netbox_rir_manager": {
-        "enabled_backends": ["ARIN"],
+        "sync_interval_hours": 12,
     },
 }
 ```
@@ -104,7 +104,7 @@ python manage.py shell -c "from netbox_rir_manager import __version__; print(__v
 
 ## Troubleshooting
 
-- **Plugin not visible in the menu**: confirm the `top_level_menu` setting is `True` (the default), the worker has been restarted, and your user has at least `view_rirconfig` permission.
+- **Plugin not visible in the menu**: with `top_level_menu` set to `True` (the default) the plugin has its own **RIR Manager** menu, and with `False` its items are under **Plugins**. Confirm NetBox has been restarted and your user has at least `view_rirconfig` permission.
 - **Migrations error referencing `ipam.RIR`**: NetBox 4.5+ is required. Earlier versions do not expose the `RIR` foreign key in the supported form.
 - **`encryption_key` warnings on first request**: this is normal until you set a value or accept the default `SECRET_KEY` fallback. See the warning in [Configuration](configuration.md#encryption-and-key-rotation).
-- **No background jobs running**: the RQ worker (`netbox-rq`) must be running for sync jobs and the daily `ScheduledRIRSyncJob` to fire.
+- **No background jobs running**: the RQ worker (`netbox-rq`) must be running for sync jobs and the `ScheduledRIRSyncJob` to fire.
