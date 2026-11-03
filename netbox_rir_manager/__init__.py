@@ -31,7 +31,9 @@ class NetBoxRIRManagerConfig(PluginConfig):
 
     def ready(self):
         super().ready()
-        from . import signals  # noqa: F401
+        # Importing jobs registers the @system_job schedule. rqworker sets up system jobs from the
+        # registry at startup, so a module only imported lazily (from views or signals) never gets scheduled.
+        from . import jobs, signals  # noqa: F401
 
         logger.info("%s plugin loaded", self.name)
 

@@ -1,3 +1,4 @@
+from core.api.serializers import JobSerializer
 from django.utils import timezone
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import status
@@ -30,6 +31,7 @@ from netbox_rir_manager.filtersets import (
     RIRTicketFilterSet,
     RIRUserKeyFilterSet,
 )
+from netbox_rir_manager.jobs import SyncRIRConfigJob
 from netbox_rir_manager.models import (
     RIRAddress,
     RIRConfig,
@@ -48,6 +50,25 @@ class RIRConfigViewSet(NetBoxModelViewSet):
     queryset = RIRConfig.objects.prefetch_related("tags")
     serializer_class = RIRConfigSerializer
     filterset_class = RIRConfigFilterSet
+
+    @action(detail=True, methods=["post"], url_path="sync")
+    def sync(self, request, pk=None):
+        """Queue a background sync of this config, run with the requesting user's own key.
+
+        Answers 202 with the queued core Job so a caller can poll /api/core/jobs/<id>/ for the outcome.
+        """
+        rir_config = self.get_object()
+        if not rir_config.resolve_key(request.user):
+            return Response(
+                {"detail": "No API key configured for this RIR config."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        job = SyncRIRConfigJob.enqueue(instance=rir_config, user=request.user)
+        return Response(
+            JobSerializer(job, context={"request": request}).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 class RIROrganizationViewSet(NetBoxModelViewSet):
