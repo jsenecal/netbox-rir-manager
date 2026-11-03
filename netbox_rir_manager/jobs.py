@@ -118,15 +118,8 @@ def _sync_organization(
     org_data = backend.get_organization(rir_config.org_handle)
     if org_data is None:
         log.warning(f"Failed to retrieve organization {rir_config.org_handle} from ARIN")
-        sync_log = RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="organization",
-            object_handle=rir_config.org_handle,
-            status="error",
-            message=f"Failed to retrieve organization {rir_config.org_handle}",
-        )
-        logs.append(sync_log)
+        message = f"Failed to retrieve organization {rir_config.org_handle}"
+        logs.append(RIRSyncLog.record(rir_config, "sync", "organization", rir_config.org_handle, "error", message))
         return logs, None
 
     # Build address data from org_data
@@ -191,15 +184,9 @@ def _sync_contacts(
         poc_data = backend.get_poc(handle)
         if poc_data is None:
             log.warning(f"Failed to retrieve POC {handle}")
-            sync_log = RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="sync",
-                object_type="contact",
-                object_handle=handle,
-                status="error",
-                message=f"Failed to retrieve POC {handle}",
+            logs.append(
+                RIRSyncLog.record(rir_config, "sync", "contact", handle, "error", f"Failed to retrieve POC {handle}")
             )
-            logs.append(sync_log)
             continue
 
         # Build address data from poc_data
@@ -264,14 +251,8 @@ def _sync_customer_for_net(
     cust_data = backend.get_customer(customer_handle)
     if cust_data is None:
         log.warning(f"Failed to retrieve customer {customer_handle}")
-        return RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="customer",
-            object_handle=customer_handle,
-            status="error",
-            message=f"Failed to retrieve customer {customer_handle}",
-        )
+        message = f"Failed to retrieve customer {customer_handle}"
+        return RIRSyncLog.record(rir_config, "sync", "customer", customer_handle, "error", message)
 
     reg_date = cust_data.get("registration_date")
     if reg_date:
