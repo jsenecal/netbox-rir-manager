@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- CI now runs on every pull request, including docs-only ones, so the
+  required lint, build and test checks always report and a docs-only PR can
+  merge without an admin bypass. A `changes` job detects docs-only PRs and the
+  test and build steps are skipped there, so each check passes in seconds.
 - **Breaking:** RIR operations a user initiates, including the automatic
   reassignment and removal an IPAM edit triggers, now run only with that user's own
   key, and the job runs as that user. Previously the automatic paths used the first
