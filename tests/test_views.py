@@ -657,16 +657,22 @@ class TestImmediateResultViews:
         assert RIRNetwork.objects.filter(handle="NET-CHILD-1").exists()
 
     @patch("netbox_rir_manager.views.ARINBackend")
-    def test_reallocate_without_ticket(self, mock_backend_cls, admin_client, networks):
-        from netbox_rir_manager.models import RIRTicket
+    def test_reallocate_without_ticket_links_child_net(self, mock_backend_cls, admin_client, networks):
+        from netbox_rir_manager.models import RIRNetwork, RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result()
+        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result(
+            "NET-REALLOC-1"
+        )
 
         response = admin_client.post(_action_url("reallocate", networks[0]), REALLOCATION)
 
         assert response.status_code == 302
         assert response.url == networks[0].get_absolute_url()
+        [(level, text)] = _messages(response)
+        assert level == "success"
+        assert "immediately" in text
         assert not RIRTicket.objects.exists()
+        assert RIRNetwork.objects.filter(handle="NET-REALLOC-1").count() == 1
 
     @patch("netbox_rir_manager.views.ARINBackend")
     def test_prefix_reassign_without_ticket_returns_to_prefix(
