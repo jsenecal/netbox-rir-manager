@@ -68,5 +68,5 @@ To inspect or trigger it manually, go to **System > Background Jobs** in NetBox 
 
 - [Syncing Resources](../user-guide/syncing.md) -- how the sync pipeline maps RIR data into NetBox.
 - [Write Operations](../user-guide/write-operations.md) -- reassign, reallocate, remove, and delete networks at the RIR.
-- [IPAM Integration](../user-guide/ipam-integration.md) -- the buttons and panels added to NetBox `Aggregate`, `Prefix`, and `Site` pages.
-- [Auto-Reassignment](../user-guide/auto-reassignment.md) -- the signal-driven workflow that reassigns prefixes automatically when they get a Site and Tenant.
+- [Addresses and Geocoding](../user-guide/addresses.md) -- the RIR Address panel on NetBox `Site` pages and how Site addresses feed reassignments.
+- [Automatic reassignment and removal](../user-guide/write-operations.md#automatic-reassignment-and-removal) -- the signal-driven workflow that reassigns prefixes automatically when they get a Site and Tenant.
