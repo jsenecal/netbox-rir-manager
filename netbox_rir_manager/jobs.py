@@ -697,7 +697,7 @@ class ReassignJob(JobRunner):
                     prefix=prefix,
                 )
             except ReassignmentError as exc:
-                self.logger.error(f"Reassignment of {prefix.prefix} failed: {exc}")
+                self.logger.error(f"{prefix.prefix}: {exc}")
                 self.job.data["status"] = "error"
                 self.job.data["message"] = str(exc)
                 self.job.save()

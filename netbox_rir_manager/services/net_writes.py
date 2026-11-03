@@ -22,8 +22,7 @@ def submit_reallocation(backend, parent, user_key, net):
         "reallocate",
         "network",
         parent.handle,
-        "Reallocation failed at ARIN",
-        log="Reallocation failed",
+        f"Reallocation of {net['start_address']} failed at ARIN",
     )
     return record_arin_result(
         result,

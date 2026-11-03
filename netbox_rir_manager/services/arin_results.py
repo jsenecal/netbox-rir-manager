@@ -119,8 +119,7 @@ def sync_log(rir_config, operation, object_type, handle, status, message):
 
 def data_error(rir_config, operation, object_type, handle, exc, error_cls=ARINDataError):
     """Log a request-data problem the backend reported (RIRDataError) and wrap it for the caller."""
-    sync_log(rir_config, operation, object_type, handle, "error", str(exc))
-    return error_cls(str(exc))
+    return _logged_error(rir_config, operation, object_type, handle, str(exc), error_cls)
 
 
 def arin_write(
@@ -131,29 +130,33 @@ def arin_write(
     handle,
     message,
     *,
-    log=None,
     error_cls=ARINWriteError,
     data_error_cls=ARINDataError,
 ):
     """Run a backend write, call(), and return its result; log and raise if it did not succeed.
 
-    message is the user's message without its final period ("Reallocation failed at ARIN"); log
-    is the sync log's wording, message by default. ARIN's reason, when it refused the write
-    (RIRRequestError), is appended to both; a result of None or False means ARIN could not be
-    reached. Data the backend cannot send (RIRDataError) raises data_error_cls instead.
+    message is the user's message without its final period ("Failed to delete network at ARIN").
+    ARIN's reason, when it refused the write (RIRRequestError), is appended to it; a result of
+    None or False means ARIN could not be reached. The sync log records the same text the user
+    sees. Data the backend cannot send (RIRDataError) raises data_error_cls instead.
     """
     try:
         result = call()
     except RIRDataError as exc:
         raise data_error(rir_config, operation, object_type, handle, exc, data_error_cls) from exc
     except RIRRequestError as exc:
-        raise _write_failure(rir_config, operation, object_type, handle, message, log, error_cls, exc) from exc
+        raise _write_failure(rir_config, operation, object_type, handle, message, error_cls, exc) from exc
     if result is None or result is False:
-        raise _write_failure(rir_config, operation, object_type, handle, message, log, error_cls)
+        raise _write_failure(rir_config, operation, object_type, handle, message, error_cls)
     return result
 
 
-def _write_failure(rir_config, operation, object_type, handle, message, log, error_cls, refusal=None):
-    detail = f": {refusal}" if refusal else ""
-    sync_log(rir_config, operation, object_type, handle, "error", f"{log or message}{detail}")
-    return error_cls(f"{message}{detail or '.'}")
+def _write_failure(rir_config, operation, object_type, handle, message, error_cls, refusal=None):
+    text = f"{message}: {refusal}" if refusal else f"{message}."
+    return _logged_error(rir_config, operation, object_type, handle, text, error_cls)
+
+
+def _logged_error(rir_config, operation, object_type, handle, text, error_cls):
+    """Write text to an error sync log and return error_cls(text), so the user sees what was logged."""
+    sync_log(rir_config, operation, object_type, handle, "error", text)
+    return error_cls(text)

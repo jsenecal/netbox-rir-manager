@@ -135,13 +135,13 @@ class ARINBackend(RIRBackend):
     # ------------------------------------------------------------------
 
     def update_network(self, handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
-        net = self._call_with_retry(self.api.net.from_handle, handle)
-        if net is None or isinstance(net, Error):
+        net = self._write_call(self.api.net.from_handle, handle)
+        if net is None:
             return None
         if "net_name" in data:
             net.net_name = data["net_name"]
-        result = self._call_with_retry(net.save)
-        if result is None or isinstance(result, Error):
+        result = self._write_call(net.save)
+        if result is None:
             return None
         return self._net_to_dict(result)
 
