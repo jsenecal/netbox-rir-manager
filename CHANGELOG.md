@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Aggregate sync now writes a `skipped` sync log row when ARIN has no Net for an
   aggregate's range, in the scheduled and per-config sync as well as the manual
   Aggregate **Sync** button.
+- The `reassign`, `reallocate` and `delete-arin` API actions answer a result ARIN
+  processed immediately, without a ticket, with `200` and
+  `{"detail", "recorded", "ticket": null, "net"}` (`net` is the linked child
+  network, if any) instead of `201` and a ticket; `recorded` is `false` when ARIN
+  made the change but NetBox could not record it. Results with a ticket still
+  return `201` and the ticket (#56).
 
 ### Fixed
 
@@ -53,6 +59,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the reassignment never got an RIR network, with nothing in the sync logs.
   Every place that computes a prefix's address range now uses one helper that
   returns the real last address for any prefix length (#55).
+- Writes ARIN processes immediately, without opening a ticket (NET deletes and
+  simple reassignments, for example), no longer fail. The plugin stored a ticket
+  with an empty number for the first one, so every later one hit the unique ticket
+  number after ARIN had already made the change: the API returned a 500, the UI a
+  server error, and NetBox kept no record of a change that had happened (#56).
+  Such results are now recorded as a `success` sync log only, and no ticket is
+  created; the Reassign, Reallocate and Delete actions return to the network (or
+  prefix) page with a message instead of opening a ticket. If NetBox fails to
+  record a change ARIN has accepted, the change is no longer reported as failed:
+  the error is logged (and written to an `error` sync log when possible) and the
+  caller is told the change succeeded at ARIN. Tickets with an empty number left
+  by earlier versions are harmless and can be deleted or renamed.
 - The Prefix **Reassign** form now submits exactly what it shows, immediately, with
   the user's own key. It used to discard the form, queue the automatic reassign job
   (which derived its own values), and fail unless the parent allocation had
