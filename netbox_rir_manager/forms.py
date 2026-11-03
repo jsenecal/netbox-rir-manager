@@ -8,6 +8,7 @@ from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField,
 from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import BulkEditNullBooleanSelect
 
+from netbox_rir_manager.fields import NetNameFormField
 from netbox_rir_manager.models import (
     RIRAddress,
     RIRConfig,
@@ -284,7 +285,9 @@ class RIRNetworkReassignForm(forms.Form):
         max_length=50, required=False, help_text="Recipient ORG handle for detailed reassignment"
     )
     # Common fields
-    net_name = forms.CharField(max_length=100, required=False, help_text="Name for the reassigned subnet")
+    net_name = NetNameFormField(
+        required=False, help_text="Name for the reassigned subnet: letters, numbers, hyphens and spaces"
+    )
     start_address = forms.GenericIPAddressField(help_text="Start IP of the subnet to reassign")
     end_address = forms.GenericIPAddressField(help_text="End IP of the subnet to reassign")
 
@@ -304,6 +307,8 @@ class RIRNetworkReallocateForm(forms.Form):
     """Form for reallocating a network to an ORG."""
 
     org_handle = forms.CharField(max_length=50, help_text="Recipient ORG handle")
-    net_name = forms.CharField(max_length=100, required=False, help_text="Name for the reallocated subnet")
+    net_name = NetNameFormField(
+        required=False, help_text="Name for the reallocated subnet: letters, numbers, hyphens and spaces"
+    )
     start_address = forms.GenericIPAddressField(help_text="Start IP of the subnet to reallocate")
     end_address = forms.GenericIPAddressField(help_text="End IP of the subnet to reallocate")

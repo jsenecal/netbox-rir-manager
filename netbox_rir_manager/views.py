@@ -63,6 +63,7 @@ from netbox_rir_manager.models import (
     RIRTicket,
     RIRUserKey,
 )
+from netbox_rir_manager.net_names import build_net_name
 from netbox_rir_manager.tables import (
     RIRAddressTable,
     RIRConfigTable,
@@ -797,9 +798,8 @@ class PrefixReassignView(LoginRequiredMixin, View):
                 initial["postal_code"] = site_address.postal_code
                 initial["country"] = site_address.country
 
-        # Generate net_name from tenant + prefix
         if prefix.tenant:
-            initial["net_name"] = f"{prefix.tenant.name}-{prefix.prefix}"
+            initial["net_name"] = build_net_name(prefix.tenant.name, prefix.prefix)
 
         form = RIRNetworkReassignForm(initial=initial)
 

@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Generated net names now follow ARIN's rules (up to 50 ASCII letters, numbers and
+  hyphens). The automatic reassignment job and the prefix Reassign form built names
+  like `Test Tenant-10.0.1.0/29`, which ARIN rejects; they now produce
+  `TEST-TENANT-10-0-1-0-29`, shortening the tenant part when needed and keeping the
+  prefix whole. User-supplied names on the Reassign and Reallocate forms and API
+  actions are validated against the same rules, with a 50-character limit instead
+  of 100.
 - Aggregate sync no longer links an aggregate to whatever Net ARIN reports as most
   specific for its range. The plugin now walks up the Net's parent chain to the Net
   registered to the config's `org_handle`, and skips (with a `skipped` sync log naming

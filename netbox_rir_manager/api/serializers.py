@@ -12,6 +12,16 @@ from netbox_rir_manager.models import (
     RIRTicket,
     RIRUserKey,
 )
+from netbox_rir_manager.net_names import ARIN_NET_NAME_MAX_LENGTH, validate_net_name
+
+
+class NetNameField(serializers.CharField):
+    """Serializer field for a net name sent to ARIN."""
+
+    default_validators = [validate_net_name]
+
+    def __init__(self, **kwargs):
+        super().__init__(max_length=ARIN_NET_NAME_MAX_LENGTH, **kwargs)
 
 
 class RIRConfigSerializer(NetBoxModelSerializer):
@@ -232,7 +242,7 @@ class NetworkReassignSerializer(serializers.Serializer):
     postal_code = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
     country = serializers.CharField(max_length=2, required=False, allow_blank=True, default="")
     org_handle = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
-    net_name = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    net_name = NetNameField(required=False, allow_blank=True, default="")
     start_address = serializers.IPAddressField()
     end_address = serializers.IPAddressField()
 
@@ -249,6 +259,6 @@ class NetworkReassignSerializer(serializers.Serializer):
 
 class NetworkReallocateSerializer(serializers.Serializer):
     org_handle = serializers.CharField(max_length=50)
-    net_name = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    net_name = NetNameField(required=False, allow_blank=True, default="")
     start_address = serializers.IPAddressField()
     end_address = serializers.IPAddressField()

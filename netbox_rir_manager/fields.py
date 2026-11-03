@@ -10,6 +10,8 @@ from django.conf import settings
 from django.core.validators import URLValidator
 from django.db import models
 
+from netbox_rir_manager.net_names import ARIN_NET_NAME_MAX_LENGTH, validate_net_name
+
 _FERNET_PREFIX = "$FERNET$"
 _fernet_instance: Fernet | None = None
 
@@ -79,6 +81,15 @@ class LenientURLFormField(forms.URLField):
     """Form URLField that accepts hostnames without a TLD."""
 
     default_validators = [LenientURLValidator()]
+
+
+class NetNameFormField(forms.CharField):
+    """Form field for a net name sent to ARIN."""
+
+    default_validators = [validate_net_name]
+
+    def __init__(self, **kwargs):
+        super().__init__(max_length=ARIN_NET_NAME_MAX_LENGTH, **kwargs)
 
 
 class LenientURLField(models.URLField):

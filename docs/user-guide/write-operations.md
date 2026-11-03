@@ -21,3 +21,9 @@ Both are opt-in per parent allocation: set **Auto reassign** on the `RIRNetwork`
 Both run with the key of the user who edited the prefix; see [Which key an operation uses](user-api-keys.md#which-key-an-operation-uses).
 
 Without the opt-in, deleting or deactivating a prefix never touches the RIR: the network is left in place and a `skipped` sync log row (operation `remove`) records the prefix change. Parent allocations themselves (networks linked to an aggregate) are never removed automatically.
+
+## Network names
+
+ARIN accepts net names of up to 50 ASCII letters, numbers, hyphens and spaces. The Reassign and Reallocate forms and API actions reject anything else before contacting ARIN.
+
+Names the plugin generates (the automatic reassignment job, and the pre-filled name on a prefix's Reassign form) follow ARIN's own convention: the tenant name and the prefix, uppercased, with accents stripped and every other character turned into a hyphen -- `Adaptiv Networks Inc.` and `50.21.160.32/29` become `ADAPTIV-NETWORKS-INC-50-21-160-32-29`. When that would exceed 50 characters, the tenant part is shortened; the prefix is always kept whole.
