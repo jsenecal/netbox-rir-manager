@@ -816,3 +816,27 @@ class TestChangelogEntries:
 
         # No ObjectChange should be created since user is not a real User
         assert ObjectChange.objects.count() == initial_count
+
+
+def test_plugin_ready_registers_scheduled_sync(monkeypatch):
+    """Loading the plugin registers the daily sync, not only once something imports jobs.py (issue #54).
+
+    rqworker schedules system jobs from the registry at startup, before any view or signal
+    handler has imported the jobs module lazily.
+    """
+    import sys
+
+    from django.apps import apps
+    from netbox.registry import registry
+
+    import netbox_rir_manager
+    import netbox_rir_manager.jobs  # noqa: F401 -- loaded first so monkeypatch can restore it
+
+    monkeypatch.delitem(sys.modules, "netbox_rir_manager.jobs")
+    monkeypatch.delattr(netbox_rir_manager, "jobs")
+
+    with patch.dict(registry["system_jobs"], clear=True), patch("netbox.plugins.PluginConfig.ready"):
+        apps.get_app_config("netbox_rir_manager").ready()
+        registered = [cls.__name__ for cls in registry["system_jobs"]]
+
+    assert registered == ["ScheduledRIRSyncJob"]
