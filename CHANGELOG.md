@@ -66,6 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The daily **Scheduled RIR Sync** never ran: its module was only imported lazily, so the
   `@system_job` registration had not happened when `rqworker` scheduled system jobs at
   startup. The plugin now imports its jobs when it loads (#54).
+- The prefix and aggregate syncs skipped every IPv4 /31 and /32 (and IPv6 /127 and
+  /128): the ARIN lookup was sent `None` as the end address, so it found nothing
+  and the reassignment never got an RIR network, with nothing in the sync logs.
+  Every place that computes a prefix's address range now uses one helper that
+  returns the real last address for any prefix length (#55).
 - Writes ARIN processes immediately, without opening a ticket (NET deletes and
   simple reassignments, for example), no longer fail. The plugin stored a ticket
   with an empty number for the first one, so every later one hit the unique ticket
