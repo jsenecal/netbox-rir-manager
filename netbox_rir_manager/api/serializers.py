@@ -238,7 +238,12 @@ class NetworkReassignSerializer(serializers.Serializer):
     customer_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     street_address = serializers.CharField(required=False, allow_blank=True, default="")
     city = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
-    state_province = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    state_province = serializers.CharField(
+        max_length=RIRAddress.STATE_PROVINCE_MAX_LENGTH,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
     postal_code = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
     country = serializers.CharField(max_length=2, required=False, allow_blank=True, default="")
     org_handle = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")

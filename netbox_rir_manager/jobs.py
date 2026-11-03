@@ -581,7 +581,7 @@ class ReassignJob(JobRunner):
     def run(self, *args, **kwargs):
         from ipam.models import Prefix
 
-        from netbox_rir_manager.services.geocoding import resolve_site_address
+        from netbox_rir_manager.services.geocoding import SubdivisionCodeError, resolve_site_address
         from netbox_rir_manager.services.reassignment import ReassignmentError, prefix_site, submit_reassignment
 
         prefix = Prefix.objects.get(pk=kwargs.get("prefix_id"))
@@ -674,7 +674,20 @@ class ReassignJob(JobRunner):
                 # Resolve site address
                 site_address = RIRAddress.get_for_site(site)
                 if not site_address:
-                    site_address = resolve_site_address(site)
+                    try:
+                        site_address = resolve_site_address(site)
+                    except SubdivisionCodeError as exc:
+                        # Stop before anything is sent to ARIN: the customer's address is unusable.
+                        RIRSyncLog.record(
+                            rir_config,
+                            "reassign",
+                            "customer",
+                            parent_network.handle,
+                            "error",
+                            f"{prefix.prefix}: {exc}",
+                        )
+                        self._fail(prefix, str(exc))
+                        return
 
                 if not site_address:
                     self.job.data["status"] = "error"
@@ -697,10 +710,7 @@ class ReassignJob(JobRunner):
                     prefix=prefix,
                 )
             except ReassignmentError as exc:
-                self.logger.error(f"{prefix.prefix}: {exc}")
-                self.job.data["status"] = "error"
-                self.job.data["message"] = str(exc)
-                self.job.save()
+                self._fail(prefix, str(exc))
                 return
 
             if outcome.recorded:
@@ -712,6 +722,13 @@ class ReassignJob(JobRunner):
             if outcome.ticket:
                 self.job.data["ticket_number"] = outcome.ticket.ticket_number
             self.job.save()
+
+    def _fail(self, prefix, message):
+        """Log message against the prefix and end the job with it as its error."""
+        self.logger.error(f"{prefix.prefix}: {message}")
+        self.job.data["status"] = "error"
+        self.job.data["message"] = message
+        self.job.save()
 
 
 class RemoveNetworkJob(JobRunner):
