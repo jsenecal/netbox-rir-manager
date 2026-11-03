@@ -11,8 +11,9 @@ def reallocation_request(data):
 def submit_reallocation(backend, parent, user_key, net):
     """Reallocate part of parent to another org at ARIN and record the outcome.
 
-    net comes from reallocation_request. Returns the ARINOutcome of record_arin_result, or
-    raises ARINWriteError after logging the failure.
+    net comes from reallocation_request. The child net ARIN returns is synced and linked, as
+    for a reassignment. Returns the ARINOutcome of record_arin_result, or raises
+    ARINWriteError after logging the failure.
     """
     result = backend.reallocate_network(parent.handle, net)
     if result is None:
@@ -25,6 +26,7 @@ def submit_reallocation(backend, parent, user_key, net):
         operation="reallocate",
         action="Reallocation",
         ticket_type="IPV4_REALLOCATE",
+        link_net=True,
     )
 
 

@@ -68,6 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the error is logged (and written to an `error` sync log when possible) and the
   caller is told the change succeeded at ARIN. Tickets with an empty number left
   by earlier versions are harmless and can be deleted or renamed.
+- Reallocations now link the new child network ARIN returns, as reassignments do.
+  The `reallocate` API action answered a result ARIN processed immediately with
+  `"net": null`, and NetBox had no record of the child network until a later prefix
+  sync found it at ARIN (#67).
 - The Prefix **Reassign** form now submits exactly what it shows, immediately, with
   the user's own key. It used to discard the form, queue the automatic reassign job
   (which derived its own values), and fail unless the parent allocation had
