@@ -798,25 +798,50 @@ class TestChangelogEntries:
         assert change.user == default_key.user
 
 
-def test_plugin_ready_registers_scheduled_sync(monkeypatch):
-    """Loading the plugin registers the daily sync, not only once something imports jobs.py.
+def test_plugin_ready_registers_scheduled_sync(reload_plugin_module):
+    """Loading the plugin registers the scheduled sync, not only once something imports jobs.py.
 
     rqworker schedules system jobs from the registry at startup, before any view or signal
     handler has imported the jobs module lazily.
     """
-    import sys
-
     from django.apps import apps
     from netbox.registry import registry
 
-    import netbox_rir_manager
-    import netbox_rir_manager.jobs  # noqa: F401 -- loaded first so monkeypatch can restore it
-
-    monkeypatch.delitem(sys.modules, "netbox_rir_manager.jobs")
-    monkeypatch.delattr(netbox_rir_manager, "jobs")
+    reload_plugin_module("jobs", load=False)
 
     with patch.dict(registry["system_jobs"], clear=True), patch("netbox.plugins.PluginConfig.ready"):
         apps.get_app_config("netbox_rir_manager").ready()
         registered = [cls.__name__ for cls in registry["system_jobs"]]
 
     assert registered == ["ScheduledRIRSyncJob"]
+
+
+def test_scheduled_sync_interval_defaults_to_daily():
+    from netbox_rir_manager.jobs import scheduled_sync_interval
+
+    assert scheduled_sync_interval() == 1440
+
+
+@pytest.mark.parametrize("hours", [0, "24", True])
+def test_scheduled_sync_interval_rejects_invalid_values(plugin_settings, hours):
+    from django.core.exceptions import ImproperlyConfigured
+
+    from netbox_rir_manager.jobs import scheduled_sync_interval
+
+    plugin_settings(sync_interval_hours=hours)
+
+    with pytest.raises(ImproperlyConfigured, match="sync_interval_hours"):
+        scheduled_sync_interval()
+
+
+def test_scheduled_sync_registered_with_configured_interval(plugin_settings, reload_plugin_module):
+    """The system job is registered with sync_interval_hours, converted to minutes."""
+    from netbox.registry import registry
+
+    plugin_settings(sync_interval_hours=6)
+
+    with patch.dict(registry["system_jobs"], clear=True):
+        reload_plugin_module("jobs")
+        intervals = {cls.__name__: kwargs["interval"] for cls, kwargs in registry["system_jobs"].items()}
+
+    assert intervals == {"ScheduledRIRSyncJob": 360}

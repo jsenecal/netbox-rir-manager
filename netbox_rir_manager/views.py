@@ -714,7 +714,7 @@ class SiteAddressResolveModalView(LoginRequiredMixin, View):
         candidates = resolve_site_address_candidates(site)
 
         # Pre-fill search field based on which source produced results:
-        # reverse geocode from coords → show coords, forward geocode → show address
+        # reverse geocode from coords -> show coords, forward geocode -> show address
         if site.latitude and site.longitude:
             search_query = f"{site.latitude}, {site.longitude}"
         elif site.physical_address:

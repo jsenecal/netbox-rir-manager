@@ -27,9 +27,9 @@
         <div class="list-group-item">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
-                    <strong>{{ c.street_address|default:"—" }}</strong>,
-                    {{ c.city|default:"—" }},
-                    {{ c.state_province|default:"—" }}
+                    <strong>{{ c.street_address|default:"&mdash;" }}</strong>,
+                    {{ c.city|default:"&mdash;" }},
+                    {{ c.state_province|default:"&mdash;" }}
                     {{ c.postal_code|default:"" }}
                     <span class="badge text-bg-secondary">{{ c.country }}</span>
                     {% if c.display_name %}

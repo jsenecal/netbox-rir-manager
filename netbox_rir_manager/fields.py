@@ -9,6 +9,7 @@ from django import forms
 from django.conf import settings
 from django.core.validators import URLValidator
 from django.db import models
+from netbox.plugins import get_plugin_config
 
 from netbox_rir_manager.net_names import ARIN_NET_NAME_MAX_LENGTH, validate_net_name
 
@@ -19,8 +20,7 @@ _fernet_instance: Fernet | None = None
 def _get_fernet() -> Fernet:
     global _fernet_instance
     if _fernet_instance is None:
-        plugin_config = getattr(settings, "PLUGINS_CONFIG", {}).get("netbox_rir_manager", {})
-        secret = plugin_config.get("encryption_key") or settings.SECRET_KEY
+        secret = get_plugin_config("netbox_rir_manager", "encryption_key") or settings.SECRET_KEY
         derived = HKDF(
             algorithm=SHA256(),
             length=32,

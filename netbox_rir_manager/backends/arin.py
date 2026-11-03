@@ -57,11 +57,10 @@ class ARINBackend(RIRBackend):
         return cls(api_key=user_key.api_key, base_url=user_key.rir_config.api_url or None)
 
     def _call_with_retry(self, func, *args, **kwargs):
-        from django.conf import settings as django_settings
+        from netbox.plugins import get_plugin_config
 
-        plugin_config = django_settings.PLUGINS_CONFIG.get("netbox_rir_manager", {})
-        max_attempts = plugin_config.get("api_retry_count", 3)
-        backoff = plugin_config.get("api_retry_backoff", 2)
+        max_attempts = get_plugin_config("netbox_rir_manager", "api_retry_count")
+        backoff = get_plugin_config("netbox_rir_manager", "api_retry_backoff")
 
         try:
             for attempt in Retrying(

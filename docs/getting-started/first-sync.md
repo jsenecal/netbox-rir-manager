@@ -60,7 +60,7 @@ Visiting an `Aggregate` or `Prefix` detail page in NetBox now shows an **RIR Net
 
 ## Step 5 (optional): Schedule recurring syncs
 
-The plugin registers `ScheduledRIRSyncJob` as a NetBox system job at the daily interval. It iterates every active `RIRConfig` and runs `sync_rir_config` for each with the config's **default key**, then queues the per-aggregate prefix discovery as the **Sync** button does. Set it by editing the config and choosing one of its keys as **Default key**; a config without one, or whose default key belongs to a deactivated user, is skipped. Changes the scheduled sync makes are attributed to the default key's owner in NetBox's change log. The worker picks the job up after restart.
+The plugin registers `ScheduledRIRSyncJob` as a NetBox system job that runs daily by default; set [`sync_interval_hours`](../reference/settings.md#sync_interval_hours) to change the interval. It iterates every active `RIRConfig` and runs `sync_rir_config` for each with the config's **default key**, then queues the per-aggregate prefix discovery as the **Sync** button does. Set it by editing the config and choosing one of its keys as **Default key**; a config without one, or whose default key belongs to a deactivated user, is skipped. Changes the scheduled sync makes are attributed to the default key's owner in NetBox's change log. The worker picks the job up after restart.
 
 To inspect or trigger it manually, go to **System > Background Jobs** in NetBox and look for `Scheduled RIR Sync`.
 
