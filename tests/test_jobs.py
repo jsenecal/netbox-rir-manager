@@ -409,7 +409,7 @@ class TestRIRSyncJob:
     def test_sync_queries_last_address_of_host_aggregate(
         self, mock_backend_class, rir_config, rir, prefix, expected_range
     ):
-        """A /31 or /32 aggregate is looked up by its real last address, not "None" (#55)."""
+        """A /31 or /32 aggregate is looked up by its real last address, not "None"."""
         from ipam.models import Aggregate
 
         from netbox_rir_manager.jobs import sync_rir_config
@@ -445,7 +445,7 @@ class TestSyncPrefixesJob:
     def test_discovers_host_prefix_reassignment(
         self, mock_backend_class, rir_user_key, prefix_under_parent, prefix, expected_range
     ):
-        """/31 and /32 child prefixes are looked up by their real last address and synced (#55)."""
+        """/31 and /32 child prefixes are looked up by their real last address and synced."""
         from netbox_rir_manager.jobs import SyncPrefixesJob
         from netbox_rir_manager.models import RIRNetwork
 
