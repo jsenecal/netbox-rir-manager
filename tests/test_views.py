@@ -612,6 +612,66 @@ class TestPrefixReassignView:
         assert response.context["form"].initial["net_name"] == "TENANT-NAME-198-51-100-16-28"
         assert response.context["parent_network"] == setup["parent"]
 
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_overlong_state_is_refused_before_arin(self, mock_backend_cls, admin_client, setup):
+        """Issue #83: a state that cannot be stored never reaches ARIN, which would orphan the customer."""
+        response = self._post(
+            admin_client,
+            setup["prefix"],
+            reassignment_type="simple",
+            customer_name="Cust",
+            city="Town",
+            country="DE",
+            state_province="North Rhine-Westphalia",
+        )
+
+        assert response.status_code == 200
+        assert "state_province" in response.context["form"].errors
+        mock_backend_cls.from_rir_config.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestSiteAddressResolve:
+    """Issue #83: a candidate without a subdivision code is shown with the error and cannot be saved."""
+
+    MESSAGE = (
+        "Could not determine the ISO 3166-2 subdivision code for &#x27;North Rhine-Westphalia&#x27;; "
+        "enter it on the Site&#x27;s RIR address."
+    )
+
+    @pytest.fixture
+    def site(self):
+        from dcim.models import Site
+
+        return Site.objects.create(name="Site R", slug="site-r", physical_address="1 Main Street, Town")
+
+    @patch("netbox_rir_manager.services.geocoding.NominatimGeocoder._get_geocoder")
+    def test_modal_shows_error_instead_of_select(self, mock_get_geocoder, admin_client, site):
+        from types import SimpleNamespace
+
+        address = {"country_code": "de", "city": "Town", "state": "North Rhine-Westphalia"}
+        mock_get_geocoder.return_value.geocode.return_value = [SimpleNamespace(raw={"address": address})]
+
+        response = admin_client.get(reverse("plugins:netbox_rir_manager:site_resolve_address", args=[site.pk]))
+
+        content = response.content.decode()
+        assert self.MESSAGE in content
+        assert reverse("plugins:netbox_rir_manager:site_select_address", args=[site.pk]) not in content
+
+    def test_select_refuses_overlong_state(self, admin_client, site):
+        from netbox_rir_manager.models import RIRAddress
+
+        existing = RIRAddress.objects.create(site=site, city="Old", country="DE")
+        response = admin_client.post(
+            reverse("plugins:netbox_rir_manager:site_select_address", args=[site.pk]),
+            {"city": "Town", "country": "DE", "state_province": "North Rhine-Westphalia"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["HX-Retarget"] == "#site-address-resolve-error"
+        assert self.MESSAGE in response.content.decode()
+        assert list(RIRAddress.objects.filter(site=site)) == [existing]
+
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("rir_user_key")

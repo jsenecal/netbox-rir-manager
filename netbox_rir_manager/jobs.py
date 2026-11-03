@@ -570,7 +570,7 @@ class ReassignJob(JobRunner):
         from ipam.models import Prefix
 
         from netbox_rir_manager.models import RIRUserKey
-        from netbox_rir_manager.services.geocoding import resolve_site_address
+        from netbox_rir_manager.services.geocoding import SubdivisionCodeError, resolve_site_address
         from netbox_rir_manager.services.reassignment import ReassignmentError, prefix_site, submit_reassignment
 
         prefix_id = kwargs.get("prefix_id")
@@ -668,7 +668,11 @@ class ReassignJob(JobRunner):
                 # Resolve site address
                 site_address = RIRAddress.get_for_site(site)
                 if not site_address:
-                    site_address = resolve_site_address(site)
+                    try:
+                        site_address = resolve_site_address(site)
+                    except SubdivisionCodeError as exc:
+                        self._fail_without_customer(rir_config, parent_network, prefix, str(exc))
+                        return
 
                 if not site_address:
                     self.job.data["status"] = "error"
@@ -706,6 +710,21 @@ class ReassignJob(JobRunner):
             if outcome.ticket:
                 self.job.data["ticket_number"] = outcome.ticket.ticket_number
             self.job.save()
+
+    def _fail_without_customer(self, rir_config, parent_network, prefix, message):
+        """Stop before anything is sent to ARIN because the customer's address is unusable."""
+        self.logger.error(f"{prefix.prefix}: {message}")
+        RIRSyncLog.objects.create(
+            rir_config=rir_config,
+            operation="reassign",
+            object_type="customer",
+            object_handle=parent_network.handle,
+            status="error",
+            message=f"{prefix.prefix}: {message}",
+        )
+        self.job.data["status"] = "error"
+        self.job.data["message"] = message
+        self.job.save()
 
 
 class RemoveNetworkJob(JobRunner):

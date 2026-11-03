@@ -65,6 +65,7 @@ from netbox_rir_manager.models import (
 )
 from netbox_rir_manager.net_names import build_net_name
 from netbox_rir_manager.services.arin_results import ARINWriteError
+from netbox_rir_manager.services.geocoding import subdivision_code_error
 from netbox_rir_manager.services.net_writes import (
     reallocation_request,
     submit_net_delete,
@@ -784,6 +785,18 @@ class SiteAddressSelectView(LoginRequiredMixin, View):
             raw_geocode = json.loads(raw_geocode_str)
         except (json.JSONDecodeError, TypeError):
             raw_geocode = {}
+
+        # The dialog offers no Select for a candidate without a subdivision code; this refuses a
+        # posted value that still cannot be stored, before the existing address is replaced.
+        if len(state_province) > RIRAddress._meta.get_field("state_province").max_length:
+            response = render(
+                request,
+                "netbox_rir_manager/htmx/site_address_resolve_error.html",
+                {"message": subdivision_code_error(state_province)},
+            )
+            response.headers["HX-Retarget"] = "#site-address-resolve-error"
+            response.headers["HX-Reswap"] = "innerHTML"
+            return response
 
         # Delete existing site-level address (not location-specific ones)
         RIRAddress.objects.filter(site=site, location__isnull=True).delete()

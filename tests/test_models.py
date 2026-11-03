@@ -720,3 +720,21 @@ class TestDefaultKeyMigration:
         single.refresh_from_db()
         assert rir_config.default_key is None  # two keys: an administrator must choose
         assert single.default_key == single_key
+
+
+@pytest.mark.django_db
+class TestRIRAddressStateProvince:
+    def test_overlong_state_is_refused_with_one_clear_message(self):
+        """Issue #83: a state name instead of a code fails validation instead of reaching the database."""
+        from django.core.exceptions import ValidationError
+
+        from netbox_rir_manager.models import RIRAddress
+
+        address = RIRAddress(city="Town", country="DE", state_province="North Rhine-Westphalia")
+        with pytest.raises(ValidationError) as excinfo:
+            address.full_clean()
+
+        assert excinfo.value.message_dict["state_province"] == [
+            "'North Rhine-Westphalia' is not an ISO 3166-2 subdivision code. Enter the code without "
+            "the country prefix, such as NY, QC or NW (at most 10 characters)."
+        ]

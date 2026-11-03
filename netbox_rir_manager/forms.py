@@ -277,7 +277,11 @@ class RIRNetworkReassignForm(forms.Form):
     customer_name = forms.CharField(max_length=255, required=False, help_text="Customer/recipient name")
     street_address = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False)
     city = forms.CharField(max_length=100, required=False)
-    state_province = forms.CharField(max_length=100, required=False)
+    state_province = forms.CharField(
+        max_length=RIRAddress._meta.get_field("state_province").max_length,
+        required=False,
+        help_text="ISO 3166-2 subdivision code without the country prefix (e.g. NY, QC)",
+    )
     postal_code = forms.CharField(max_length=20, required=False)
     country = forms.CharField(max_length=2, required=False, help_text="ISO 3166-1 two-letter code")
     # Detailed reassignment fields

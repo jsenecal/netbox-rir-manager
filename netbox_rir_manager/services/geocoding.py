@@ -14,6 +14,21 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Nominatim addressdetails keys holding the full ISO 3166-2 code ("DE-NW"), in order of preference.
+# lvl4 is the state/province level that the "state" name describes.
+NOMINATIM_ISO_KEYS = ("ISO3166-2-lvl4", "ISO3166-2-lvl6")
+
+
+def subdivision_code_error(state_name: str) -> str:
+    """The user-facing message for a geocoded state/province with no known ISO 3166-2 code."""
+    return (
+        f"Could not determine the ISO 3166-2 subdivision code for '{state_name}'; enter it on the Site's RIR address."
+    )
+
+
+class SubdivisionCodeError(ValueError):
+    """Geocoding found a state/province but not its ISO 3166-2 code, so the address cannot be saved."""
+
 
 @dataclass
 class GeocodingResult:
@@ -21,10 +36,18 @@ class GeocodingResult:
 
     street_address: str
     city: str
-    state_province: str  # ISO-3166-2 subdivision code (e.g. "NY", "QC")
+    state_province: str  # ISO-3166-2 subdivision code (e.g. "NY", "QC"), empty when unknown
     postal_code: str
     country: str  # ISO-3166-1 alpha-2 (e.g. "US", "CA")
     raw: dict
+    state_name: str = ""  # The state/province name as the geocoder returned it
+
+    @property
+    def subdivision_error(self) -> str:
+        """Why this result cannot be saved as an address, or "" when it can."""
+        if self.state_name and not self.state_province:
+            return subdivision_code_error(self.state_name)
+        return ""
 
     @property
     def display_name(self) -> str:
@@ -125,7 +148,6 @@ class NominatimGeocoder(GeocodingService):
 
         country_code = (addr.get("country_code") or "").upper()
         state = addr.get("state") or addr.get("province") or ""
-        state_code = self._resolve_state_code(country_code, state)
 
         street_parts = []
         if addr.get("house_number"):
@@ -136,36 +158,54 @@ class NominatimGeocoder(GeocodingService):
         return GeocodingResult(
             street_address=" ".join(street_parts),
             city=addr.get("city") or addr.get("town") or addr.get("village") or "",
-            state_province=state_code,
+            state_province=self._resolve_state_code(country_code, state, addr),
             postal_code=addr.get("postcode") or "",
             country=country_code,
             raw=raw,
+            state_name=state,
         )
 
+    @classmethod
+    def _resolve_state_code(cls, country_code: str, state_name: str, addr: dict) -> str:
+        """Find the ISO 3166-2 subdivision code, without its country prefix ("NW" for "DE-NW").
+
+        Nominatim's own lvl4 code is preferred. Otherwise the state name is looked up in
+        pycountry, then Nominatim's lvl6 code is tried. Returns "" when no code is found:
+        the name itself is never returned, since it is not a code and may not fit the field.
+        """
+        if not country_code:
+            return ""
+        lvl4, lvl6 = (cls._nominatim_code(country_code, addr.get(key)) for key in NOMINATIM_ISO_KEYS)
+        return lvl4 or cls._pycountry_code(country_code, state_name) or lvl6
+
     @staticmethod
-    def _resolve_state_code(country_code: str, state_name: str) -> str:
-        """Map a state/province name to its ISO-3166-2 subdivision code."""
-        if not state_name or not country_code:
-            return state_name
+    def _nominatim_code(country_code: str, code) -> str:
+        """The subdivision part of a Nominatim ISO 3166-2 code, if it belongs to country_code."""
+        prefix = f"{country_code}-"
+        if isinstance(code, str) and code.upper().startswith(prefix):
+            return code[len(prefix) :].upper()
+        return ""
 
-        try:
-            import pycountry
+    @staticmethod
+    def _pycountry_code(country_code: str, state_name: str) -> str:
+        """Match a state name against pycountry's subdivision names and their English translations.
 
-            # Search for subdivision by name within the country
-            subdivisions = pycountry.subdivisions.get(country_code=country_code)
-            if not subdivisions:
-                return state_name
+        pycountry's names are in the local language ("Nordrhein-Westfalen") while Nominatim is
+        asked for English names, so the English translation is compared too where one exists.
+        """
+        if not state_name:
+            return ""
 
-            state_lower = state_name.lower()
-            for sub in subdivisions:
-                if sub.name.lower() == state_lower:
-                    # Return just the subdivision part (e.g. "US-NY" -> "NY")
-                    return sub.code.split("-", 1)[-1]
+        import gettext
 
-            return state_name
-        except Exception:
-            logger.debug("pycountry lookup failed for %s/%s", country_code, state_name)
-            return state_name
+        import pycountry
+
+        english = gettext.translation("iso3166-2", pycountry.LOCALES_DIR, languages=["en"], fallback=True)
+        wanted = state_name.casefold()
+        for sub in pycountry.subdivisions.get(country_code=country_code) or ():
+            if wanted in (sub.name.casefold(), english.gettext(sub.name).casefold()):
+                return sub.code.split("-", 1)[-1]
+        return ""
 
 
 def _get_geocoding_service() -> GeocodingService:
@@ -231,6 +271,9 @@ def resolve_site_address(site: Site) -> RIRAddress | None:
     3. Else if Site has physical_address, forward geocode.
     4. If geocoding succeeds, create and return RIRAddress.
     5. If fails, return None.
+
+    Raises SubdivisionCodeError, saving nothing, when the geocoder found a state/province
+    whose ISO 3166-2 code cannot be determined.
     """
     from netbox_rir_manager.models import RIRAddress
 
@@ -253,6 +296,9 @@ def resolve_site_address(site: Site) -> RIRAddress | None:
     if result is None:
         logger.warning("Could not resolve address for site %s (pk=%s)", site.name, site.pk)
         return None
+
+    if result.subdivision_error:
+        raise SubdivisionCodeError(result.subdivision_error)
 
     address = RIRAddress.objects.create(
         site=site,
