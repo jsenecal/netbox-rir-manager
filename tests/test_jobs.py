@@ -398,9 +398,77 @@ class TestRIRSyncJob:
         assert owner_in_message in logs[0].message
         assert mock_backend.get_network.call_count == expected_lookups
 
+    @pytest.mark.parametrize(
+        "prefix, expected_range",
+        [
+            pytest.param("192.0.2.8/31", ("192.0.2.8", "192.0.2.9"), id="ipv4-31"),
+            pytest.param("192.0.2.8/32", ("192.0.2.8", "192.0.2.8"), id="ipv4-32"),
+        ],
+    )
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_sync_queries_last_address_of_host_aggregate(
+        self, mock_backend_class, rir_config, rir, prefix, expected_range
+    ):
+        """A /31 or /32 aggregate is looked up by its real last address, not "None" (#55)."""
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.jobs import sync_rir_config
+
+        agg = Aggregate.objects.create(prefix=prefix, rir=rir)
+
+        mock_backend = MagicMock()
+        mock_backend.find_net.return_value = {
+            "handle": "NET-HOST-1",
+            "net_name": "HOST-NET",
+            "org_handle": "TESTORG-ARIN",
+            "parent_net_handle": "",
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        _logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+
+        mock_backend.find_net.assert_called_once_with(*expected_range)
+        assert [(a.pk, net.handle) for a, net in agg_nets] == [(agg.pk, "NET-HOST-1")]
+
 
 @pytest.mark.django_db
 class TestSyncPrefixesJob:
+    @pytest.mark.parametrize(
+        "prefix, expected_range",
+        [
+            pytest.param("10.0.1.8/31", ("10.0.1.8", "10.0.1.9"), id="ipv4-31"),
+            pytest.param("10.0.1.8/32", ("10.0.1.8", "10.0.1.8"), id="ipv4-32"),
+        ],
+    )
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_discovers_host_prefix_reassignment(
+        self, mock_backend_class, rir_user_key, prefix_under_parent, prefix, expected_range
+    ):
+        """/31 and /32 child prefixes are looked up by their real last address and synced (#55)."""
+        from netbox_rir_manager.jobs import SyncPrefixesJob
+        from netbox_rir_manager.models import RIRNetwork
+
+        setup = prefix_under_parent("10.0.0.0/20", prefix, "NET-PARENT-20")
+
+        mock_backend = MagicMock()
+        mock_backend.find_net.return_value = {
+            "handle": "NET-HOST-1",
+            "net_name": "HOST-NET",
+            "org_handle": "",
+            "parent_net_handle": "NET-PARENT-20",
+            "net_blocks": [],
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        make_runner(SyncPrefixesJob).run(
+            aggregate_id=setup["agg"].pk, parent_handle=setup["parent"].handle, user_key_id=rir_user_key.pk
+        )
+
+        mock_backend.find_net.assert_called_once_with(*expected_range)
+        assert RIRNetwork.objects.get(handle="NET-HOST-1").prefix == setup["prefix"]
+
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_discovers_child_prefixes(self, mock_backend_class, rir_config, rir_user_key, rir):
         """SyncPrefixesJob discovers and syncs child prefix networks."""

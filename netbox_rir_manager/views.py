@@ -1,4 +1,3 @@
-import ipaddress
 import json
 
 from django.contrib import messages
@@ -52,6 +51,7 @@ from netbox_rir_manager.forms import (
     RIRUserKeyFilterForm,
     RIRUserKeyForm,
 )
+from netbox_rir_manager.ip_ranges import prefix_range
 from netbox_rir_manager.models import (
     RIRAddress,
     RIRConfig,
@@ -635,11 +635,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
 
         backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
 
-        network = ipaddress.ip_network(str(prefix.prefix), strict=False)
-        start_address = str(network.network_address)
-        end_address = str(network.broadcast_address)
-
-        net_data = backend.find_net(start_address, end_address)
+        net_data = backend.find_net(*prefix_range(prefix.prefix))
         if net_data is None:
             messages.warning(request, "No matching network found at ARIN for this prefix.")
             RIRSyncLog.objects.create(
@@ -693,11 +689,8 @@ class PrefixReassignView(LoginRequiredMixin, View):
         parent_network, _agg = RIRNetwork.find_for_prefix(prefix)
 
         # Pre-fill form
-        network = ipaddress.ip_network(str(prefix.prefix), strict=False)
-        initial = {
-            "start_address": str(network.network_address),
-            "end_address": str(network.broadcast_address),
-        }
+        start_address, end_address = prefix_range(prefix.prefix)
+        initial = {"start_address": start_address, "end_address": end_address}
 
         # Pre-fill from tenant
         if prefix.tenant:
