@@ -646,14 +646,7 @@ class PrefixSyncView(RIRActionPermissionMixin, View):
         net_data = backend.find_net(*prefix_range(prefix.prefix))
         if net_data is None:
             messages.warning(request, "No matching network found at ARIN for this prefix.")
-            RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="sync",
-                object_type="network",
-                object_handle=str(prefix.prefix),
-                status="skipped",
-                message=f"No ARIN network found for {prefix.prefix}",
-            )
+            RIRSyncLog.log_skipped(rir_config, "sync", str(prefix.prefix), f"No ARIN network found for {prefix.prefix}")
             return redirect(prefix.get_absolute_url())
 
         # Check if this is actually a child net (not the parent aggregate's net)

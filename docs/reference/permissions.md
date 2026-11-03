@@ -38,7 +38,7 @@ Each action page requires the same NetBox permission as its REST API counterpart
 
 Pages show an action's button only to users who can use it: **Sync Now** on a config, the **ARIN Actions** menu on a network, **Refresh Status** on a ticket, **Sync Selected** on the config list, the **Sync from ARIN** and **Reassign at ARIN** buttons on aggregates and prefixes, and **Resolve** on a site. The site panel's edit button needs `change_riraddress` on the address.
 
-The NetBox permission decides who may act; the key still decides what is sent to the RIR. Without a key of their own on the config, nothing is sent (see [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses)).
+The NetBox permission decides who may act; the key still decides what is sent to the RIR. Without a key of their own on the config, nothing is sent (see [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses)). Deactivating a NetBox user stops all of their keys, including as a config's default key and in jobs already queued with them.
 
 ## REST API
 

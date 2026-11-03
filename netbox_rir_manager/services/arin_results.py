@@ -85,7 +85,7 @@ def record_arin_result(result, *, network, user_key, operation, action, ticket_t
             child = result.get("net")
             if link_net and child and child.get("handle"):
                 net, _ = RIRNetwork.sync_from_arin(child, rir_config, prefix=prefix, user_key=user_key)
-            sync_log(rir_config, operation, "network", network.handle, "success", message)
+            RIRSyncLog.record(rir_config, operation, "network", network.handle, "success", message)
     except Exception as exc:
         # Anything raised here would turn an ARIN change that happened into an error response.
         logger.exception("%s of %s succeeded at ARIN but could not be recorded", action, network.handle)
@@ -97,24 +97,14 @@ def record_arin_result(result, *, network, user_key, operation, action, ticket_t
         error = " ".join(str(exc).split())
         try:
             with transaction.atomic():
-                sync_log(rir_config, operation, "network", network.handle, "error", f"{failure} Error: {error}")
+                RIRSyncLog.record(
+                    rir_config, operation, "network", network.handle, "error", f"{failure} Error: {error}"
+                )
         except Exception:
             logger.exception("Could not write the sync log for %s of %s", action, network.handle)
         return ARINOutcome(message=f"{failure} Check the NetBox log. Error: {error}", recorded=False)
 
     return ARINOutcome(message=message, ticket=ticket, net=net)
-
-
-def sync_log(rir_config, operation, object_type, handle, status, message):
-    """Write an RIRSyncLog row."""
-    return RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation=operation,
-        object_type=object_type,
-        object_handle=handle,
-        status=status,
-        message=message,
-    )
 
 
 def data_error(rir_config, operation, object_type, handle, exc, error_cls=ARINDataError):
@@ -158,5 +148,5 @@ def _write_failure(rir_config, operation, object_type, handle, message, error_cl
 
 def _logged_error(rir_config, operation, object_type, handle, text, error_cls):
     """Write text to an error sync log and return error_cls(text), so the user sees what was logged."""
-    sync_log(rir_config, operation, object_type, handle, "error", text)
+    RIRSyncLog.record(rir_config, operation, object_type, handle, "error", text)
     return error_cls(text)
