@@ -862,6 +862,27 @@ def test_permission_constraints_limit_which_network(operator_key, operator_clien
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("url_name, target", [("aggregate_sync", "aggregate"), ("prefix_sync", "prefix")])
+def test_sync_refused_when_constraints_exclude_the_config(
+    operator_key, operator_client, action_targets, side_effects, url_name, target
+):
+    """Syncing from an aggregate or prefix needs add_rirconfig on the config that would be used."""
+    from dcim.models import Site
+    from ipam.models import Aggregate, Prefix
+
+    from netbox_rir_manager.models import RIRConfig
+
+    grant(operator_key.user, RIRConfig, ["add"], constraints={"name": "Some Other Config"})
+    for netbox_model in (Aggregate, Prefix, Site):
+        grant(operator_key.user, netbox_model, ["view"])
+
+    response = _action_request(operator_client, action_targets, url_name, target, "post", {})
+
+    assert response.status_code == 403
+    side_effects["arin"].for_user_key.assert_not_called()
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     "target, action_url, model",
     [
