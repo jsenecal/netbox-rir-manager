@@ -1,7 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib.messages import get_messages
 from django.urls import reverse
+
+from netbox_rir_manager.constants import NO_API_KEY_MESSAGE
 
 
 @pytest.mark.django_db
@@ -183,6 +186,7 @@ class TestRIRConfigSyncView:
         url = reverse("plugins:netbox_rir_manager:rirconfig_sync", args=[rir_config.pk])
         response = admin_client.post(url)
         assert response.status_code == 302  # redirect back
+        assert [str(m) for m in get_messages(response.wsgi_request)] == [NO_API_KEY_MESSAGE]
 
     def test_sync_requires_post(self, admin_client, rir_config):
         url = reverse("plugins:netbox_rir_manager:rirconfig_sync", args=[rir_config.pk])

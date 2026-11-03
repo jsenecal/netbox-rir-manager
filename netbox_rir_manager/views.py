@@ -20,6 +20,7 @@ from netbox.views import generic
 
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.choices import normalize_ticket_status
+from netbox_rir_manager.constants import NO_API_KEY_MESSAGE
 from netbox_rir_manager.filtersets import (
     RIRAddressFilterSet,
     RIRConfigFilterSet,
@@ -339,7 +340,7 @@ class RIRConfigSyncView(LoginRequiredMixin, View):
         rir_config = get_object_or_404(RIRConfig, pk=pk)
 
         if not rir_config.resolve_key(request.user):
-            messages.error(request, "You don't have an API key configured for this RIR config.")
+            messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(rir_config.get_absolute_url())
 
         SyncRIRConfigJob.enqueue(instance=rir_config, user=request.user)
@@ -387,7 +388,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
 
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
-            messages.error(request, "No API key configured for this RIR config.")
+            messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
@@ -432,7 +433,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
 
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
-            messages.error(request, "No API key configured for this RIR config.")
+            messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
@@ -492,7 +493,7 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
         network = get_object_or_404(RIRNetwork, pk=pk)
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
-            messages.error(request, "No API key configured for this RIR config.")
+            messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
@@ -535,7 +536,7 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
         network = get_object_or_404(RIRNetwork, pk=pk)
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
-            messages.error(request, "No API key configured for this RIR config.")
+            messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
@@ -630,7 +631,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
 
         user_key = rir_config.resolve_key(request.user)
         if not user_key:
-            messages.error(request, "No API key configured for this RIR config.")
+            messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(prefix.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
@@ -749,7 +750,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
 
         user_key = parent_network.rir_config.resolve_key(request.user)
         if not user_key:
-            messages.error(request, "No API key configured for this RIR config.")
+            messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(prefix.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(parent_network.rir_config, api_key=user_key.api_key)

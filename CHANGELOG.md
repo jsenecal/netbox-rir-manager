@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The RIR config **Sync** button now reports a missing key as "No API key configured
+  for this RIR config.", the same wording as every other UI action and the REST API,
+  which now all read it from one shared constant (#69).
 - The daily **Scheduled RIR Sync** never ran: its module was only imported lazily, so the
   `@system_job` registration had not happened when `rqworker` scheduled system jobs at
   startup. The plugin now imports its jobs when it loads (#54).
