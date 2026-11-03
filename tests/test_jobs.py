@@ -551,7 +551,7 @@ class TestSyncPrefixesJob:
             "net_blocks": [],
             "raw_data": {},
         }
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         make_runner(SyncPrefixesJob).run(
             aggregate_id=setup["agg"].pk, parent_handle=setup["parent"].handle, user_key_id=rir_user_key.pk
@@ -608,7 +608,7 @@ class TestSyncPrefixesJob:
 
         mock_backend = MagicMock()
         mock_backend.find_net.side_effect = find_net_side_effect
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(SyncPrefixesJob)
 
@@ -664,7 +664,7 @@ class TestSyncPrefixesJob:
             "registration_date": "2024-06-01",
             "raw_data": {},
         }
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(SyncPrefixesJob)
         runner.run(
@@ -698,7 +698,7 @@ class TestSyncPrefixesJob:
 
         mock_backend = MagicMock()
         mock_backend.find_net.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(SyncPrefixesJob)
 
@@ -742,7 +742,7 @@ class TestReassignJobPreFlight:
             "net_type": "RS",
             "org_handle": "",
         }
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(ReassignJob)
 
@@ -781,7 +781,7 @@ class TestReassignJobPreFlight:
         }
         # Reassignment itself fails (we just need to verify it was attempted)
         mock_backend.reassign_network.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(ReassignJob)
 
@@ -803,7 +803,7 @@ class TestReassignJobPreFlight:
         mock_backend = MagicMock()
         mock_backend.find_net.return_value = None
         mock_backend.reassign_network.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(ReassignJob)
 
@@ -829,7 +829,7 @@ class TestReassignJobPreFlight:
         runner.run(prefix_id=reassign_setup["prefix"].pk, user_key_id=rir_user_key.pk)
 
         assert runner.job.data["status"] == "error"
-        mock_backend_class.from_rir_config.assert_not_called()
+        mock_backend_class.for_user_key.assert_not_called()
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_simple_reassignment_without_site_reports_error(
@@ -842,7 +842,7 @@ class TestReassignJobPreFlight:
         rir_organization.save()
         mock_backend = MagicMock()
         mock_backend.find_net.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(ReassignJob)
         runner.run(prefix_id=reassign_setup["prefix"].pk, user_key_id=rir_user_key.pk)
@@ -867,7 +867,7 @@ class TestRemoveNetworkJob:
 
         mock_backend = MagicMock()
         mock_backend.remove_network.return_value = True
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(RemoveNetworkJob)
 
@@ -891,7 +891,7 @@ class TestRemoveNetworkJob:
 
         mock_backend = MagicMock()
         mock_backend.remove_network.side_effect = RIRRequestError(NOT_FOUND)
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        mock_backend_class.for_user_key.return_value = mock_backend
 
         runner = make_runner(RemoveNetworkJob)
 
@@ -1008,7 +1008,7 @@ class TestReassignJobOutcome:
         setup = prefix_under_parent("10.0.0.0/20", "10.0.1.0/29", "NET-PARENT-20", auto_reassign=True)
         rir_organization.tenant = setup["tenant"]
         rir_organization.save()
-        backend = mock_backend_class.from_rir_config.return_value
+        backend = mock_backend_class.for_user_key.return_value
         backend.find_net.return_value = None
         backend.reassign_network.return_value = reassign_result
 

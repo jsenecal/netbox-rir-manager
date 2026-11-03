@@ -17,7 +17,7 @@ from netbox_rir_manager.net_names import to_ascii
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from netbox_rir_manager.models import RIRConfig
+    from netbox_rir_manager.models import RIRConfig, RIRUserKey
 
 
 def error_detail(error: Error) -> str:
@@ -58,6 +58,11 @@ class ARINBackend(RIRBackend):
             api_key=api_key,
             base_url=rir_config.api_url or None,
         )
+
+    @classmethod
+    def for_user_key(cls, user_key: RIRUserKey) -> ARINBackend:
+        """Create a backend that acts with user_key, against the config the key belongs to."""
+        return cls.from_rir_config(user_key.rir_config, api_key=user_key.api_key)
 
     def _call_with_retry(self, func, *args, **kwargs):
         from django.conf import settings as django_settings

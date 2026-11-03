@@ -506,7 +506,7 @@ class SyncPrefixesJob(JobRunner):
         user_key = RIRUserKey.objects.get(pk=user_key_id)
         parent_net = RIRNetwork.objects.get(handle=parent_handle)
         rir_config = parent_net.rir_config
-        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
 
         prefixes = Prefix.objects.filter(prefix__net_contained=agg.prefix)
         self.logger.info(f"Scanning {prefixes.count()} prefixes under {agg.prefix}")
@@ -595,7 +595,7 @@ class ReassignJob(JobRunner):
 
             self.logger.info(f"Found parent network {parent_network.handle}")
             rir_config = parent_network.rir_config
-            backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+            backend = ARINBackend.for_user_key(user_key)
 
             # Determine reassignment type
             tenant = prefix.tenant
@@ -729,7 +729,7 @@ class RemoveNetworkJob(JobRunner):
         self.job.save()
 
         self.logger.info(f"Removing network {network.handle} from ARIN")
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
 
         with _changelog_context(self.job.user):
             try:

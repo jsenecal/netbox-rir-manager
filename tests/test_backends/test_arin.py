@@ -87,6 +87,17 @@ def test_from_rir_config_no_api_url(mock_api_class):
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
+def test_for_user_key(mock_api_class):
+    """for_user_key acts with the key's own api_key against the key's own config."""
+    user_key = MagicMock(api_key="user-key")
+    user_key.rir_config.api_url = "https://reg.ote.arin.net/"
+
+    backend = ARINBackend.for_user_key(user_key)
+    assert isinstance(backend, ARINBackend)
+    mock_api_class.assert_called_once_with(api_key="user-key", base_url="https://reg.ote.arin.net/")
+
+
+@patch("netbox_rir_manager.backends.arin.Api")
 def test_authenticate_success(mock_api_class):
     mock_api = MagicMock()
     mock_org = MagicMock()  # Not an Error instance

@@ -236,7 +236,7 @@ class TestRIRNetworkActionViews:
     def test_reassign_simple_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
         from netbox_rir_manager.models import RIRTicket
 
-        backend = mock_backend_cls.from_rir_config.return_value
+        backend = mock_backend_cls.for_user_key.return_value
         backend.create_customer.return_value = {"handle": "C-TEST"}
         backend.reassign_network.return_value = ticket_result("TKT-REASSIGN-001", "IPV4_SIMPLE_REASSIGN")
 
@@ -268,13 +268,13 @@ class TestRIRNetworkActionViews:
         assert response.status_code == 302
         assert response.url == rir_network.get_absolute_url()
         assert _messages(response) == [("danger", NO_API_KEY_MESSAGE)]
-        mock_backend_cls.from_rir_config.assert_not_called()
+        mock_backend_cls.for_user_key.assert_not_called()
 
     @patch("netbox_rir_manager.views.ARINBackend")
     def test_remove_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
         from netbox_rir_manager.models import RIRSyncLog
 
-        mock_backend_cls.from_rir_config.return_value.remove_network.return_value = True
+        mock_backend_cls.for_user_key.return_value.remove_network.return_value = True
 
         response = admin_client.post(_action_url("remove", rir_network))
 
@@ -288,7 +288,7 @@ class TestRIRNetworkActionViews:
     def test_delete_arin_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
         from netbox_rir_manager.models import RIRTicket
 
-        backend = mock_backend_cls.from_rir_config.return_value
+        backend = mock_backend_cls.for_user_key.return_value
         backend.delete_network.return_value = ticket_result("TKT-DELETE-001", "NET_DELETE_REQUEST")
 
         response = admin_client.post(_action_url("delete_arin", rir_network))
@@ -302,7 +302,7 @@ class TestRIRNetworkActionViews:
     def test_reallocate_success(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
         from netbox_rir_manager.models import RIRTicket
 
-        backend = mock_backend_cls.from_rir_config.return_value
+        backend = mock_backend_cls.for_user_key.return_value
         backend.reallocate_network.return_value = ticket_result("TKT-REALLOC-001", "IPV4_REALLOCATE")
 
         response = admin_client.post(_action_url("reallocate", rir_network), REALLOCATION)
@@ -327,7 +327,7 @@ class TestRIRNetworkActionViews:
         from netbox_rir_manager.models import RIRSyncLog, RIRTicket
 
         failure = WRITE_FAILURES[failure]
-        detail, log = failure.arrange(mock_backend_cls.from_rir_config.return_value, refused)
+        detail, log = failure.arrange(mock_backend_cls.for_user_key.return_value, refused)
 
         response = admin_client.post(_action_url(action, rir_network), failure.data)
 
@@ -344,7 +344,7 @@ class TestRIRNetworkActionViews:
         from netbox_rir_manager.backends.base import RIRDataError
         from netbox_rir_manager.models import RIRSyncLog, RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.reallocate_network.side_effect = RIRDataError(
+        mock_backend_cls.for_user_key.return_value.reallocate_network.side_effect = RIRDataError(
             "Invalid Net details for ARIN: version: Field required"
         )
 
@@ -365,9 +365,9 @@ def legacy_setup(rir, rir_config, rir_user_key, admin_user):
     from netbox_rir_manager.models import RIRConfig, RIRUserKey
 
     legacy = RIRConfig.objects.create(rir=rir, name="Z Legacy Config", org_handle="LEGACY-ARIN", is_active=True)
-    RIRUserKey.objects.create(user=admin_user, rir_config=legacy, api_key="legacy-key")
+    key = RIRUserKey.objects.create(user=admin_user, rir_config=legacy, api_key="legacy-key")
     agg = Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
-    return {"legacy": legacy, "agg": agg}
+    return {"legacy": legacy, "key": key, "agg": agg}
 
 
 @pytest.mark.django_db
@@ -383,7 +383,7 @@ class TestAggregateSyncView:
             "parent_net_handle": "",
             "raw_data": {},
         }
-        mock_backend_cls.from_rir_config.return_value = mock_backend
+        mock_backend_cls.for_user_key.return_value = mock_backend
 
         url = reverse("plugins:netbox_rir_manager:aggregate_sync", args=[legacy_setup["agg"].pk])
         response = admin_client.post(url)
@@ -406,7 +406,7 @@ class TestAggregateSyncView:
 
         mock_backend = MagicMock()
         mock_backend.find_net.return_value = found
-        mock_backend_cls.from_rir_config.return_value = mock_backend
+        mock_backend_cls.for_user_key.return_value = mock_backend
 
         url = reverse("plugins:netbox_rir_manager:aggregate_sync", args=[legacy_setup["agg"].pk])
         admin_client.post(url)
@@ -422,7 +422,7 @@ class TestAggregateSyncView:
 
         admin_client.post(reverse("plugins:netbox_rir_manager:aggregate_sync", args=[agg.pk]))
 
-        mock_backend_cls.from_rir_config.assert_not_called()
+        mock_backend_cls.for_user_key.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -440,11 +440,11 @@ class TestPrefixSyncView:
 
         mock_backend = MagicMock()
         mock_backend.find_net.return_value = {"handle": "NET-CUST-1", "customer_handle": "C1", "raw_data": {}}
-        mock_backend_cls.from_rir_config.return_value = mock_backend
+        mock_backend_cls.for_user_key.return_value = mock_backend
 
         admin_client.post(reverse("plugins:netbox_rir_manager:prefix_sync", args=[pfx.pk]))
 
-        mock_backend_cls.from_rir_config.assert_called_once_with(legacy_setup["legacy"], api_key="legacy-key")
+        mock_backend_cls.for_user_key.assert_called_once_with(legacy_setup["key"])
         net = RIRNetwork.objects.get(handle="NET-CUST-1")
         assert net.rir_config == legacy_setup["legacy"]
         assert net.prefix == pfx
@@ -459,7 +459,7 @@ class TestPrefixSyncView:
 
         admin_client.post(reverse("plugins:netbox_rir_manager:prefix_sync", args=[pfx.pk]))
 
-        mock_backend_cls.from_rir_config.assert_not_called()
+        mock_backend_cls.for_user_key.assert_not_called()
         assert not RIRNetwork.objects.exists()
 
 
@@ -482,7 +482,7 @@ def test_prefix_action_without_key_shows_shared_message(
     assert response.status_code == 302
     assert response.url == prefix.get_absolute_url()
     assert _messages(response) == [("danger", NO_API_KEY_MESSAGE)]
-    mock_backend_cls.from_rir_config.assert_not_called()
+    mock_backend_cls.for_user_key.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -511,7 +511,7 @@ class TestPrefixReassignView:
             "net": {"handle": "NET-198-51-100-16-1", "net_name": "TYPED-NAME", "raw_data": {}},
             "raw_data": {},
         }
-        mock_backend_cls.from_rir_config.return_value = mock_backend
+        mock_backend_cls.for_user_key.return_value = mock_backend
 
         response = self._post(
             admin_client, setup["prefix"], reassignment_type="detailed", org_handle="CUST-ARIN", net_name="TYPED-NAME"
@@ -538,7 +538,7 @@ class TestPrefixReassignView:
         mock_backend = MagicMock()
         mock_backend.create_customer.return_value = {"handle": "C0000001"}
         mock_backend.reassign_network.return_value = {"ticket_number": "TKT-PFX-2", "raw_data": {}}
-        mock_backend_cls.from_rir_config.return_value = mock_backend
+        mock_backend_cls.for_user_key.return_value = mock_backend
 
         self._post(
             admin_client,
@@ -572,7 +572,7 @@ class TestPrefixReassignView:
         mock_backend = MagicMock()
         mock_backend.create_customer.return_value = customer_result
         mock_backend.reassign_network.return_value = reassign_result
-        mock_backend_cls.from_rir_config.return_value = mock_backend
+        mock_backend_cls.for_user_key.return_value = mock_backend
 
         response = self._post(
             admin_client, setup["prefix"], reassignment_type="simple", customer_name="Cust", city="Laval", country="CA"
@@ -622,7 +622,7 @@ class TestImmediateResultViews:
     def test_delete_arin_without_ticket_twice(self, mock_backend_cls, admin_client, networks):
         from netbox_rir_manager.models import RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.delete_network.return_value = immediate_result()
+        mock_backend_cls.for_user_key.return_value.delete_network.return_value = immediate_result()
 
         for network in networks:
             response = admin_client.post(_action_url("delete_arin", network))
@@ -648,7 +648,7 @@ class TestImmediateResultViews:
             status="resolved",
             created_date=timezone.now(),
         )
-        mock_backend_cls.from_rir_config.return_value.reassign_network.return_value = immediate_result("NET-CHILD-1")
+        mock_backend_cls.for_user_key.return_value.reassign_network.return_value = immediate_result("NET-CHILD-1")
 
         response = admin_client.post(_action_url("reassign", networks[0]), DETAILED)
 
@@ -661,9 +661,7 @@ class TestImmediateResultViews:
     def test_reallocate_without_ticket_links_child_net(self, mock_backend_cls, admin_client, networks):
         from netbox_rir_manager.models import RIRNetwork, RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result(
-            "NET-REALLOC-1"
-        )
+        mock_backend_cls.for_user_key.return_value.reallocate_network.return_value = immediate_result("NET-REALLOC-1")
 
         response = admin_client.post(_action_url("reallocate", networks[0]), REALLOCATION)
 
@@ -682,7 +680,7 @@ class TestImmediateResultViews:
         from netbox_rir_manager.models import RIRNetwork, RIRTicket
 
         setup = prefix_under_parent("198.51.100.0/24", "198.51.100.16/28", "NET-198-51-100-0-1")
-        mock_backend_cls.from_rir_config.return_value.reassign_network.return_value = immediate_result(
+        mock_backend_cls.for_user_key.return_value.reassign_network.return_value = immediate_result(
             "NET-198-51-100-16-1"
         )
 
@@ -698,7 +696,7 @@ class TestImmediateResultViews:
 
     @patch("netbox_rir_manager.views.ARINBackend")
     def test_recording_failure_warns_that_arin_changed(self, mock_backend_cls, admin_client, networks, rir_ticket):
-        mock_backend_cls.from_rir_config.return_value.delete_network.return_value = ticket_result(EXISTING_TICKET)
+        mock_backend_cls.for_user_key.return_value.delete_network.return_value = ticket_result(EXISTING_TICKET)
 
         response = admin_client.post(_action_url("delete_arin", networks[0]))
 

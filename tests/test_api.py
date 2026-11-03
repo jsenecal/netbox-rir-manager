@@ -280,7 +280,7 @@ def _action_url(action, network):
 class TestRIRNetworkAPIActions:
     @patch("netbox_rir_manager.api.views.ARINBackend")
     def test_reassign_api_simple(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
-        backend = mock_backend_cls.from_rir_config.return_value
+        backend = mock_backend_cls.for_user_key.return_value
         backend.create_customer.return_value = {"handle": "C-TEST"}
         backend.reassign_network.return_value = ticket_result("TKT-API-001", "IPV4_SIMPLE_REASSIGN")
 
@@ -312,7 +312,7 @@ class TestRIRNetworkAPIActions:
         from netbox_rir_manager.backends.base import RIRDataError
         from netbox_rir_manager.models import RIRSyncLog
 
-        mock_backend = mock_backend_cls.from_rir_config.return_value
+        mock_backend = mock_backend_cls.for_user_key.return_value
         mock_backend.create_customer.side_effect = RIRDataError(
             "Invalid Customer details for ARIN: iso3166_2: String should have at most 3 characters"
         )
@@ -355,13 +355,13 @@ class TestRIRNetworkAPIActions:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "net_name" in response.json()
-        mock_backend_cls.from_rir_config.assert_not_called()
+        mock_backend_cls.for_user_key.assert_not_called()
 
     @patch("netbox_rir_manager.api.views.ARINBackend")
     def test_reallocate_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
         from netbox_rir_manager.models import RIRTicket
 
-        backend = mock_backend_cls.from_rir_config.return_value
+        backend = mock_backend_cls.for_user_key.return_value
         backend.reallocate_network.return_value = ticket_result("TKT-API-REALLOC", "IPV4_REALLOCATE")
 
         response = admin_api_client.post(
@@ -386,7 +386,7 @@ class TestRIRNetworkAPIActions:
         from netbox_rir_manager.backends.base import RIRDataError
         from netbox_rir_manager.models import RIRSyncLog
 
-        mock_backend = mock_backend_cls.from_rir_config.return_value
+        mock_backend = mock_backend_cls.for_user_key.return_value
         mock_backend.reallocate_network.side_effect = RIRDataError(
             "Invalid Net details for ARIN: version: Field required"
         )
@@ -400,7 +400,7 @@ class TestRIRNetworkAPIActions:
 
     @patch("netbox_rir_manager.api.views.ARINBackend")
     def test_remove_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
-        mock_backend_cls.from_rir_config.return_value.remove_network.return_value = True
+        mock_backend_cls.for_user_key.return_value.remove_network.return_value = True
 
         response = admin_api_client.post(_action_url("remove-net", rir_network), format="json")
         assert response.status_code == status.HTTP_200_OK
@@ -409,7 +409,7 @@ class TestRIRNetworkAPIActions:
     def test_delete_arin_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
         from netbox_rir_manager.models import RIRTicket
 
-        backend = mock_backend_cls.from_rir_config.return_value
+        backend = mock_backend_cls.for_user_key.return_value
         backend.delete_network.return_value = ticket_result("TKT-API-DELETE", "NET_DELETE_REQUEST")
 
         response = admin_api_client.post(_action_url("delete-arin", rir_network), format="json")
@@ -432,7 +432,7 @@ class TestRIRNetworkAPIActions:
         from netbox_rir_manager.models import RIRSyncLog, RIRTicket
 
         failure = WRITE_FAILURES[failure]
-        detail, log = failure.arrange(mock_backend_cls.from_rir_config.return_value, refused)
+        detail, log = failure.arrange(mock_backend_cls.for_user_key.return_value, refused)
 
         response = admin_api_client.post(_action_url(action, rir_network), failure.data, format="json")
 
@@ -458,7 +458,7 @@ class TestAPIImmediateResults:
         """Two immediate deletes in a row both succeed; no ticket with an empty number is stored."""
         from netbox_rir_manager.models import RIRSyncLog, RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.delete_network.return_value = immediate_result()
+        mock_backend_cls.for_user_key.return_value.delete_network.return_value = immediate_result()
 
         for network in networks:
             response = admin_api_client.post(_action_url("delete-arin", network), format="json")
@@ -477,7 +477,7 @@ class TestAPIImmediateResults:
         from netbox_rir_manager.models import RIRNetwork, RIRTicket
 
         children = ["NET-CHILD-1", "NET-CHILD-2"]
-        mock_backend_cls.from_rir_config.return_value.reassign_network.side_effect = [
+        mock_backend_cls.for_user_key.return_value.reassign_network.side_effect = [
             immediate_result(child) for child in children
         ]
 
@@ -495,9 +495,7 @@ class TestAPIImmediateResults:
     def test_reallocate_without_ticket_returns_child_net(self, mock_backend_cls, admin_api_client, networks):
         from netbox_rir_manager.models import RIRNetwork, RIRTicket
 
-        mock_backend_cls.from_rir_config.return_value.reallocate_network.return_value = immediate_result(
-            "NET-REALLOC-1"
-        )
+        mock_backend_cls.for_user_key.return_value.reallocate_network.return_value = immediate_result("NET-REALLOC-1")
 
         response = admin_api_client.post(_action_url("reallocate", networks[0]), REALLOCATION, format="json")
 
@@ -516,7 +514,7 @@ class TestAPIImmediateResults:
         from netbox_rir_manager.models import RIRSyncLog
 
         # ARIN hands back a ticket number NetBox already holds, so storing it fails.
-        mock_backend_cls.from_rir_config.return_value.delete_network.return_value = ticket_result(EXISTING_TICKET)
+        mock_backend_cls.for_user_key.return_value.delete_network.return_value = ticket_result(EXISTING_TICKET)
 
         response = admin_api_client.post(_action_url("delete-arin", networks[0]), format="json")
 

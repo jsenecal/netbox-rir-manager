@@ -405,7 +405,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net, customer, org_handle = reassignment_request(form.cleaned_data)
         try:
             outcome = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
@@ -449,7 +449,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net = reallocation_request(form.cleaned_data)
         try:
             outcome = submit_reallocation(backend, network, user_key, net)
@@ -477,7 +477,7 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         try:
             submit_net_remove(backend, network)
         except ARINWriteError as exc:
@@ -505,7 +505,7 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         try:
             outcome = submit_net_delete(backend, network, user_key)
         except ARINWriteError as exc:
@@ -535,7 +535,7 @@ class AggregateSyncView(LoginRequiredMixin, View):
 
         for user_key in user_keys:
             rir_config = user_key.rir_config
-            backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+            backend = ARINBackend.for_user_key(user_key)
             sync_log, net = sync_aggregate(backend, rir_config, aggregate, user_key=user_key)
             if net:
                 messages.success(request, f"{sync_log.message} from ARIN.")
@@ -573,7 +573,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(prefix.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
 
         net_data = backend.find_net(*prefix_range(prefix.prefix))
         if net_data is None:
@@ -692,7 +692,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(prefix.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(parent_network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net, customer, org_handle = reassignment_request(form.cleaned_data)
         try:
             outcome = submit_reassignment(
