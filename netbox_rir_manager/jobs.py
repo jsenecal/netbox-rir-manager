@@ -419,6 +419,45 @@ def _resolve_owned_net(backend: ARINBackend, net_data: dict, org_handle: str) ->
     return None
 
 
+def enqueue_prefix_syncs(
+    rir_config: RIRConfig,
+    agg_nets: list[tuple],
+    user_key: RIRUserKey,
+    log: logging.Logger = logger,
+) -> None:
+    """Queue one prefix discovery job per (aggregate, parent net) pair a config sync returned.
+
+    Each job runs with the key the config sync used and as that key's owner, so its changes are
+    logged under the owner. For a manual sync the owner is the requesting user, who is also the
+    change log user of the config sync. The scheduled sync has no change log user, but its prefix
+    jobs still run as the default key's owner.
+    """
+    for agg, parent_net in agg_nets:
+        SyncPrefixesJob.enqueue(
+            instance=rir_config,
+            user=user_key.user,
+            aggregate_id=agg.pk,
+            parent_handle=parent_net.handle,
+            user_key_id=user_key.pk,
+        )
+        log.info(f"Enqueued prefix sync for aggregate {agg.prefix}")
+
+
+def sync_config_and_queue_prefixes(
+    rir_config: RIRConfig,
+    user_key: RIRUserKey,
+    log: logging.Logger = logger,
+) -> list[RIRSyncLog]:
+    """Sync a config with user_key, then queue its per-aggregate prefix discovery.
+
+    Every config sync must be followed by its prefix discovery, so both jobs go through here.
+    The caller owns the change log context the sync runs in. Returns the sync logs.
+    """
+    logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=log)
+    enqueue_prefix_syncs(rir_config, agg_nets, user_key, log=log)
+    return logs
+
+
 class SyncRIRConfigJob(JobRunner):
     """Background job for syncing RIR data."""
 
@@ -441,18 +480,7 @@ class SyncRIRConfigJob(JobRunner):
 
         self.logger.info(f"Starting RIR sync for {rir_config.name}")
         with _changelog_context(self.job.user):
-            logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=self.logger)
-
-        # Enqueue per-aggregate prefix discovery sub-jobs
-        for agg, parent_net in agg_nets:
-            SyncPrefixesJob.enqueue(
-                instance=rir_config,
-                user=user_key.user,
-                aggregate_id=agg.pk,
-                parent_handle=parent_net.handle,
-                user_key_id=user_key.pk,
-            )
-            self.logger.info(f"Enqueued prefix sync for aggregate {agg.prefix}")
+            logs = sync_config_and_queue_prefixes(rir_config, user_key, log=self.logger)
 
         self.job.data["sync_logs_count"] = len(logs)
         self.job.save()
@@ -742,10 +770,7 @@ class ScheduledRIRSyncJob(JobRunner):
 
                 self.logger.info(f"Using default key {user_key.pk} for config {config.name}")
                 try:
-                    logs, _agg_nets = sync_rir_config(
-                        config, api_key=user_key.api_key, user_key=user_key, log=self.logger
-                    )
-                    total_logs += len(logs)
+                    total_logs += len(sync_config_and_queue_prefixes(config, user_key, log=self.logger))
                 except Exception:
                     self.logger.exception(f"Scheduled sync failed for config {config.name}")
 

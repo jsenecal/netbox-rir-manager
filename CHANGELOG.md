@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The daily **Scheduled RIR Sync** now also queues the per-aggregate prefix sync,
+  as the manual **Sync** does, so reassignments made outside NetBox are discovered on
+  the schedule. Those prefix jobs use the config's default key and run as its owner (#66).
 - A config sync fetched and synced a POC once for each role it holds on the org (for
   example a NOC that is also the Tech contact), writing duplicate sync log rows and
   making extra ARIN calls. Each POC is now synced once per run; the org still records
