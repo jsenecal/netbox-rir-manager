@@ -32,13 +32,24 @@ class RIRSyncLog(NetBoxModel):
         return reverse("plugins:netbox_rir_manager:rirsynclog", args=[self.pk])
 
     @classmethod
-    def log_synced(cls, rir_config, object_type, handle, created, suffix=""):
-        """Log that a sync created or updated the object_type with handle; suffix ends the message."""
+    def record(cls, rir_config, operation, object_type, handle, status, message):
+        """Write one sync log row."""
         return cls.objects.create(
             rir_config=rir_config,
-            operation="sync",
+            operation=operation,
             object_type=object_type,
             object_handle=handle,
-            status="success",
-            message=f"{'Created' if created else 'Updated'} {object_type} {handle}{suffix}",
+            status=status,
+            message=message,
         )
+
+    @classmethod
+    def log_skipped(cls, rir_config, operation, handle, message):
+        """Record a network operation that was deliberately not performed, and why."""
+        return cls.record(rir_config, operation, "network", handle, "skipped", message)
+
+    @classmethod
+    def log_synced(cls, rir_config, object_type, handle, created, suffix=""):
+        """Record that a sync created or updated the object_type with handle; suffix ends the message."""
+        verb = "Created" if created else "Updated"
+        return cls.record(rir_config, "sync", object_type, handle, "success", f"{verb} {object_type} {handle}{suffix}")

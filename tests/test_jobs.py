@@ -78,6 +78,22 @@ class TestScheduledSyncJob:
 
         arin.from_rir_config.assert_not_called()
 
+    def test_scheduled_sync_skips_config_whose_default_key_owner_is_deactivated(
+        self, mock_arin, rir_config, default_key
+    ):
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+
+        arin = mock_arin("jobs")
+        default_key.user.is_active = False
+        default_key.user.save()
+
+        runner = make_runner(ScheduledRIRSyncJob)
+        runner.run()
+
+        arin.from_rir_config.assert_not_called()
+        warning = runner.logger.warning.call_args[0][0]
+        assert "deactivated user" in warning
+
 
 @pytest.mark.django_db
 class TestRIRSyncJob:
@@ -619,6 +635,55 @@ class TestRemoveNetworkJob:
         assert log.status == "error"
 
 
+def _prefix_sync_kwargs(rir_config, rir):
+    from ipam.models import Aggregate
+
+    agg = Aggregate.objects.create(prefix="10.70.0.0/16", rir=rir)
+    return {"aggregate_id": agg.pk, "parent_handle": "NET-KEYCHECK-AGG"}
+
+
+def _reassign_kwargs(rir_config, rir):
+    from ipam.models import Prefix
+
+    return {"prefix_id": Prefix.objects.create(prefix="10.71.1.0/24").pk}
+
+
+def _remove_kwargs(rir_config, rir):
+    from netbox_rir_manager.models import RIRNetwork
+
+    network = RIRNetwork.objects.create(rir_config=rir_config, handle="NET-KEYCHECK-RM")
+    return {"network_id": network.pk}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "job_name, make_kwargs",
+    [
+        pytest.param("SyncPrefixesJob", _prefix_sync_kwargs, id="prefix-sync"),
+        pytest.param("ReassignJob", _reassign_kwargs, id="reassign"),
+        pytest.param("RemoveNetworkJob", _remove_kwargs, id="remove"),
+    ],
+)
+def test_queued_job_refuses_key_of_deactivated_owner(mock_arin, rir_config, rir, rir_user_key, job_name, make_kwargs):
+    """A job queued before its key's owner was deactivated never calls ARIN with that key."""
+    from netbox_rir_manager import jobs
+    from netbox_rir_manager.models import RIRSyncLog
+
+    arin = mock_arin("jobs")
+    kwargs = make_kwargs(rir_config, rir)
+    rir_user_key.user.is_active = False
+    rir_user_key.user.save()
+
+    runner = make_runner(getattr(jobs, job_name))
+    runner.run(user_key_id=rir_user_key.pk, **kwargs)
+
+    arin.for_user_key.assert_not_called()
+    assert runner.job.data["status"] == "skipped"
+    assert f"{rir_user_key.user.username} is deactivated" in runner.job.data["message"]
+    log = RIRSyncLog.objects.get(rir_config=rir_config, status="skipped")
+    assert log.message == runner.job.data["message"]
+
+
 @pytest.mark.django_db
 class TestChangelogEntries:
     """Verify that sync operations create ObjectChange changelog entries."""
@@ -661,6 +726,23 @@ class TestChangelogEntries:
         runner.run()
 
         assert ObjectChange.objects.count() == initial_count
+
+    def test_scheduled_sync_attributes_changes_to_default_key_owner(self, mock_arin, rir_config, default_key):
+        """The scheduled sync logs its changes under the owner of the key that made the calls."""
+        from core.models import ObjectChange
+
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+        from netbox_rir_manager.models import RIROrganization
+
+        mock_arin("jobs", get_organization=arin_org("SCHEDLOG-ARIN", "Scheduled Log Org"))
+
+        runner = make_runner(ScheduledRIRSyncJob)
+        runner.job.user = None
+        runner.run()
+
+        org = RIROrganization.objects.get(handle="SCHEDLOG-ARIN")
+        change = ObjectChange.objects.get(changed_object_id=org.pk, changed_object_type__model="rirorganization")
+        assert change.user == default_key.user
 
 
 def test_plugin_ready_registers_scheduled_sync(monkeypatch):

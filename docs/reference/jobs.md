@@ -10,14 +10,16 @@ The plugin's background work runs as NetBox jobs (`JobRunner` subclasses in `net
 | `ARIN Remove`        | `RemoveNetworkJob`    | Deleting or deactivating a prefix under an allocation with **Auto reassign** set |
 | `Scheduled RIR Sync` | `ScheduledRIRSyncJob` | NetBox's system job scheduler, daily                            |
 
-Jobs queued from a user's action, or from a prefix edit, run as a NetBox user, and the changes they make are recorded in the changelog under that user. `Scheduled RIR Sync` is a system job with no user, so the changes it makes itself are not recorded in the changelog; the `ARIN Prefix Sync` jobs it queues run as the owner of the config's default key. Which RIR key each job uses is described in [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses).
+Jobs queued from a user's action, or from a prefix edit, run as a NetBox user, and the changes they make are recorded in the changelog under that user. `Scheduled RIR Sync` is a system job with no user of its own: it syncs each config under the owner of the config's default key, and the `ARIN Prefix Sync` jobs it queues run as that same user, so every change in a scheduled run is recorded under the account whose RIR key made the calls. Which RIR key each job uses is described in [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses).
+
+A key whose owner is deactivated is never used, even by a job queued before the deactivation. `ARIN Prefix Sync`, `ARIN Reassign` and `ARIN Remove` check the key's owner when they start; if the owner is deactivated, the job makes no RIR call, records `status: skipped` with the reason in `message`, and writes a `skipped` sync log row naming the deactivated user.
 
 ## RIR Sync
 
 Syncs one config: its organization, the organization's contacts, and the networks anchoring the config's aggregates, as described in [Syncing Resources](../user-guide/syncing.md). It then queues one `ARIN Prefix Sync` per aggregate it linked.
 
 - **User**: the user who asked for the sync.
-- **Key**: that user's own key on the config. With none, the job records `status: error` and `message: No API key` in its data and syncs nothing.
+- **Key**: that user's own key on the config. With none, or when the user has been deactivated since the sync was queued, the job records `status: error` in its data, with the reason in `message`, and syncs nothing.
 - **Job data**: `rir_config` (the config name) and `sync_logs_count`, the number of sync log rows the run wrote.
 
 The config's `last_sync` is set when the sync finishes.
@@ -38,20 +40,20 @@ Reassigns one prefix automatically; see [Automatic reassignment and removal](../
 4. Submits the reassignment, with a net name built from the tenant and the prefix (see [Network names](../user-guide/write-operations.md#network-names)).
 
 - **User and key**: the user who saved the prefix, with their own key on the config. When no user is behind the change (automation outside a web or API request), the config's default key and the user who owns it.
-- **Job data**: `prefix`, `status` (`success`, `synced` or `error`), `message`, `reassignment_type` (`simple` or `detailed`), `org_handle` for a detailed reassignment, and `ticket_number` when ARIN opened a ticket.
+- **Job data**: `prefix`, `status` (`success`, `synced`, `skipped` or `error`), `message`, `reassignment_type` (`simple` or `detailed`), `org_handle` for a detailed reassignment, and `ticket_number` when ARIN opened a ticket.
 
 ## ARIN Remove
 
 Removes one reassigned or reallocated network at ARIN when its prefix is deleted or no longer Active.
 
 - **User and key**: as for `ARIN Reassign`: the user who edited the prefix and their own key, or the default key outside a request.
-- **Job data**: `network_handle` and `status` (`success` or `error`); on failure, `message` holds the error, with ARIN's reason when ARIN refused the removal.
+- **Job data**: `network_handle` and `status` (`success`, `skipped` or `error`); on failure, `message` holds the error, with ARIN's reason when ARIN refused the removal.
 
 ## Scheduled RIR Sync
 
 A NetBox system job registered with a fixed daily interval when the plugin loads, so restart the RQ worker after installing or upgrading the plugin. It syncs every active config with the config's default key and queues the same `ARIN Prefix Sync` jobs as a manual sync; see [Scheduled](../user-guide/syncing.md#scheduled) for the details.
 
-- **User**: none. The changes it makes itself are not recorded in the changelog.
+- **User**: none on the job itself. Each config is synced under the owner of its default key, so its changes are recorded in the changelog under that user. A config with no default key, or whose default key belongs to a deactivated user, is skipped with a warning in the job log that says which.
 - **Job data**: `configs_synced` (the number of active configs) and `total_logs`, the number of sync log rows written.
 
 Its runs are listed under **System > Background Jobs**.

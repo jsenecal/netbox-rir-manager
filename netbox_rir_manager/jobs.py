@@ -44,6 +44,26 @@ def _changelog_context(user):
         yield
 
 
+def _queued_user_key(runner: JobRunner, user_key_id: int, operation: str, object_handle: str) -> RIRUserKey | None:
+    """Load the key a job was queued with, or None if it may no longer be used.
+
+    The owner may have been deactivated since the job was queued. In that case the job is
+    marked skipped and a skipped sync log records why, so no RIR call is made with the key.
+    """
+    from netbox_rir_manager.models import RIRUserKey
+
+    user_key = RIRUserKey.objects.select_related("user", "rir_config").get(pk=user_key_id)
+    if user_key.user.is_active:
+        return user_key
+
+    reason = user_key.rir_config.no_key_reason(user_key.user)
+    runner.logger.warning(reason)
+    runner.job.data = {"status": "skipped", "message": reason}
+    runner.job.save()
+    RIRSyncLog.log_skipped(user_key.rir_config, operation, object_handle, reason)
+    return None
+
+
 def sync_rir_config(
     rir_config: RIRConfig,
     api_key: str,
@@ -348,15 +368,7 @@ def sync_aggregate(
             handle = found["handle"]
             message = f"Aggregate {agg.prefix} is not registered to {rir_config.org_handle} (owned by {owner})"
         log.info(message)
-        sync_log = RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="network",
-            object_handle=handle,
-            status="skipped",
-            message=message,
-        )
-        return sync_log, None
+        return RIRSyncLog.log_skipped(rir_config, "sync", handle, message), None
 
     rir_network, created = RIRNetwork.sync_from_arin(
         net_data,
@@ -412,9 +424,8 @@ def enqueue_prefix_syncs(
     """Queue one prefix discovery job per (aggregate, parent net) pair a config sync returned.
 
     Each job runs with the key the config sync used and as that key's owner, so its changes are
-    logged under the owner. For a manual sync the owner is the requesting user, who is also the
-    change log user of the config sync. The scheduled sync has no change log user, but its prefix
-    jobs still run as the default key's owner.
+    logged under the same user as the config sync's: the requesting user for a manual sync, the
+    default key's owner for the scheduled sync.
     """
     for agg, parent_net in agg_nets:
         SyncPrefixesJob.enqueue(
@@ -435,7 +446,8 @@ def sync_config_and_queue_prefixes(
     """Sync a config with user_key, then queue its per-aggregate prefix discovery.
 
     Every config sync must be followed by its prefix discovery, so both jobs go through here.
-    The caller owns the change log context the sync runs in. Returns the sync logs.
+    The caller owns the change log context the sync runs in, which should be user_key's owner so
+    the config sync and its prefix jobs are logged under the same user. Returns the sync logs.
     """
     logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=log)
     enqueue_prefix_syncs(rir_config, agg_nets, user_key, log=log)
@@ -454,8 +466,9 @@ class SyncRIRConfigJob(JobRunner):
         rir_config = RIRConfig.objects.get(pk=self.job.object_id)
         user_key = rir_config.resolve_key(self.job.user)
         if not user_key:
-            self.logger.error(f"No API key resolves for config {rir_config.name}; nothing synced")
-            self.job.data = {"rir_config": rir_config.name, "status": "error", "message": "No API key"}
+            reason = rir_config.no_key_reason(self.job.user)
+            self.logger.error(f"{reason}; nothing synced")
+            self.job.data = {"rir_config": rir_config.name, "status": "error", "message": reason}
             self.job.save()
             return
 
@@ -480,14 +493,13 @@ class SyncPrefixesJob(JobRunner):
     def run(self, *args, **kwargs):
         from ipam.models import Aggregate, Prefix
 
-        from netbox_rir_manager.models import RIRUserKey
-
         aggregate_id = kwargs["aggregate_id"]
         parent_handle = kwargs["parent_handle"]
-        user_key_id = kwargs["user_key_id"]
 
         agg = Aggregate.objects.get(pk=aggregate_id)
-        user_key = RIRUserKey.objects.get(pk=user_key_id)
+        user_key = _queued_user_key(self, kwargs["user_key_id"], "sync", parent_handle)
+        if not user_key:
+            return
         parent_net = RIRNetwork.objects.get(handle=parent_handle)
         rir_config = parent_net.rir_config
         backend = ARINBackend.for_user_key(user_key)
@@ -539,15 +551,13 @@ class ReassignJob(JobRunner):
     def run(self, *args, **kwargs):
         from ipam.models import Prefix
 
-        from netbox_rir_manager.models import RIRUserKey
         from netbox_rir_manager.services.geocoding import resolve_site_address
         from netbox_rir_manager.services.reassignment import ReassignmentError, prefix_site, submit_reassignment
 
-        prefix_id = kwargs.get("prefix_id")
-        user_key_id = kwargs.get("user_key_id")
-
-        prefix = Prefix.objects.get(pk=prefix_id)
-        user_key = RIRUserKey.objects.get(pk=user_key_id)
+        prefix = Prefix.objects.get(pk=kwargs.get("prefix_id"))
+        user_key = _queued_user_key(self, kwargs["user_key_id"], "reassign", str(prefix.prefix))
+        if not user_key:
+            return
 
         self.job.data = {"prefix": str(prefix.prefix), "status": "starting"}
         self.job.save()
@@ -592,16 +602,12 @@ class ReassignJob(JobRunner):
                 )
                 self.job.save()
 
-                RIRSyncLog.objects.create(
-                    rir_config=rir_config,
-                    operation="reassign",
-                    object_type="network",
-                    object_handle=actual_handle,
-                    status="skipped",
-                    message=(
-                        f"Prefix {prefix.prefix} already reassigned at ARIN as "
-                        f"{actual_handle}. Synced instead of re-reassigning."
-                    ),
+                RIRSyncLog.log_skipped(
+                    rir_config,
+                    "reassign",
+                    actual_handle,
+                    f"Prefix {prefix.prefix} already reassigned at ARIN as "
+                    f"{actual_handle}. Synced instead of re-reassigning.",
                 )
                 return
 
@@ -682,15 +688,13 @@ class RemoveNetworkJob(JobRunner):
         name = "ARIN Remove"
 
     def run(self, *args, **kwargs):
-        from netbox_rir_manager.models import RIRUserKey
         from netbox_rir_manager.services.arin_results import ARINWriteError
         from netbox_rir_manager.services.net_writes import submit_net_remove
 
-        network_id = kwargs.get("network_id")
-        user_key_id = kwargs.get("user_key_id")
-
-        network = RIRNetwork.objects.get(pk=network_id)
-        user_key = RIRUserKey.objects.get(pk=user_key_id)
+        network = RIRNetwork.objects.get(pk=kwargs.get("network_id"))
+        user_key = _queued_user_key(self, kwargs["user_key_id"], "remove", network.handle)
+        if not user_key:
+            return
 
         self.job.data = {"network_handle": network.handle, "status": "starting"}
         self.job.save()
@@ -725,21 +729,22 @@ class ScheduledRIRSyncJob(JobRunner):
         total_logs = 0
         self.logger.info(f"Starting scheduled sync for {configs.count()} active configs")
 
-        with _changelog_context(self.job.user):
-            for config in configs:
-                self.logger.info(f"Syncing config: {config.name}")
+        for config in configs:
+            self.logger.info(f"Syncing config: {config.name}")
 
-                # No user initiated this run, so only the config's default key may be used.
-                user_key = config.resolve_key()
-                if not user_key:
-                    self.logger.warning(f"No default key for config {config.name}, skipping")
-                    continue
+            # No user initiated this run, so only the config's default key may be used.
+            user_key = config.resolve_key()
+            if not user_key:
+                self.logger.warning(f"{config.no_key_reason()}, skipping")
+                continue
 
-                self.logger.info(f"Using default key {user_key.pk} for config {config.name}")
-                try:
+            self.logger.info(f"Using default key {user_key.pk} for config {config.name}")
+            # Log the changes under the key's owner, the account the RIR attributes the calls to.
+            try:
+                with _changelog_context(user_key.user):
                     total_logs += len(sync_config_and_queue_prefixes(config, user_key, log=self.logger))
-                except Exception:
-                    self.logger.exception(f"Scheduled sync failed for config {config.name}")
+            except Exception:
+                self.logger.exception(f"Scheduled sync failed for config {config.name}")
 
         self.logger.info(f"Scheduled sync complete: {configs.count()} configs, {total_logs} logs")
         self.job.data = {"configs_synced": len(configs), "total_logs": total_logs}
