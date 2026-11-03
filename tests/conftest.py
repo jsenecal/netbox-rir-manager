@@ -109,6 +109,35 @@ if _netbox_available:
         )
 
     @pytest.fixture
+    def aggregate(db, rir):
+        """The 192.0.2.0/24 aggregate on the test RIR."""
+        from ipam.models import Aggregate
+
+        return Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
+
+    @pytest.fixture
+    def mock_arin(monkeypatch):
+        """Return a factory that replaces ARINBackend in one plugin module with a mock.
+
+        mock_arin("views", find_net=...) patches netbox_rir_manager.views.ARINBackend and
+        returns the mocked class. Both of its constructors, from_rir_config and for_user_key,
+        build the same backend mock, also available as .backend. Each keyword sets the return
+        value of that backend method; get_organization and find_net return None unless given,
+        so ARIN holds nothing by default.
+        """
+
+        def _mock(module, **returns):
+            backend_cls = MagicMock()
+            backend = backend_cls.backend = backend_cls.for_user_key.return_value
+            backend_cls.from_rir_config.return_value = backend
+            for method, value in {"get_organization": None, "find_net": None, **returns}.items():
+                getattr(backend, method).return_value = value
+            monkeypatch.setattr(f"netbox_rir_manager.{module}.ARINBackend", backend_cls)
+            return backend_cls
+
+        return _mock
+
+    @pytest.fixture
     def rir_organization(db, rir_config):
         """Create a test RIR organization."""
         from netbox_rir_manager.models import RIRAddress, RIROrganization

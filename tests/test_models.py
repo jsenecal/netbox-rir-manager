@@ -182,20 +182,17 @@ class TestRIRNetwork:
         assert net.pk is not None
         assert str(net) == "NET-192-0-2-0-1"
 
-    def test_rir_network_link_to_aggregate(self, rir_config, rir):
-        from ipam.models import Aggregate
-
+    def test_rir_network_link_to_aggregate(self, rir_config, aggregate):
         from netbox_rir_manager.models import RIRNetwork
 
-        agg = Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
         net = RIRNetwork.objects.create(
             rir_config=rir_config,
             handle="NET-192-0-2-0-1",
             net_name="EXAMPLE-NET",
-            aggregate=agg,
+            aggregate=aggregate,
         )
-        assert net.aggregate == agg
-        assert net in agg.rir_networks.all()
+        assert net.aggregate == aggregate
+        assert net in aggregate.rir_networks.all()
 
     def test_rir_network_link_to_prefix(self, rir_config):
         from ipam.models import Prefix

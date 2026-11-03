@@ -30,6 +30,27 @@ def immediate_result(child_handle=None):
     return {"net": {"handle": child_handle, "net_name": "CHILD-NET"}} if child_handle else {}
 
 
+def arin_net(handle, *, net_name="", org_handle="", parent_handle="", net_blocks=(), **extra):
+    """A net as the backend's lookups return it: its owner (org_handle, or customer_handle in
+    extra), the handle of the net it was carved from, and its net blocks."""
+    return {
+        "handle": handle,
+        "net_name": net_name,
+        "version": 4,
+        "org_handle": org_handle,
+        "parent_net_handle": parent_handle,
+        "net_blocks": list(net_blocks),
+        "raw_data": {},
+        **extra,
+    }
+
+
+def arin_org(handle, name, *, poc_links=(), **address):
+    """An organization as the backend returns it, with its POC links and any address fields."""
+    blank = dict.fromkeys(("street_address", "city", "state_province", "postal_code", "country"), "")
+    return {"handle": handle, "name": name, **blank, **address, "poc_links": list(poc_links), "raw_data": {}}
+
+
 # Error payloads ARIN's OT&E environment returned, verbatim.
 _ERROR_XML = (
     '<error xmlns="http://www.arin.net/regrws/core/v1"><message>{message}</message><code>{code}</code>'
