@@ -1,9 +1,9 @@
 import ipaddress
 import logging
 
-from django.conf import settings
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
+from netbox.plugins import get_plugin_config
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +14,7 @@ def auto_link_network(sender, instance, created, raw=False, **kwargs):
     if raw:
         return
 
-    plugin_config = settings.PLUGINS_CONFIG.get("netbox_rir_manager", {})
-    if not plugin_config.get("auto_link_networks", True):
+    if not get_plugin_config("netbox_rir_manager", "auto_link_networks"):
         return
 
     # Don't overwrite existing links

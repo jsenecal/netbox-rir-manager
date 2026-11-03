@@ -18,7 +18,7 @@ The plugin defines no custom permissions. Each model gets Django's four standard
 
 The list, detail, add, edit, import, bulk edit and delete pages are NetBox's generic views, so they enforce the matching permission (and its constraints) as they do for core models. Customers, sync logs and tickets are created by the plugin, not by hand: their pages offer list, detail and delete only.
 
-The **RIR Manager** menu shows each item to users holding its `view_*` permission, and the **+** button to users holding `add_*`.
+The **RIR Manager** menu (or the **NetBox RIR Manager** section of the **Plugins** menu, when `top_level_menu` is `False`) shows each item to users holding its `view_*` permission, and the **+** button to users holding `add_*`.
 
 ## Actions in the web UI
 

@@ -1,4 +1,4 @@
-"""Rename RIRSiteAddress → RIRAddress and centralize address fields.
+"""Rename RIRSiteAddress -> RIRAddress and centralize address fields.
 
 Replaces the 5 inline address fields on RIROrganization, RIRContact, and
 RIRCustomer with a FK to the (renamed) RIRAddress model.  Site becomes
@@ -44,7 +44,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # 1. Rename RIRSiteAddress → RIRAddress
+        # 1. Rename RIRSiteAddress -> RIRAddress
         migrations.RenameModel(
             old_name="RIRSiteAddress",
             new_name="RIRAddress",
@@ -109,7 +109,7 @@ class Migration(migrations.Migration):
             migrate_addresses_forward,
             migrations.RunPython.noop,
         ),
-        # 6. Remove inline address fields (5 per model × 3 models = 15)
+        # 6. Remove inline address fields (5 per model x 3 models = 15)
         migrations.RemoveField(model_name="rirorganization", name="street_address"),
         migrations.RemoveField(model_name="rirorganization", name="city"),
         migrations.RemoveField(model_name="rirorganization", name="state_province"),

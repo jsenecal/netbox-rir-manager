@@ -21,12 +21,10 @@ class NetBoxRIRManagerConfig(PluginConfig):
         "top_level_menu": True,
         "sync_interval_hours": 24,
         "auto_link_networks": True,
-        "enabled_backends": ["ARIN"],
         "encryption_key": "",
         "api_retry_count": 3,
         "api_retry_backoff": 2,
         "geocoding_provider": "nominatim",
-        "google_geocoding_api_key": "",
     }
 
     def ready(self):

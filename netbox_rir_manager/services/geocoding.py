@@ -210,10 +210,9 @@ class NominatimGeocoder(GeocodingService):
 
 def _get_geocoding_service() -> GeocodingService:
     """Get the configured geocoding service."""
-    from django.conf import settings
+    from netbox.plugins import get_plugin_config
 
-    plugin_config = settings.PLUGINS_CONFIG.get("netbox_rir_manager", {})
-    provider = plugin_config.get("geocoding_provider", "nominatim")
+    provider = get_plugin_config("netbox_rir_manager", "geocoding_provider")
 
     if provider == "nominatim":
         return NominatimGeocoder()
@@ -247,7 +246,7 @@ def resolve_site_address_candidates(site: Site, query: str | None = None, limit:
         results = geocoder.geocode_many(query, limit=limit)
         if results:
             return _deduplicate_results(results)
-        # Query failed — fall through to site-based resolution
+        # Query failed -- fall through to site-based resolution
 
     # Try reverse geocode from coordinates
     if site.latitude and site.longitude:

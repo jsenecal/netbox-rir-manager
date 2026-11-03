@@ -14,6 +14,8 @@ PLUGINS_CONFIG = {
 }
 ```
 
+Two other settings change how the plugin fits into NetBox: `top_level_menu` set to `False` lists its pages under NetBox's shared **Plugins** menu instead of a top-level **RIR Manager** menu, and `sync_interval_hours` sets the hours between scheduled syncs (24 by default).
+
 Every setting, its default and how the plugin uses it are listed in [Reference: Settings](../reference/settings.md).
 
 ## Encryption and key rotation

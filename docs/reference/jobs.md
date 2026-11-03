@@ -8,7 +8,7 @@ The plugin's background work runs as NetBox jobs (`JobRunner` subclasses in `net
 | `ARIN Prefix Sync`   | `SyncPrefixesJob`     | `RIR Sync` and `Scheduled RIR Sync`, one per synced aggregate   |
 | `ARIN Reassign`      | `ReassignJob`         | Saving a prefix under an allocation with **Auto reassign** set  |
 | `ARIN Remove`        | `RemoveNetworkJob`    | Deleting or deactivating a prefix under an allocation with **Auto reassign** set |
-| `Scheduled RIR Sync` | `ScheduledRIRSyncJob` | NetBox's system job scheduler, daily                            |
+| `Scheduled RIR Sync` | `ScheduledRIRSyncJob` | NetBox's system job scheduler, every `sync_interval_hours`     |
 
 Jobs queued from a user's action, or from a prefix edit, run as a NetBox user, and the changes they make are recorded in the changelog under that user. `Scheduled RIR Sync` is a system job with no user of its own: it syncs each config under the owner of the config's default key, and the `ARIN Prefix Sync` jobs it queues run as that same user, so every change in a scheduled run is recorded under the account whose RIR key made the calls. Which RIR key each job uses is described in [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses).
 
@@ -51,7 +51,7 @@ Removes one reassigned or reallocated network at ARIN when its prefix is deleted
 
 ## Scheduled RIR Sync
 
-A NetBox system job registered with a fixed daily interval when the plugin loads, so restart the RQ worker after installing or upgrading the plugin. It syncs every active config with the config's default key and queues the same `ARIN Prefix Sync` jobs as a manual sync; see [Scheduled](../user-guide/syncing.md#scheduled) for the details.
+A NetBox system job registered when the plugin loads, at the interval set by [`sync_interval_hours`](settings.md#sync_interval_hours) (24 hours by default), so restart the RQ worker after installing or upgrading the plugin or changing the setting. It syncs every active config with the config's default key and queues the same `ARIN Prefix Sync` jobs as a manual sync; see [Scheduled](../user-guide/syncing.md#scheduled) for the details.
 
 - **User**: none on the job itself. Each config is synced under the owner of its default key, so its changes are recorded in the changelog under that user. A config with no default key, or whose default key belongs to a deactivated user, is skipped with a warning in the job log that says which.
 - **Job data**: `configs_synced` (the number of active configs) and `total_logs`, the number of sync log rows written.

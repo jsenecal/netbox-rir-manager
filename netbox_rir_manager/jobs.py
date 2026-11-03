@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 
 from core.choices import JobIntervalChoices
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 from netbox.jobs import JobRunner, system_job
+from netbox.plugins import get_plugin_config
 from utilities.request import NetBoxFakeRequest, apply_request_processors
 
 from netbox_rir_manager.backends.arin import ARINBackend
@@ -712,7 +714,21 @@ class RemoveNetworkJob(JobRunner):
         self.job.save()
 
 
-@system_job(interval=JobIntervalChoices.INTERVAL_DAILY)
+def scheduled_sync_interval() -> int:
+    """Return the scheduled sync interval in minutes, from the sync_interval_hours setting.
+
+    NetBox reads a system job's interval when the class is registered, so this runs once, at import.
+    """
+    hours = get_plugin_config("netbox_rir_manager", "sync_interval_hours")
+    # bool is a subclass of int, but True is not a meaningful number of hours.
+    if type(hours) is not int or hours < 1:
+        raise ImproperlyConfigured(
+            f"netbox_rir_manager: sync_interval_hours must be a whole number of hours, at least 1 (got {hours!r})."
+        )
+    return hours * JobIntervalChoices.INTERVAL_HOURLY
+
+
+@system_job(interval=scheduled_sync_interval())
 class ScheduledRIRSyncJob(JobRunner):
     """Scheduled background job that syncs all active RIR configs."""
 

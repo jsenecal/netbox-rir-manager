@@ -17,7 +17,7 @@
 - **Write operations** -- reassign, reallocate, remove, and delete networks directly through the plugin
 - **Ticket tracking** -- monitor RIR tickets and their status
 - **Per-user API keys** -- encrypted at rest
-- **Scheduled sync** -- daily background jobs keep RIR data current
+- **Scheduled sync** -- a recurring background job (daily by default) keeps RIR data current
 - **Pluggable backend architecture** -- ARIN supported today; PRs welcome for RIPE, APNIC, LACNIC, AFRINIC
 - **Full REST API** -- every resource and action exposed under `/api/plugins/rir-manager/`
 - **Sync logging** -- full audit trail of every sync operation
@@ -54,13 +54,13 @@ PLUGINS = [
 
 PLUGINS_CONFIG = {
     "netbox_rir_manager": {
-        "top_level_menu": True,
-        "sync_interval_hours": 24,
+        "top_level_menu": True,  # False lists the items under the shared Plugins menu
+        "sync_interval_hours": 24,  # hours between scheduled syncs
         "auto_link_networks": True,
-        "enabled_backends": ["ARIN"],
         "encryption_key": "",  # defaults to NetBox SECRET_KEY
         "api_retry_count": 3,
         "api_retry_backoff": 2,
+        "geocoding_provider": "nominatim",
     },
 }
 ```

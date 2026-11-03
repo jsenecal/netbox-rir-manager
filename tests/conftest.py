@@ -3,6 +3,7 @@ Pytest configuration for netbox_rir_manager tests.
 Sets up Django and NetBox environment for testing.
 """
 
+import importlib
 import os
 import sys
 from types import ModuleType
@@ -88,6 +89,40 @@ if _netbox_available:
     import django
 
     django.setup()
+
+    @pytest.fixture
+    def plugin_settings(settings):
+        """Return a function that overrides some of the plugin's settings for one test.
+
+        The other keys keep the values NetBox applied from default_settings.
+        """
+
+        def _override(**overrides):
+            plugins_config = settings.PLUGINS_CONFIG
+            settings.PLUGINS_CONFIG = {
+                **plugins_config,
+                "netbox_rir_manager": {**plugins_config["netbox_rir_manager"], **overrides},
+            }
+
+        return _override
+
+    @pytest.fixture
+    def reload_plugin_module(monkeypatch):
+        """Return a function that drops a netbox_rir_manager submodule so the next import runs it again.
+
+        It returns the freshly imported module, or None with load=False, for a test that wants the
+        plugin itself to import it. The original module is restored after the test.
+        """
+        import netbox_rir_manager
+
+        def _reload(name, load=True):
+            module_name = f"netbox_rir_manager.{name}"
+            importlib.import_module(module_name)  # loaded first so monkeypatch can restore it
+            monkeypatch.delitem(sys.modules, module_name)
+            monkeypatch.delattr(netbox_rir_manager, name)
+            return importlib.import_module(module_name) if load else None
+
+        return _reload
 
     @pytest.fixture
     def rir(db):
