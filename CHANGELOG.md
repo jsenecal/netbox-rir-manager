@@ -47,7 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validated against pyregrws (no IP version, and the range was not in a net
   block), so every request failed with a server error before anything was sent.
   The range now goes in a net block typed `S` (reassigned) or `A` (reallocated),
-  with the version taken from the start address. For a simple reassignment, the
+  with the version taken from the start address, and the payload names the parent
+  net, which ARIN requires. Verified against ARIN's OT&E environment: simple and
+  detailed reassignment, reallocation and removal. For a simple reassignment, the
   customer details are now mapped to the payload ARIN expects (ISO 3166-1 country
   code, numbered street address lines, ISO 3166-2 subdivision code), and accented
   letters in the customer name, street address, city and postal code are

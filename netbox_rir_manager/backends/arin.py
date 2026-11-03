@@ -117,7 +117,7 @@ class ARINBackend(RIRBackend):
 
     def _write_child_net(self, parent_handle: str, net_data: dict[str, Any], block_type: str, submit):
         """Build the child net (raising RIRDataError before any call), then submit it under the parent."""
-        child_net = self._build_net(net_data, block_type)
+        child_net = self._build_net(net_data, block_type, parent_handle)
         parent = self._call_with_retry(self.api.net.from_handle, parent_handle)
         if parent is None or isinstance(parent, Error):
             return None
@@ -171,11 +171,13 @@ class ARINBackend(RIRBackend):
         self._build_net(net_data, "S")
 
     @classmethod
-    def _build_net(cls, net_data: dict[str, Any], block_type: str) -> Net:
+    def _build_net(cls, net_data: dict[str, Any], block_type: str, parent_handle: str | None = None) -> Net:
         """Build the child Net from the plugin's flat net data.
 
         The range goes in a single net block typed S for a reassignment or A for a
-        reallocation, and the IP version comes from its start address.
+        reallocation, and the IP version comes from its start address. ARIN refuses a
+        reassignment or reallocation whose parentNetHandle does not match the parent in the
+        request URL, so the parent's handle is carried in the payload.
         """
         start = net_data.get("start_address")
         try:
@@ -187,6 +189,7 @@ class ARINBackend(RIRBackend):
             "net_name": net_data.get("net_name") or None,
             "customer_handle": net_data.get("customer_handle") or None,
             "org_handle": net_data.get("org_handle") or None,
+            "parent_net_handle": parent_handle,
             "net_blocks": [{"type": block_type, "start_address": start, "end_address": net_data.get("end_address")}],
         }
         return cls._build_model(Net, payload)

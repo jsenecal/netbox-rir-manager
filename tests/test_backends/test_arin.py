@@ -1216,7 +1216,8 @@ def test_net_payload_builds_real_pyregrws_net(
     """The plugin's flat net data becomes a Net pyregrws accepts.
 
     Net is not mocked here: version comes from the start address, and the range goes in one
-    net block typed S (reassigned) or A (reallocated).
+    net block typed S (reassigned) or A (reallocated). parentNetHandle must name the parent
+    in the request URL, or ARIN refuses the request (seen against ARIN OT&E).
     """
     from ipaddress import ip_address
 
@@ -1231,6 +1232,7 @@ def test_net_payload_builds_real_pyregrws_net(
     child = getattr(mock_api.net, verb).call_args[0][1]
     assert child.version == version
     assert child.net_name == net_data["net_name"]
+    assert child.parent_net_handle == "NET-PARENT"
     assert getattr(child, handle_field) == net_data[handle_field]
     [block] = child.net_blocks
     assert block.type == block_type
