@@ -16,6 +16,10 @@ class ARINWriteError(Exception):
     """ARIN refused or failed a write; the message is safe to show a user."""
 
 
+class ARINDataError(ARINWriteError):
+    """The request's own data cannot be sent to ARIN, so nothing was submitted."""
+
+
 @dataclass
 class ARINOutcome:
     """What NetBox recorded about a write ARIN accepted.
@@ -110,3 +114,9 @@ def sync_log(rir_config, operation, object_type, handle, status, message):
         status=status,
         message=message,
     )
+
+
+def data_error(rir_config, operation, object_type, handle, exc, error_cls=ARINDataError):
+    """Log a request-data problem the backend reported (RIRDataError) and wrap it for the caller."""
+    sync_log(rir_config, operation, object_type, handle, "error", str(exc))
+    return error_cls(str(exc))
