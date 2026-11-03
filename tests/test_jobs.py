@@ -1042,3 +1042,54 @@ def test_plugin_ready_registers_scheduled_sync(monkeypatch):
         registered = [cls.__name__ for cls in registry["system_jobs"]]
 
     assert registered == ["ScheduledRIRSyncJob"]
+
+
+@pytest.mark.parametrize(("hours", "minutes"), [(24, 1440), (6, 360), (1, 60), (168, 10080)])
+def test_scheduled_sync_interval_converts_hours_to_minutes(settings, hours, minutes):
+    from netbox_rir_manager.jobs import scheduled_sync_interval
+
+    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"sync_interval_hours": hours}}
+
+    assert scheduled_sync_interval() == minutes
+
+
+def test_scheduled_sync_interval_defaults_to_daily(settings):
+    from netbox_rir_manager.jobs import scheduled_sync_interval
+
+    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {}}
+
+    assert scheduled_sync_interval() == 1440
+
+
+@pytest.mark.parametrize("hours", [0, -1, 1.5, "24", None, True])
+def test_scheduled_sync_interval_rejects_invalid_values(settings, hours):
+    from django.core.exceptions import ImproperlyConfigured
+
+    from netbox_rir_manager.jobs import scheduled_sync_interval
+
+    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"sync_interval_hours": hours}}
+
+    with pytest.raises(ImproperlyConfigured, match="sync_interval_hours"):
+        scheduled_sync_interval()
+
+
+def test_scheduled_sync_registered_with_configured_interval(monkeypatch, settings):
+    """The system job is registered with sync_interval_hours, converted to minutes."""
+    import importlib
+    import sys
+
+    from netbox.registry import registry
+
+    import netbox_rir_manager
+    import netbox_rir_manager.jobs  # noqa: F401 -- loaded first so monkeypatch can restore it
+
+    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"sync_interval_hours": 6}}
+    monkeypatch.delitem(sys.modules, "netbox_rir_manager.jobs")
+    monkeypatch.delattr(netbox_rir_manager, "jobs")
+
+    with patch.dict(registry["system_jobs"], clear=True):
+        jobs = importlib.import_module("netbox_rir_manager.jobs")
+        intervals = {cls.__name__: kwargs["interval"] for cls, kwargs in registry["system_jobs"].items()}
+
+    assert jobs.ScheduledRIRSyncJob.__name__ in intervals
+    assert intervals == {"ScheduledRIRSyncJob": 360}
