@@ -44,6 +44,33 @@ def _changelog_context(user):
         yield
 
 
+def _queued_user_key(runner: JobRunner, user_key_id: int, operation: str, object_handle: str) -> RIRUserKey | None:
+    """Load the key a job was queued with, or None if it may no longer be used.
+
+    The owner may have been deactivated since the job was queued. In that case the job is
+    marked skipped and a skipped sync log records why, so no RIR call is made with the key.
+    """
+    from netbox_rir_manager.models import RIRUserKey
+
+    user_key = RIRUserKey.objects.select_related("user", "rir_config").get(pk=user_key_id)
+    if user_key.user.is_active:
+        return user_key
+
+    reason = user_key.rir_config.no_key_reason(user_key.user)
+    runner.logger.warning(reason)
+    runner.job.data = {"status": "skipped", "message": reason}
+    runner.job.save()
+    RIRSyncLog.objects.create(
+        rir_config=user_key.rir_config,
+        operation=operation,
+        object_type="network",
+        object_handle=object_handle,
+        status="skipped",
+        message=reason,
+    )
+    return None
+
+
 def sync_rir_config(
     rir_config: RIRConfig,
     api_key: str,
@@ -496,14 +523,13 @@ class SyncPrefixesJob(JobRunner):
     def run(self, *args, **kwargs):
         from ipam.models import Aggregate, Prefix
 
-        from netbox_rir_manager.models import RIRUserKey
-
         aggregate_id = kwargs["aggregate_id"]
         parent_handle = kwargs["parent_handle"]
-        user_key_id = kwargs["user_key_id"]
 
         agg = Aggregate.objects.get(pk=aggregate_id)
-        user_key = RIRUserKey.objects.get(pk=user_key_id)
+        user_key = _queued_user_key(self, kwargs["user_key_id"], "sync", parent_handle)
+        if not user_key:
+            return
         parent_net = RIRNetwork.objects.get(handle=parent_handle)
         rir_config = parent_net.rir_config
         backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
@@ -569,15 +595,13 @@ class ReassignJob(JobRunner):
     def run(self, *args, **kwargs):
         from ipam.models import Prefix
 
-        from netbox_rir_manager.models import RIRUserKey
         from netbox_rir_manager.services.geocoding import resolve_site_address
         from netbox_rir_manager.services.reassignment import ReassignmentError, prefix_site, submit_reassignment
 
-        prefix_id = kwargs.get("prefix_id")
-        user_key_id = kwargs.get("user_key_id")
-
-        prefix = Prefix.objects.get(pk=prefix_id)
-        user_key = RIRUserKey.objects.get(pk=user_key_id)
+        prefix = Prefix.objects.get(pk=kwargs.get("prefix_id"))
+        user_key = _queued_user_key(self, kwargs.get("user_key_id"), "reassign", str(prefix.prefix))
+        if not user_key:
+            return
 
         self.job.data = {"prefix": str(prefix.prefix), "status": "starting"}
         self.job.save()
@@ -715,15 +739,13 @@ class RemoveNetworkJob(JobRunner):
         name = "ARIN Remove"
 
     def run(self, *args, **kwargs):
-        from netbox_rir_manager.models import RIRUserKey
         from netbox_rir_manager.services.arin_results import ARINWriteError
         from netbox_rir_manager.services.net_writes import submit_net_remove
 
-        network_id = kwargs.get("network_id")
-        user_key_id = kwargs.get("user_key_id")
-
-        network = RIRNetwork.objects.get(pk=network_id)
-        user_key = RIRUserKey.objects.get(pk=user_key_id)
+        network = RIRNetwork.objects.get(pk=kwargs.get("network_id"))
+        user_key = _queued_user_key(self, kwargs.get("user_key_id"), "remove", network.handle)
+        if not user_key:
+            return
 
         self.job.data = {"network_handle": network.handle, "status": "starting"}
         self.job.save()

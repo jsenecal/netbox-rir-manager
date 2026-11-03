@@ -920,6 +920,60 @@ class TestRemoveNetworkJob:
         assert log.status == "error"
 
 
+def _prefix_sync_kwargs(rir_config, rir):
+    from ipam.models import Aggregate
+
+    from netbox_rir_manager.models import RIRNetwork
+
+    agg = Aggregate.objects.create(prefix="10.70.0.0/16", rir=rir)
+    RIRNetwork.objects.create(rir_config=rir_config, handle="NET-KEYCHECK-AGG", aggregate=agg)
+    return {"aggregate_id": agg.pk, "parent_handle": "NET-KEYCHECK-AGG"}
+
+
+def _reassign_kwargs(rir_config, rir):
+    from ipam.models import Prefix
+
+    return {"prefix_id": Prefix.objects.create(prefix="10.71.1.0/24").pk}
+
+
+def _remove_kwargs(rir_config, rir):
+    from netbox_rir_manager.models import RIRNetwork
+
+    network = RIRNetwork.objects.create(rir_config=rir_config, handle="NET-KEYCHECK-RM")
+    return {"network_id": network.pk}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "job_name, make_kwargs",
+    [
+        pytest.param("SyncPrefixesJob", _prefix_sync_kwargs, id="prefix-sync"),
+        pytest.param("ReassignJob", _reassign_kwargs, id="reassign"),
+        pytest.param("RemoveNetworkJob", _remove_kwargs, id="remove"),
+    ],
+)
+@patch("netbox_rir_manager.jobs.ARINBackend")
+def test_queued_job_refuses_key_of_deactivated_owner(
+    mock_backend_class, rir_config, rir, rir_user_key, job_name, make_kwargs
+):
+    """A job queued before its key's owner was deactivated never calls ARIN with that key."""
+    from netbox_rir_manager import jobs
+    from netbox_rir_manager.models import RIRSyncLog
+
+    kwargs = make_kwargs(rir_config, rir)
+    rir_user_key.user.is_active = False
+    rir_user_key.user.save()
+
+    runner = make_runner(getattr(jobs, job_name))
+    runner.run(user_key_id=rir_user_key.pk, **kwargs)
+
+    mock_backend_class.from_rir_config.assert_not_called()
+    assert runner.job.data["status"] == "skipped"
+    assert "admin is deactivated" in runner.job.data["message"]
+    log = RIRSyncLog.objects.get(rir_config=rir_config, status="skipped")
+    assert log.message == runner.job.data["message"]
+
+
 @pytest.mark.django_db
 class TestChangelogEntries:
     """Verify that sync operations create ObjectChange changelog entries."""

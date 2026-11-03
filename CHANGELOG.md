@@ -53,7 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A key whose owner is deactivated is no longer used, as the user's own key or as a
   config's default key. Deactivating a user now stops their keys the way deleting them
-  does: the scheduled sync skips the config, and the log line or `skipped` sync log names
+  does: the scheduled sync skips the config, prefix sync, reassign and remove jobs queued
+  before the deactivation make no ARIN call, and the log line or `skipped` sync log names
   the deactivated user (#75).
 - The RIR config **Sync** button now reports a missing key as "No API key configured
   for this RIR config.", the same wording as every other UI action and the REST API,
