@@ -18,22 +18,27 @@ The plugin defines no custom permissions. Each model gets Django's four standard
 
 The list, detail, add, edit, import, bulk edit and delete pages are NetBox's generic views, so they enforce the matching permission (and its constraints) as they do for core models. Customers, sync logs and tickets are created by the plugin, not by hand: their pages offer list, detail and delete only.
 
-The **RIR Manager** menu (or the **NetBox RIR Manager** section of the **Plugins** menu, when `top_level_menu` is `False`) shows each item to users holding its `view_*` permission, and the **+** button to users holding `add_*`. The **Sync Selected** action on the RIR config list is shown to users holding `change_rirconfig`.
+The **RIR Manager** menu (or the **NetBox RIR Manager** section of the **Plugins** menu, when `top_level_menu` is `False`) shows each item to users holding its `view_*` permission, and the **+** button to users holding `add_*`.
 
 ## Actions in the web UI
 
-The action pages below only require a logged-in user. They do not check a NetBox permission on the object they act on:
+Each action page requires the same NetBox permission as its REST API counterpart: the `add` permission on the model the action acts on. As in the REST API, the object must fall within that permission's constraints, so a constrained permission limits which objects a user can act on. A user without the permission gets `403 Forbidden`, and an object outside its constraints gives `404 Not Found`. The GET pages that show an action's form or confirmation need the same permission as submitting it.
 
-| Action                                                   | Also requires                         |
-|----------------------------------------------------------|---------------------------------------|
-| **Sync** on an RIR config, and **Sync Selected**         | The user's own key on the config      |
-| **Reassign**, **Reallocate**, **Remove**, **Delete** on an RIR network | The user's own key on the network's config |
-| **Sync** on an Aggregate                                 | The user's own key on an active config for the aggregate's RIR |
-| **Sync** and **Reassign** on a Prefix                    | The user's own key on the config that owns the parent network |
-| **Resolve** on a Site's RIR Address panel (geocode and save an address) | Nothing else                  |
-| **Refresh** on a ticket                                  | Nothing else                          |
+| Action                                                   | Permission                       | Also requires                         |
+|----------------------------------------------------------|----------------------------------|---------------------------------------|
+| **Sync** on an RIR config, and **Sync Selected**         | `add_rirconfig` on the config    | The user's own key on the config      |
+| **Reassign**, **Reallocate**, **Remove**, **Delete at ARIN** on an RIR network | `add_rirnetwork` on the network | The user's own key on the network's config |
+| **Sync** on an Aggregate                                 | `add_rirconfig` on an active config for the aggregate's RIR | `view_aggregate`, and the user's own key on that config |
+| **Sync** on a Prefix                                     | `add_rirconfig` on the config that owns the parent network | `view_prefix`, and the user's own key on that config |
+| **Reassign** on a Prefix                                 | `add_rirnetwork` on the parent network | `view_prefix`, and the user's own key on the parent network's config |
+| **Resolve** on a Site's RIR Address panel, and selecting a candidate | `add_riraddress`; the saved address must fall within its constraints | `view_site` |
+| **Refresh** on a ticket                                  | `add_rirticket` on the ticket    | Nothing else                          |
 
-The key is the real gate for anything sent to the RIR: without a key of their own on the config, nothing is sent (see [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses)). Control who can act at the RIR by controlling who has a key. Deactivating a NetBox user stops all of their keys, including as a config's default key and in jobs already queued with them.
+**Sync Selected** syncs only the selected configs the user's `add_rirconfig` permission covers. The aggregate and prefix **Sync** have no REST endpoint of their own; they do for one object what a config's **Sync** does for all of them, so they need the config sync's permission.
+
+Pages show an action's button only to users who can use it: **Sync Now** on a config, the **ARIN Actions** menu on a network, **Refresh Status** on a ticket, **Sync Selected** on the config list, the **Sync from ARIN** and **Reassign at ARIN** buttons on aggregates and prefixes, and **Resolve** on a site. The site panel's edit button needs `change_riraddress` on the address.
+
+The NetBox permission decides who may act; the key still decides what is sent to the RIR. Without a key of their own on the config, nothing is sent (see [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses)). Deactivating a NetBox user stops all of their keys, including as a config's default key and in jobs already queued with them.
 
 ## REST API
 

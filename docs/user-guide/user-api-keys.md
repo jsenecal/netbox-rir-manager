@@ -93,7 +93,6 @@ The list view filters by `user` and `rir_config_id`. Search matches `user.userna
 ## Permissions
 
 - **Managing keys** uses the standard `RIRUserKey` permissions: `view_riruserkey` to list and view keys, `add_riruserkey`, `change_riruserkey` and `delete_riruserkey` to manage them. The key form lets the editor pick any user; see [User keys](../reference/permissions.md#user-keys) to limit users to their own keys.
-- **Sync and write actions in the web UI** require a logged-in user and that user's own key on the config. They do not check a NetBox permission on the object.
-- **The same actions through the REST API** are `POST` requests, so NetBox requires the `add` permission on the endpoint's model (for example `add_rirnetwork` for `reassign`) and a token with write access, as well as the user's own key.
+- **Sync and write actions**, in the web UI and the REST API, require the `add` permission on the model they act on (for example `add_rirnetwork` for **Reassign**, `add_rirconfig` for **Sync**), within that permission's constraints, as well as the user's own key on the config. A key alone is not enough, and a permission without a key sends nothing to the RIR. Through the REST API, the token must also have write access.
 
 See [Reference: Permissions](../reference/permissions.md) for the full list.

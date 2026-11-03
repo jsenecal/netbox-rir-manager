@@ -4,11 +4,12 @@
     <h5 class="card-header d-flex justify-content-between align-items-center">
         RIR Address
         <span>
-            {% if site_address %}
+            {% if site_address and can_edit_address %}
                 <a href="{{ site_address.get_absolute_url }}edit/" class="btn btn-sm btn-outline-secondary" title="Edit address">
                     <i class="mdi mdi-pencil"></i>
                 </a>
             {% endif %}
+            {% if can_resolve %}
             <a href="#"
                 class="btn btn-sm btn-outline-primary"
                 title="Resolve address via geocoding"
@@ -18,6 +19,7 @@
             >
                 <i class="mdi mdi-map-marker"></i> Resolve
             </a>
+            {% endif %}
         </span>
     </h5>
     {% if site_address %}
@@ -59,7 +61,7 @@
     </table>
     {% else %}
     <div class="card-body text-muted">
-        No structured address resolved. Click "Resolve" to geocode from site coordinates or physical address.
+        No structured address resolved.{% if can_resolve %} Click "Resolve" to geocode from site coordinates or physical address.{% endif %}
     </div>
     {% endif %}
 </div>

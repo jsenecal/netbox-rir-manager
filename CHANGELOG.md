@@ -25,6 +25,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (security):** the web UI action pages now require the same NetBox
+  permission as their REST API counterparts, within that permission's constraints.
+  Before, any logged-in user with their own key on the config could use them.
+  Non-superusers need a new grant to keep acting:
+  - **Sync** and **Sync Selected** on an RIR config: `add_rirconfig` on the config.
+  - **Reassign**, **Reallocate**, **Remove** and **Delete at ARIN** on an RIR network:
+    `add_rirnetwork` on the network.
+  - **Sync** on an Aggregate or a Prefix: `add_rirconfig` on the config used, plus
+    `view_aggregate` or `view_prefix`.
+  - **Reassign** on a Prefix: `add_rirnetwork` on the parent network, plus `view_prefix`.
+  - **Resolve** (and selecting a candidate) on a Site's RIR Address panel:
+    `add_riraddress`, plus `view_site`.
+  - **Refresh** on a ticket: `add_rirticket` on the ticket.
+
+  The buttons are hidden from users without the permission, and **Sync Selected** now
+  follows `add_rirconfig` instead of `change_rirconfig`.
 - CI now runs on every pull request, including docs-only ones, so the
   required lint, build and test checks always report and a docs-only PR can
   merge without an admin bypass. A `changes` job detects docs-only PRs and the

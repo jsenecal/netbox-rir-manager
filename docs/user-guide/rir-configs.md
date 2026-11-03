@@ -34,7 +34,7 @@ The list view supports the standard NetBox bulk actions plus one custom action:
 - **Add**: standard create form.
 - **Import**: CSV import via `RIRConfigImportForm`. Fields: `rir` (looked up by name), `name`, `api_url`, `org_handle`, `is_active`.
 - **Edit**: bulk-edit `rir`, `api_url`, `org_handle`, and `is_active`.
-- **Sync Selected**: enqueue a `SyncRIRConfigJob` for every selected config. Configs without a user key for the requesting user are skipped with a warning. See [Syncing Resources](syncing.md).
+- **Sync Selected**: enqueue a `SyncRIRConfigJob` for every selected config the user's `add_rirconfig` permission covers. Configs without a user key for the requesting user are skipped with a warning. See [Syncing Resources](syncing.md).
 - **Delete**: standard bulk delete. Cascades through every dependent plugin model.
 
 ## What happens when a config is deleted

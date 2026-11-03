@@ -757,3 +757,220 @@ class TestImmediateResultViews:
         [(level, text)] = _messages(response)
         assert level == "warning"
         assert "succeeded at ARIN" in text
+
+
+class ReachedARINError(Exception):
+    """Raised by the mocked ARIN backend to show that a view got as far as calling ARIN."""
+
+
+def grant(user, model, actions, constraints=None):
+    """Give user a NetBox object permission for actions on model."""
+    from core.models import ObjectType
+    from users.models import ObjectPermission
+
+    perm = ObjectPermission.objects.create(
+        name=f"{user.username} {model._meta.model_name} {'/'.join(actions)}",
+        actions=actions,
+        constraints=constraints,
+    )
+    perm.object_types.set([ObjectType.objects.get_for_model(model)])
+    perm.users.add(user)
+    return perm
+
+
+@pytest.fixture
+def action_targets(rir_config, rir_network, rir_ticket, prefix_under_parent):
+    """One object for every UI action view to act on, all under the test config."""
+    from dcim.models import Site
+
+    setup = prefix_under_parent("198.51.100.0/24", "198.51.100.16/28", "NET-198-51-100-0-1")
+    return {
+        "config": rir_config,
+        "network": rir_network,
+        "ticket": rir_ticket,
+        "aggregate": setup["agg"],
+        "prefix": setup["prefix"],
+        "site": Site.objects.create(name="Site 1", slug="site-1"),
+    }
+
+
+@pytest.fixture
+def operator_client(operator_key):
+    """A logged-in non-superuser who holds their own key on the test config."""
+    from django.test import Client
+
+    client = Client()
+    client.force_login(operator_key.user)
+    return client
+
+
+@pytest.fixture
+def side_effects(monkeypatch, mock_arin):
+    """Replace every way an action view acts with recording mocks; ARIN raises ReachedARINError."""
+    from unittest.mock import MagicMock
+
+    arin = mock_arin("views")
+    arin.for_user_key.side_effect = ReachedARINError
+    enqueue = MagicMock()
+    monkeypatch.setattr("netbox_rir_manager.jobs.SyncRIRConfigJob.enqueue", enqueue)
+    geocode = MagicMock(return_value=[])
+    monkeypatch.setattr("netbox_rir_manager.services.geocoding.resolve_site_address_candidates", geocode)
+    return {"arin": arin, "enqueue": enqueue, "geocode": geocode}
+
+
+SITE_ADDRESS = {"street_address": "1 Main St", "city": "Anytown", "country": "US"}
+PREFIX_REASSIGN = {**DETAILED, "start_address": "198.51.100.16", "end_address": "198.51.100.31"}
+
+# (url name, target, method, data, model whose add permission the action needs, how it proceeds)
+ACTION_VIEWS = [
+    ("rirconfig_sync", "config", "post", {}, "RIRConfig", "enqueue"),
+    ("rirconfig_bulk_sync", None, "post", {"_confirm": "1"}, "RIRConfig", "enqueue"),
+    ("rirnetwork_reassign", "network", "get", {}, "RIRNetwork", 200),
+    ("rirnetwork_reassign", "network", "post", DETAILED, "RIRNetwork", "arin"),
+    ("rirnetwork_reallocate", "network", "get", {}, "RIRNetwork", 200),
+    ("rirnetwork_reallocate", "network", "post", REALLOCATION, "RIRNetwork", "arin"),
+    ("rirnetwork_remove", "network", "get", {}, "RIRNetwork", 200),
+    ("rirnetwork_remove", "network", "post", {}, "RIRNetwork", "arin"),
+    ("rirnetwork_delete_arin", "network", "get", {}, "RIRNetwork", 200),
+    ("rirnetwork_delete_arin", "network", "post", {}, "RIRNetwork", "arin"),
+    ("aggregate_sync", "aggregate", "post", {}, "RIRConfig", "arin"),
+    ("prefix_sync", "prefix", "post", {}, "RIRConfig", "arin"),
+    ("prefix_reassign", "prefix", "get", {}, "RIRNetwork", 200),
+    ("prefix_reassign", "prefix", "post", PREFIX_REASSIGN, "RIRNetwork", "arin"),
+    ("site_resolve_address", "site", "get", {}, "RIRAddress", "geocode"),
+    ("site_resolve_address", "site", "post", {"query": "1 Main St"}, "RIRAddress", "geocode"),
+    ("site_select_address", "site", "post", SITE_ADDRESS, "RIRAddress", 204),
+    ("rirticket_refresh", "ticket", "post", {}, "RIRTicket", 302),
+]
+
+
+def _action_request(client, action_targets, url_name, target, method, data):
+    if target is None:  # the bulk sync acts on the configs it is posted
+        url = reverse(f"plugins:netbox_rir_manager:{url_name}")
+        data = {**data, "pk": [action_targets["config"].pk]}
+    else:
+        url = reverse(f"plugins:netbox_rir_manager:{url_name}", args=[action_targets[target].pk])
+    return getattr(client, method)(url, data)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("url_name, target, method, data, model, proceeds", ACTION_VIEWS)
+class TestActionViewPermissions:
+    """Each UI action needs the same NetBox permission as its REST API counterpart, not just a key."""
+
+    def test_key_without_permission_is_denied(
+        self, operator_client, action_targets, side_effects, url_name, target, method, data, model, proceeds
+    ):
+        from netbox_rir_manager.models import RIRAddress
+
+        response = _action_request(operator_client, action_targets, url_name, target, method, data)
+
+        assert response.status_code == 403
+        side_effects["arin"].for_user_key.assert_not_called()
+        side_effects["enqueue"].assert_not_called()
+        side_effects["geocode"].assert_not_called()
+        assert not RIRAddress.objects.filter(street_address=SITE_ADDRESS["street_address"]).exists()
+
+    def test_key_with_permission_proceeds(
+        self,
+        operator_key,
+        operator_client,
+        action_targets,
+        side_effects,
+        url_name,
+        target,
+        method,
+        data,
+        model,
+        proceeds,
+    ):
+        from dcim.models import Site
+        from ipam.models import Aggregate, Prefix
+
+        from netbox_rir_manager import models
+
+        grant(operator_key.user, getattr(models, model), ["add"])
+        # The NetBox object the action starts from must be visible to the user.
+        for netbox_model in (Aggregate, Prefix, Site):
+            grant(operator_key.user, netbox_model, ["view"])
+
+        if proceeds == "arin":
+            with pytest.raises(ReachedARINError):
+                _action_request(operator_client, action_targets, url_name, target, method, data)
+            return
+
+        response = _action_request(operator_client, action_targets, url_name, target, method, data)
+        if proceeds in ("enqueue", "geocode"):
+            assert response.status_code in (200, 302)
+            side_effects[proceeds].assert_called_once()
+        else:
+            assert response.status_code == proceeds
+
+
+@pytest.mark.django_db
+def test_permission_constraints_limit_which_network(operator_key, operator_client, side_effects, networks):
+    """A constrained add permission lets the user act only on the networks it matches."""
+    from netbox_rir_manager.models import RIRNetwork
+
+    allowed, other = networks
+    grant(operator_key.user, RIRNetwork, ["add"], constraints={"handle": allowed.handle})
+
+    response = operator_client.post(_action_url("delete_arin", other))
+
+    assert response.status_code == 404
+    side_effects["arin"].for_user_key.assert_not_called()
+    with pytest.raises(ReachedARINError):
+        operator_client.post(_action_url("delete_arin", allowed))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("url_name, target", [("aggregate_sync", "aggregate"), ("prefix_sync", "prefix")])
+def test_sync_refused_when_constraints_exclude_the_config(
+    operator_key, operator_client, action_targets, side_effects, url_name, target
+):
+    """Syncing from an aggregate or prefix needs add_rirconfig on the config that would be used."""
+    from dcim.models import Site
+    from ipam.models import Aggregate, Prefix
+
+    from netbox_rir_manager.models import RIRConfig
+
+    grant(operator_key.user, RIRConfig, ["add"], constraints={"name": "Some Other Config"})
+    for netbox_model in (Aggregate, Prefix, Site):
+        grant(operator_key.user, netbox_model, ["view"])
+
+    response = _action_request(operator_client, action_targets, url_name, target, "post", {})
+
+    assert response.status_code == 403
+    side_effects["arin"].for_user_key.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "target, action_url, model",
+    [
+        ("config", "rirconfig_sync", "RIRConfig"),
+        ("network", "rirnetwork_reassign", "RIRNetwork"),
+        ("ticket", "rirticket_refresh", "RIRTicket"),
+        ("aggregate", "aggregate_sync", "RIRConfig"),
+        ("prefix", "prefix_sync", "RIRConfig"),
+        ("prefix", "prefix_reassign", "RIRNetwork"),
+        ("site", "site_resolve_address", "RIRAddress"),
+    ],
+)
+@pytest.mark.parametrize("permitted", [False, True])
+def test_action_buttons_follow_permission(
+    operator_key, operator_client, action_targets, target, action_url, model, permitted
+):
+    """A page offers an action only to users holding the permission the action needs."""
+    from netbox_rir_manager import models
+
+    obj = action_targets[target]
+    grant(operator_key.user, type(obj), ["view"])
+    if permitted:
+        grant(operator_key.user, getattr(models, model), ["add"])
+
+    response = operator_client.get(obj.get_absolute_url())
+
+    assert response.status_code == 200
+    url = reverse(f"plugins:netbox_rir_manager:{action_url}", args=[obj.pk])
+    assert (url.encode() in response.content) is permitted

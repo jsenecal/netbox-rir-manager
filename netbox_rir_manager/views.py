@@ -1,8 +1,8 @@
 import json
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,6 +18,8 @@ from netbox.object_actions import (
     ObjectAction,
 )
 from netbox.views import generic
+from utilities.permissions import get_permission_for_model
+from utilities.views import ObjectPermissionRequiredMixin
 
 from netbox_rir_manager.backends.arin import ARINBackend
 from netbox_rir_manager.constants import NO_API_KEY_MESSAGE
@@ -90,6 +92,30 @@ from netbox_rir_manager.tables import (
 )
 
 
+class RIRActionPermissionMixin(ObjectPermissionRequiredMixin):
+    """Require the add permission on the queryset's model, as the matching REST API action does.
+
+    The REST API runs custom actions as POST requests, so NetBox requires add_<model> on them and
+    restricts the object to that permission's constraints. NetBox's mixin does the same here: it
+    denies users without the permission and restricts self.queryset to the objects they may act on.
+    """
+
+    queryset = None
+
+    def get_required_permission(self):
+        return get_permission_for_model(self.queryset.model, "add")
+
+    def require_permitted(self, obj, message):
+        """Refuse when obj is outside the objects the user's permission lets them act on."""
+        if not self.queryset.filter(pk=obj.pk).exists():
+            raise PermissionDenied(message)
+
+
+def restricted_or_404(model, request, pk, action="view"):
+    """The NetBox object pk, if the user's action permission covers it."""
+    return get_object_or_404(model.objects.restrict(request.user, action), pk=pk)
+
+
 def arin_outcome_redirect(request, outcome, fallback_url):
     """Report a write ARIN accepted, then open its ticket, or fallback_url when there is none."""
     if not outcome.recorded:
@@ -104,7 +130,7 @@ class BulkSync(ObjectAction):
     name = "bulk_sync"
     label = "Sync Selected"
     multi = True
-    permissions_required = {"change"}
+    permissions_required = {"add"}
     template_name = "netbox_rir_manager/buttons/bulk_sync.html"
 
 
@@ -118,6 +144,9 @@ class RIRConfigListView(generic.ObjectListView):
 
 class RIRConfigView(generic.ObjectView):
     queryset = RIRConfig.objects.all()
+
+    def get_extra_context(self, request, instance):
+        return {"can_sync": request.user.has_perm("netbox_rir_manager.add_rirconfig", instance)}
 
 
 class RIRConfigEditView(generic.ObjectEditView):
@@ -147,8 +176,13 @@ class RIRConfigBulkDeleteView(generic.BulkDeleteView):
     table = RIRConfigTable
 
 
-class RIRConfigBulkSyncView(LoginRequiredMixin, View):
-    """Trigger sync jobs for multiple RIR configs at once."""
+class RIRConfigBulkSyncView(RIRActionPermissionMixin, View):
+    """Trigger sync jobs for multiple RIR configs at once.
+
+    Only the selected configs the user's add_rirconfig permission covers are synced.
+    """
+
+    queryset = RIRConfig.objects.all()
 
     def post(self, request):
         from netbox_rir_manager.jobs import SyncRIRConfigJob
@@ -156,7 +190,7 @@ class RIRConfigBulkSyncView(LoginRequiredMixin, View):
         pk_list = [int(pk) for pk in request.POST.getlist("pk")]
 
         if "_confirm" in request.POST:
-            configs = RIRConfig.objects.filter(pk__in=pk_list)
+            configs = self.queryset.filter(pk__in=pk_list)
             synced = []
             skipped = []
             for config in configs:
@@ -174,7 +208,7 @@ class RIRConfigBulkSyncView(LoginRequiredMixin, View):
 
             return redirect(reverse("plugins:netbox_rir_manager:rirconfig_list"))
 
-        configs = RIRConfig.objects.filter(pk__in=pk_list)
+        configs = self.queryset.filter(pk__in=pk_list)
         table = RIRConfigTable(configs, orderable=False)
         if not table.rows:
             messages.warning(request, "No configs were selected.")
@@ -262,6 +296,9 @@ class RIRNetworkListView(generic.ObjectListView):
 class RIRNetworkView(generic.ObjectView):
     queryset = RIRNetwork.objects.all()
 
+    def get_extra_context(self, request, instance):
+        return {"can_act_at_arin": request.user.has_perm("netbox_rir_manager.add_rirnetwork", instance)}
+
 
 class RIRNetworkEditView(generic.ObjectEditView):
     queryset = RIRNetwork.objects.all()
@@ -340,19 +377,24 @@ class RIRTicketListView(generic.ObjectListView):
 class RIRTicketView(generic.ObjectView):
     queryset = RIRTicket.objects.all()
 
+    def get_extra_context(self, request, instance):
+        return {"can_refresh": request.user.has_perm("netbox_rir_manager.add_rirticket", instance)}
+
 
 class RIRTicketDeleteView(generic.ObjectDeleteView):
     queryset = RIRTicket.objects.all()
 
 
 # --- Sync Trigger View ---
-class RIRConfigSyncView(LoginRequiredMixin, View):
+class RIRConfigSyncView(RIRActionPermissionMixin, View):
     """Trigger a background sync job for an RIRConfig."""
+
+    queryset = RIRConfig.objects.all()
 
     def post(self, request, pk):
         from netbox_rir_manager.jobs import SyncRIRConfigJob
 
-        rir_config = get_object_or_404(RIRConfig, pk=pk)
+        rir_config = get_object_or_404(self.queryset, pk=pk)
 
         if not rir_config.resolve_key(request.user):
             messages.error(request, NO_API_KEY_MESSAGE)
@@ -364,20 +406,24 @@ class RIRConfigSyncView(LoginRequiredMixin, View):
         return redirect(return_url or rir_config.get_absolute_url())
 
 
-class RIRTicketRefreshView(LoginRequiredMixin, View):
+class RIRTicketRefreshView(RIRActionPermissionMixin, View):
     """Refresh ticket status from ARIN (placeholder)."""
 
+    queryset = RIRTicket.objects.all()
+
     def post(self, request, pk):
-        ticket = get_object_or_404(RIRTicket, pk=pk)
+        ticket = get_object_or_404(self.queryset, pk=pk)
         messages.info(request, f"Ticket {ticket.ticket_number} status is: {ticket.get_status_display()}")
         return redirect(ticket.get_absolute_url())
 
 
-class RIRNetworkReassignView(LoginRequiredMixin, View):
+class RIRNetworkReassignView(RIRActionPermissionMixin, View):
     """Reassign a subnet from this network."""
 
+    queryset = RIRNetwork.objects.all()
+
     def get(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         form = RIRNetworkReassignForm()
         return render(
             request,
@@ -389,7 +435,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         form = RIRNetworkReassignForm(request.POST)
         if not form.is_valid():
             return render(
@@ -417,11 +463,13 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
         return arin_outcome_redirect(request, outcome, network.get_absolute_url())
 
 
-class RIRNetworkReallocateView(LoginRequiredMixin, View):
+class RIRNetworkReallocateView(RIRActionPermissionMixin, View):
     """Reallocate a subnet from this network."""
 
+    queryset = RIRNetwork.objects.all()
+
     def get(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         form = RIRNetworkReallocateForm()
         return render(
             request,
@@ -433,7 +481,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         form = RIRNetworkReallocateForm(request.POST)
         if not form.is_valid():
             return render(
@@ -460,11 +508,13 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
         return arin_outcome_redirect(request, outcome, network.get_absolute_url())
 
 
-class RIRNetworkRemoveView(LoginRequiredMixin, View):
+class RIRNetworkRemoveView(RIRActionPermissionMixin, View):
     """Remove a reassigned/reallocated network from ARIN (with confirmation page)."""
 
+    queryset = RIRNetwork.objects.all()
+
     def get(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         return render(
             request,
             "netbox_rir_manager/rirnetwork_confirm_remove.html",
@@ -472,7 +522,7 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, NO_API_KEY_MESSAGE)
@@ -488,11 +538,13 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
         return redirect(network.get_absolute_url())
 
 
-class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
+class RIRNetworkDeleteARINView(RIRActionPermissionMixin, View):
     """Delete a network at ARIN, with a confirmation page."""
 
+    queryset = RIRNetwork.objects.all()
+
     def get(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         return render(
             request,
             "netbox_rir_manager/rirnetwork_confirm_delete_arin.html",
@@ -500,7 +552,7 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        network = get_object_or_404(RIRNetwork, pk=pk)
+        network = get_object_or_404(self.queryset, pk=pk)
         user_key = network.rir_config.resolve_key(request.user)
         if not user_key:
             messages.error(request, NO_API_KEY_MESSAGE)
@@ -516,19 +568,28 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
 
 
 # --- Aggregate Sync View (from Aggregate detail page) ---
-class AggregateSyncView(LoginRequiredMixin, View):
-    """Sync a single aggregate from ARIN."""
+class AggregateSyncView(RIRActionPermissionMixin, View):
+    """Sync a single aggregate from ARIN.
+
+    Syncing is what a config's Sync does for each of its aggregates, so this needs add_rirconfig,
+    and only configs that permission covers are tried.
+    """
+
+    queryset = RIRConfig.objects.all()
 
     def post(self, request, pk):
         from ipam.models import Aggregate
 
         from netbox_rir_manager.jobs import sync_aggregate
 
-        aggregate = get_object_or_404(Aggregate, pk=pk)
+        aggregate = restricted_or_404(Aggregate, request, pk)
 
         # Several active configs (one per org) can share an RIR; the aggregate belongs to
         # whichever one's org it is registered to, so try each config the user holds a key for.
-        configs = RIRConfig.objects.filter(rir=aggregate.rir, is_active=True)
+        active = RIRConfig.objects.filter(rir=aggregate.rir, is_active=True)
+        configs = self.queryset.filter(pk__in=active)
+        if active.exists() and not configs.exists():
+            raise PermissionDenied("You may not sync any active RIR config for this aggregate's RIR.")
         user_keys = [key for key in (config.resolve_key(request.user) for config in configs) if key]
         if not user_keys:
             messages.error(request, "No API key configured for an active RIR config on this aggregate's RIR.")
@@ -547,13 +608,18 @@ class AggregateSyncView(LoginRequiredMixin, View):
 
 
 # --- Prefix Sync View (from Prefix detail page) ---
-class PrefixSyncView(LoginRequiredMixin, View):
-    """Sync a single prefix from ARIN using mostSpecificNet."""
+class PrefixSyncView(RIRActionPermissionMixin, View):
+    """Sync a single prefix from ARIN using mostSpecificNet.
+
+    Needs add_rirconfig on the config that owns the parent network, as for the aggregate Sync.
+    """
+
+    queryset = RIRConfig.objects.all()
 
     def post(self, request, pk):
         from ipam.models import Prefix
 
-        prefix = get_object_or_404(Prefix, pk=pk)
+        prefix = restricted_or_404(Prefix, request, pk)
 
         # The prefix belongs to whichever config's org holds the net anchoring its aggregate.
         parent_network, agg = RIRNetwork.find_for_prefix(prefix)
@@ -568,6 +634,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
             return redirect(prefix.get_absolute_url())
 
         rir_config = parent_network.rir_config
+        self.require_permitted(rir_config, f"You may not sync RIR config {rir_config}.")
 
         user_key = rir_config.resolve_key(request.user)
         if not user_key:
@@ -605,15 +672,27 @@ class PrefixSyncView(LoginRequiredMixin, View):
 
 
 # --- Prefix Reassign View (from Prefix detail page) ---
-class PrefixReassignView(LoginRequiredMixin, View):
-    """Reassign a prefix at ARIN from the Prefix detail page."""
+class PrefixReassignView(RIRActionPermissionMixin, View):
+    """Reassign a prefix at ARIN from the Prefix detail page.
 
-    def get(self, request, pk):
+    This reassigns from the parent network, so it needs add_rirnetwork on that network, as the
+    network's own Reassign does.
+    """
+
+    queryset = RIRNetwork.objects.all()
+
+    def get_targets(self, request, pk):
+        """The prefix and its parent network, refused when the user may not act on that network."""
         from ipam.models import Prefix
 
-        prefix = get_object_or_404(Prefix, pk=pk)
-
+        prefix = restricted_or_404(Prefix, request, pk)
         parent_network, _agg = RIRNetwork.find_for_prefix(prefix)
+        if parent_network:
+            self.require_permitted(parent_network, f"You may not reassign from RIR network {parent_network.handle}.")
+        return prefix, parent_network
+
+    def get(self, request, pk):
+        prefix, parent_network = self.get_targets(request, pk)
 
         # Pre-fill form
         start_address, end_address = prefix_range(prefix.prefix)
@@ -652,12 +731,8 @@ class PrefixReassignView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        from ipam.models import Prefix
-
-        prefix = get_object_or_404(Prefix, pk=pk)
+        prefix, parent_network = self.get_targets(request, pk)
         form = RIRNetworkReassignForm(request.POST)
-
-        parent_network, _agg = RIRNetwork.find_for_prefix(prefix)
 
         if not form.is_valid():
             return render(
@@ -700,9 +775,13 @@ class PrefixReassignView(LoginRequiredMixin, View):
 
 
 # --- Site Address Resolve Views ---
-class SiteAddressResolveModalView(LoginRequiredMixin, View):
-    """Return HTMX modal content with geocoding candidates for a Site."""
+class SiteAddressResolveModalView(RIRActionPermissionMixin, View):
+    """Return HTMX modal content with geocoding candidates for a Site.
 
+    This is the form for SiteAddressSelectView, so it needs the same add_riraddress permission.
+    """
+
+    queryset = RIRAddress.objects.all()
     template_name = "netbox_rir_manager/htmx/site_address_resolve_modal.html"
 
     def get(self, request, pk):
@@ -710,7 +789,7 @@ class SiteAddressResolveModalView(LoginRequiredMixin, View):
 
         from netbox_rir_manager.services.geocoding import resolve_site_address_candidates
 
-        site = get_object_or_404(Site, pk=pk)
+        site = restricted_or_404(Site, request, pk)
         candidates = resolve_site_address_candidates(site)
 
         # Pre-fill search field based on which source produced results:
@@ -737,7 +816,7 @@ class SiteAddressResolveModalView(LoginRequiredMixin, View):
 
         from netbox_rir_manager.services.geocoding import resolve_site_address_candidates
 
-        site = get_object_or_404(Site, pk=pk)
+        site = restricted_or_404(Site, request, pk)
         query = request.POST.get("query", "").strip()
         candidates = resolve_site_address_candidates(site, query=query or None)
 
@@ -752,13 +831,19 @@ class SiteAddressResolveModalView(LoginRequiredMixin, View):
         )
 
 
-class SiteAddressSelectView(LoginRequiredMixin, View):
-    """Create an RIRAddress from a selected geocoding candidate."""
+class SiteAddressSelectView(RIRActionPermissionMixin, View):
+    """Create an RIRAddress from a selected geocoding candidate.
+
+    Needs add_riraddress, and the saved address must fall within that permission's constraints,
+    as NetBox requires for an object created through its edit views.
+    """
+
+    queryset = RIRAddress.objects.all()
 
     def post(self, request, pk):
         from dcim.models import Site
 
-        site = get_object_or_404(Site, pk=pk)
+        site = restricted_or_404(Site, request, pk)
 
         street_address = request.POST.get("street_address", "")
         city = request.POST.get("city", "")
@@ -792,29 +877,33 @@ class SiteAddressSelectView(LoginRequiredMixin, View):
             response.headers["HX-Reswap"] = "innerHTML"
             return response
 
-        # Delete existing site-level address (not location-specific ones)
-        RIRAddress.objects.filter(site=site, location__isnull=True).delete()
+        # A rejected address is rolled back with the delete that preceded it.
+        with transaction.atomic():
+            # Delete existing site-level address (not location-specific ones)
+            RIRAddress.objects.filter(site=site, location__isnull=True).delete()
 
-        # Use get_or_create on address fields to handle unique constraint
-        address, created = RIRAddress.objects.get_or_create(
-            street_address=street_address,
-            city=city,
-            state_province=state_province,
-            postal_code=postal_code,
-            country=country,
-            defaults={
-                "raw_geocode": raw_geocode,
-                "auto_resolved": True,
-                "last_resolved": timezone.now(),
-            },
-        )
+            # Use get_or_create on address fields to handle unique constraint
+            address, created = RIRAddress.objects.get_or_create(
+                street_address=street_address,
+                city=city,
+                state_province=state_province,
+                postal_code=postal_code,
+                country=country,
+                defaults={
+                    "raw_geocode": raw_geocode,
+                    "auto_resolved": True,
+                    "last_resolved": timezone.now(),
+                },
+            )
 
-        # Assign site FK (whether newly created or existing)
-        address.site = site
-        address.auto_resolved = True
-        address.last_resolved = timezone.now()
-        if raw_geocode:
-            address.raw_geocode = raw_geocode
-        address.save()
+            # Assign site FK (whether newly created or existing)
+            address.site = site
+            address.auto_resolved = True
+            address.last_resolved = timezone.now()
+            if raw_geocode:
+                address.raw_geocode = raw_geocode
+            address.save()
+
+            self.require_permitted(address, "The selected address is outside your RIR address permission.")
 
         return HttpResponse(status=204, headers={"HX-Redirect": site.get_absolute_url()})
