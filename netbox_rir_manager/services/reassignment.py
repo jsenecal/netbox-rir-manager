@@ -84,8 +84,7 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
             "create",
             "customer",
             parent.handle,
-            "Failed to create customer at ARIN",
-            log=f"Failed to create customer for {net['start_address']}",
+            f"Failed to create customer for {net['start_address']} at ARIN",
             error_cls=ReassignmentError,
             data_error_cls=ReassignmentDataError,
         )
@@ -108,8 +107,7 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
         "reassign",
         "network",
         parent.handle,
-        "Reassignment failed at ARIN",
-        log=f"Reassignment of {net['start_address']} failed",
+        f"Reassignment of {net['start_address']} failed at ARIN",
         error_cls=ReassignmentError,
         data_error_cls=ReassignmentDataError,
     )

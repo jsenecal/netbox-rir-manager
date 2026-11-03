@@ -94,4 +94,5 @@ Browse them under **RIR Manager > Sync Logs**, filter by config or status, or re
 
 ## See also
 
-- [IPAM Integration](ipam-integration.md) -- the **Sync** buttons on Aggregate and Prefix pages.
+- [Networks (and customers)](#3-networks-and-customers) -- the **Sync** buttons on Aggregate and Prefix pages.
+- [Reference: Background Jobs](../reference/jobs.md) -- `SyncRIRConfigJob`, `SyncPrefixesJob` and `ScheduledRIRSyncJob`.

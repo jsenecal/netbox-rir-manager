@@ -52,7 +52,12 @@ class RIRBackend(ABC):
 
     @abstractmethod
     def update_network(self, handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
-        """Update a network's details (name, POC links, comments). Returns updated net dict or None."""
+        """Update a network's details (name, POC links, comments).
+
+        Returns the updated net dict, or None if the RIR cannot be reached.
+
+        Raises RIRRequestError when the RIR refuses the request.
+        """
         ...
 
     @abstractmethod

@@ -9,11 +9,11 @@ From a **Network** detail view, you can act against the RIR directly:
 | **Remove**    | Remove a previously reassigned/reallocated network                     |
 | **Delete**    | Submit a deletion request to the RIR                                   |
 
-Operations that require RIR-side approval create a ticket. Tickets are visible under **RIR Manager -> Tickets** and update as the RIR transitions them through their states. On success the ticket page opens.
+Operations that require RIR-side approval create a ticket. Tickets are visible under **RIR Manager -> Tickets**, with the ticket number, type and the status ARIN returned when the request was submitted. The plugin does not poll ARIN afterwards, so the status stays as recorded; the **Refresh** button on a ticket, and `POST /api/plugins/rir-manager/tickets/<id>/refresh/`, return the stored status without contacting ARIN. Follow the ticket's progress at ARIN. On success the ticket page opens.
 
 ARIN processes some operations immediately and opens no ticket -- NET deletes and simple reassignments, for example. Those create no ticket: the result is recorded as a `success` sync log under **RIR Manager -> Sync Logs**, any new child network is still linked, and you return to the network (or prefix) page with a message saying ARIN processed the change immediately.
 
-When ARIN refuses an operation, its reason follows the usual message, in the error you see, the REST API `detail` and the `error` sync log, for example `Reassignment failed at ARIN: startAddress: IP range overlaps with existing network(s).` When ARIN cannot be reached at all, the message stays as it was (`Reassignment failed at ARIN.`).
+When ARIN refuses an operation, its reason follows the usual message, in the error you see, the REST API `detail` and the `error` sync log, for example `Reassignment of 192.0.2.0 failed at ARIN: startAddress: IP range overlaps with existing network(s).` When ARIN cannot be reached at all, the message ends there (`Reassignment of 192.0.2.0 failed at ARIN.`). The sync log records exactly the message you see. Reassign, reallocate and the customer a simple reassignment creates name the start address of the range, for example `Reallocation of 192.0.2.0 failed at ARIN.` and `Failed to create customer for 192.0.2.0 at ARIN.`; delete and remove read `Failed to delete network at ARIN.` and `Failed to remove network from ARIN.`
 
 If NetBox cannot record a change ARIN has already accepted, you get a warning that the change succeeded at ARIN but was not recorded, the error is written to the NetBox log and, when possible, to an `error` sync log. Do not resubmit: the change is already in place at ARIN.
 
