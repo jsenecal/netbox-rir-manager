@@ -65,36 +65,24 @@ def test_arin_backend_init_custom_url(mock_api_class):
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
-def test_from_rir_config(mock_api_class):
-    """from_rir_config should create a backend from an RIRConfig-like object."""
-    rir_config = MagicMock()
-    rir_config.api_url = "https://reg.ote.arin.net/"
-
-    backend = ARINBackend.from_rir_config(rir_config, api_key="test-key")
-    assert isinstance(backend, ARINBackend)
-    mock_api_class.assert_called_once_with(api_key="test-key", base_url="https://reg.ote.arin.net/")
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
-def test_from_rir_config_no_api_url(mock_api_class):
-    """from_rir_config with empty api_url should not pass base_url."""
-    rir_config = MagicMock()
-    rir_config.api_url = ""
-
-    backend = ARINBackend.from_rir_config(rir_config, api_key="test-key")
-    assert isinstance(backend, ARINBackend)
-    mock_api_class.assert_called_once_with(api_key="test-key")
-
-
-@patch("netbox_rir_manager.backends.arin.Api")
 def test_for_user_key(mock_api_class):
-    """for_user_key acts with the key's own api_key against the key's own config."""
+    """for_user_key acts with the key's own api_key against its config's API URL."""
     user_key = MagicMock(api_key="user-key")
     user_key.rir_config.api_url = "https://reg.ote.arin.net/"
 
     backend = ARINBackend.for_user_key(user_key)
     assert isinstance(backend, ARINBackend)
     mock_api_class.assert_called_once_with(api_key="user-key", base_url="https://reg.ote.arin.net/")
+
+
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_for_user_key_no_api_url(mock_api_class):
+    """A config without an API URL leaves pyregrws on its default endpoint."""
+    user_key = MagicMock(api_key="user-key")
+    user_key.rir_config.api_url = ""
+
+    ARINBackend.for_user_key(user_key)
+    mock_api_class.assert_called_once_with(api_key="user-key")
 
 
 @patch("netbox_rir_manager.backends.arin.Api")

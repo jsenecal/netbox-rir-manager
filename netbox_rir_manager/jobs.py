@@ -65,20 +65,19 @@ def _queued_user_key(runner: JobRunner, user_key_id: int, operation: str, object
 
 
 def sync_rir_config(
-    rir_config: RIRConfig,
-    api_key: str,
+    user_key: RIRUserKey,
     resource_types: list[str] | None = None,
-    user_key: RIRUserKey | None = None,
     log: logging.Logger = logger,
 ) -> tuple[list[RIRSyncLog], list[tuple]]:
     """
-    Sync RIR data for the given config.
+    Sync RIR data for user_key's config, calling the RIR with that key.
     resource_types: list of "organizations", "contacts", "networks". None = all.
     Returns (sync_logs, agg_nets) where agg_nets is a list of (Aggregate, RIRNetwork) tuples.
     """
+    rir_config = user_key.rir_config
     logs: list[RIRSyncLog] = []
     agg_nets: list[tuple] = []
-    backend = ARINBackend.from_rir_config(rir_config, api_key=api_key)
+    backend = ARINBackend.for_user_key(user_key)
 
     types_to_sync = resource_types or ["organizations", "contacts", "networks"]
     log.info(f"Starting sync for {rir_config.name} (types: {', '.join(types_to_sync)})")
@@ -430,7 +429,7 @@ def sync_config_and_queue_prefixes(
     The caller owns the change log context the sync runs in, which should be user_key's owner so
     the config sync and its prefix jobs are logged under the same user. Returns the sync logs.
     """
-    logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=log)
+    logs, agg_nets = sync_rir_config(user_key, log=log)
     enqueue_prefix_syncs(rir_config, agg_nets, user_key, log=log)
     return logs
 

@@ -52,17 +52,9 @@ class ARINBackend(RIRBackend):
         self.api = Api(**kwargs)
 
     @classmethod
-    def from_rir_config(cls, rir_config: RIRConfig, api_key: str) -> ARINBackend:
-        """Create backend instance from an RIRConfig model."""
-        return cls(
-            api_key=api_key,
-            base_url=rir_config.api_url or None,
-        )
-
-    @classmethod
     def for_user_key(cls, user_key: RIRUserKey) -> ARINBackend:
-        """Create a backend that acts with user_key, against the config the key belongs to."""
-        return cls.from_rir_config(user_key.rir_config, api_key=user_key.api_key)
+        """Create a backend that acts with user_key, against the API URL of the key's config."""
+        return cls(api_key=user_key.api_key, base_url=user_key.rir_config.api_url or None)
 
     def _call_with_retry(self, func, *args, **kwargs):
         from django.conf import settings as django_settings

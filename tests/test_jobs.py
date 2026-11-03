@@ -35,7 +35,7 @@ class TestScheduledSyncJob:
 
         make_runner(ScheduledRIRSyncJob).run()
 
-        arin.from_rir_config.assert_not_called()
+        arin.for_user_key.assert_not_called()
 
     def test_scheduled_sync_uses_only_default_key(self, mock_arin, rir_config, default_key, operator_key):
         """Scheduled sync has no acting user: it syncs once with the default key, never other users' keys."""
@@ -45,7 +45,7 @@ class TestScheduledSyncJob:
 
         make_runner(ScheduledRIRSyncJob).run()
 
-        arin.from_rir_config.assert_called_once_with(rir_config, api_key=default_key.api_key)
+        arin.for_user_key.assert_called_once_with(default_key)
 
     @patch("netbox_rir_manager.jobs.SyncPrefixesJob")
     def test_scheduled_sync_queues_prefix_discovery_with_default_key(
@@ -76,7 +76,7 @@ class TestScheduledSyncJob:
 
         make_runner(ScheduledRIRSyncJob).run()
 
-        arin.from_rir_config.assert_not_called()
+        arin.for_user_key.assert_not_called()
 
     def test_scheduled_sync_skips_config_whose_default_key_owner_is_deactivated(
         self, mock_arin, rir_config, default_key
@@ -90,14 +90,14 @@ class TestScheduledSyncJob:
         runner = make_runner(ScheduledRIRSyncJob)
         runner.run()
 
-        arin.from_rir_config.assert_not_called()
+        arin.for_user_key.assert_not_called()
         warning = runner.logger.warning.call_args[0][0]
         assert "deactivated user" in warning
 
 
 @pytest.mark.django_db
 class TestRIRSyncJob:
-    def test_sync_creates_org_and_log(self, mock_arin, rir_config):
+    def test_sync_creates_org_and_log(self, mock_arin, rir_config, rir_user_key):
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIROrganization, RIRSyncLog
 
@@ -106,7 +106,7 @@ class TestRIRSyncJob:
         )
         mock_arin("jobs", get_organization=org)
 
-        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
+        logs, agg_nets = sync_rir_config(rir_user_key, resource_types=["organizations"])
 
         assert len(logs) == 1
         assert logs[0].status == "success"
@@ -114,31 +114,31 @@ class TestRIRSyncJob:
         assert RIROrganization.objects.filter(handle="TESTORG-ARIN").exists()
         assert RIRSyncLog.objects.filter(rir_config=rir_config).count() == 1
 
-    def test_sync_error_creates_error_log(self, mock_arin, rir_config):
+    def test_sync_error_creates_error_log(self, mock_arin, rir_config, rir_user_key):
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIRSyncLog
 
         mock_arin("jobs", get_organization=None)
 
-        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
+        logs, agg_nets = sync_rir_config(rir_user_key, resource_types=["organizations"])
 
         assert len(logs) == 1
         assert logs[0].status == "error"
         assert agg_nets == []
         assert RIRSyncLog.objects.filter(rir_config=rir_config, status="error").count() == 1
 
-    def test_sync_updates_last_sync(self, mock_arin, rir_config):
+    def test_sync_updates_last_sync(self, mock_arin, rir_config, rir_user_key):
         from netbox_rir_manager.jobs import sync_rir_config
 
         mock_arin("jobs")
 
         assert rir_config.last_sync is None
-        sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations"])
+        sync_rir_config(rir_user_key, resource_types=["organizations"])
 
         rir_config.refresh_from_db()
         assert rir_config.last_sync is not None
 
-    def test_sync_contacts_from_org(self, mock_arin, rir_config):
+    def test_sync_contacts_from_org(self, mock_arin, rir_config, rir_user_key):
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIRContact, RIROrganization
 
@@ -159,14 +159,14 @@ class TestRIRSyncJob:
             },
         )
 
-        sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations", "contacts"])
+        sync_rir_config(rir_user_key, resource_types=["organizations", "contacts"])
 
         assert RIROrganization.objects.filter(handle="TESTORG-ARIN").exists()
         contact = RIRContact.objects.get(handle="JD123-ARIN")
         assert contact.first_name == "John"
         assert contact.last_name == "Doe"
 
-    def test_sync_contacts_poc_in_several_roles_synced_once(self, mock_arin, rir_config):
+    def test_sync_contacts_poc_in_several_roles_synced_once(self, mock_arin, rir_config, rir_user_key):
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIROrganization, RIRSyncLog
 
@@ -183,7 +183,7 @@ class TestRIRSyncJob:
             "raw_data": {},
         }
 
-        sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations", "contacts"])
+        sync_rir_config(rir_user_key, resource_types=["organizations", "contacts"])
 
         fetched = [c.args[0] for c in backend.get_poc.call_args_list]
         assert fetched == ["NOC11106-ARIN", "JD123-ARIN"]
@@ -193,7 +193,7 @@ class TestRIRSyncJob:
         )
         assert RIROrganization.objects.get(handle="TESTORG-ARIN").raw_data["poc_links"] == poc_links
 
-    def test_sync_networks_from_ipam(self, mock_arin, rir_config, aggregate):
+    def test_sync_networks_from_ipam(self, mock_arin, rir_config, rir_user_key, aggregate):
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIRNetwork
 
@@ -203,7 +203,7 @@ class TestRIRSyncJob:
             find_net=arin_net("NET-192-0-2-0-1", net_name="EXAMPLE-NET", org_handle="TESTORG-ARIN", net_blocks=[block]),
         )
 
-        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+        logs, agg_nets = sync_rir_config(rir_user_key, resource_types=["networks"])
 
         net = RIRNetwork.objects.get(handle="NET-192-0-2-0-1")
         assert net.net_name == "EXAMPLE-NET"
@@ -216,7 +216,7 @@ class TestRIRSyncJob:
 
         mock_arin("jobs", get_organization=arin_org("SYNCBY-ARIN", "Sync By Org"))
 
-        sync_rir_config(rir_config, api_key="test-key", user_key=rir_user_key)
+        sync_rir_config(rir_user_key)
 
         org = RIROrganization.objects.get(handle="SYNCBY-ARIN")
         assert org.synced_by == rir_user_key
@@ -225,7 +225,7 @@ class TestRIRSyncJob:
         from netbox_rir_manager.jobs import SyncRIRConfigJob
         from netbox_rir_manager.models import RIRUserKey
 
-        RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="job-key")
+        key = RIRUserKey.objects.create(user=admin_user, rir_config=rir_config, api_key="job-key")
         arin = mock_arin("jobs")
 
         runner = make_runner(SyncRIRConfigJob)
@@ -235,7 +235,7 @@ class TestRIRSyncJob:
         runner.run()
 
         assert "rir_config" in runner.job.data
-        arin.from_rir_config.assert_called_once_with(rir_config, api_key="job-key")
+        arin.for_user_key.assert_called_once_with(key)
 
     @patch("netbox_rir_manager.jobs.SyncPrefixesJob")
     def test_sync_job_queues_prefix_discovery_with_users_key(
@@ -273,10 +273,10 @@ class TestRIRSyncJob:
 
         runner.run()
 
-        arin.from_rir_config.assert_not_called()
+        arin.for_user_key.assert_not_called()
         assert runner.job.data["status"] == "error"
 
-    def test_sync_returns_agg_nets(self, mock_arin, rir_config, rir):
+    def test_sync_returns_agg_nets(self, mock_arin, rir_config, rir_user_key, rir):
         """sync_rir_config returns (logs, agg_nets) with aggregate/network pairs."""
         from ipam.models import Aggregate
 
@@ -286,7 +286,7 @@ class TestRIRSyncJob:
         agg = Aggregate.objects.create(prefix="10.0.0.0/8", rir=rir)
         mock_arin("jobs", find_net=arin_net("NET-10-0-0-0-1", org_handle=rir_config.org_handle))
 
-        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+        logs, agg_nets = sync_rir_config(rir_user_key, resource_types=["networks"])
 
         assert len(logs) == 1
         assert len(agg_nets) == 1
@@ -295,7 +295,7 @@ class TestRIRSyncJob:
         assert isinstance(returned_net, RIRNetwork)
         assert returned_net.handle == "NET-10-0-0-0-1"
 
-    def test_sync_walks_up_to_net_owned_by_config_org(self, mock_arin, rir_config, aggregate):
+    def test_sync_walks_up_to_net_owned_by_config_org(self, mock_arin, rir_config, rir_user_key, aggregate):
         """When the most specific net is a child, the aggregate links to our parent net instead."""
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIRNetwork
@@ -306,7 +306,7 @@ class TestRIRSyncJob:
             get_network=arin_net("NET-PARENT-1", org_handle="TESTORG-ARIN", parent_handle="NET-UPSTREAM-1"),
         ).backend
 
-        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+        logs, agg_nets = sync_rir_config(rir_user_key, resource_types=["networks"])
 
         backend.get_network.assert_called_once_with("NET-PARENT-1")
         assert RIRNetwork.objects.get(handle="NET-PARENT-1").aggregate == aggregate
@@ -352,7 +352,16 @@ class TestRIRSyncJob:
         ],
     )
     def test_sync_skips_aggregate_not_owned_by_config_org(
-        self, mock_arin, rir_config, aggregate, config_org, found, parent, expected_lookups, owner_in_message
+        self,
+        mock_arin,
+        rir_config,
+        rir_user_key,
+        aggregate,
+        config_org,
+        found,
+        parent,
+        expected_lookups,
+        owner_in_message,
     ):
         """An aggregate whose net chain never reaches the config org is skipped and logged, not synced."""
         from netbox_rir_manager.jobs import sync_rir_config
@@ -362,7 +371,7 @@ class TestRIRSyncJob:
         rir_config.save()
         backend = mock_arin("jobs", find_net=found, get_network=parent).backend
 
-        logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+        logs, agg_nets = sync_rir_config(rir_user_key, resource_types=["networks"])
 
         assert agg_nets == []
         assert not RIRNetwork.objects.exists()
@@ -378,7 +387,9 @@ class TestRIRSyncJob:
             pytest.param("192.0.2.8/32", ("192.0.2.8", "192.0.2.8"), id="ipv4-32"),
         ],
     )
-    def test_sync_queries_last_address_of_host_aggregate(self, mock_arin, rir_config, rir, prefix, expected_range):
+    def test_sync_queries_last_address_of_host_aggregate(
+        self, mock_arin, rir_config, rir_user_key, rir, prefix, expected_range
+    ):
         """A /31 or /32 aggregate is looked up by its real last address, not "None"."""
         from ipam.models import Aggregate
 
@@ -387,7 +398,7 @@ class TestRIRSyncJob:
         agg = Aggregate.objects.create(prefix=prefix, rir=rir)
         backend = mock_arin("jobs", find_net=arin_net("NET-HOST-1", org_handle="TESTORG-ARIN")).backend
 
-        _logs, agg_nets = sync_rir_config(rir_config, api_key="test-key", resource_types=["networks"])
+        _logs, agg_nets = sync_rir_config(rir_user_key, resource_types=["networks"])
 
         backend.find_net.assert_called_once_with(*expected_range)
         assert [(a.pk, net.handle) for a, net in agg_nets] == [(agg.pk, "NET-HOST-1")]
