@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.utils import timezone
 
+from netbox_rir_manager.backends.base import RIRDataError, RIRRequestError
 from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.models import RIRNetwork, RIRSyncLog, RIRTicket
 
@@ -120,3 +121,39 @@ def data_error(rir_config, operation, object_type, handle, exc, error_cls=ARINDa
     """Log a request-data problem the backend reported (RIRDataError) and wrap it for the caller."""
     sync_log(rir_config, operation, object_type, handle, "error", str(exc))
     return error_cls(str(exc))
+
+
+def arin_write(
+    call,
+    rir_config,
+    operation,
+    object_type,
+    handle,
+    message,
+    *,
+    log=None,
+    error_cls=ARINWriteError,
+    data_error_cls=ARINDataError,
+):
+    """Run a backend write, call(), and return its result; log and raise if it did not succeed.
+
+    message is the user's message without its final period ("Reallocation failed at ARIN"); log
+    is the sync log's wording, message by default. ARIN's reason, when it refused the write
+    (RIRRequestError), is appended to both; a result of None or False means ARIN could not be
+    reached. Data the backend cannot send (RIRDataError) raises data_error_cls instead.
+    """
+    try:
+        result = call()
+    except RIRDataError as exc:
+        raise data_error(rir_config, operation, object_type, handle, exc, data_error_cls) from exc
+    except RIRRequestError as exc:
+        raise _write_failure(rir_config, operation, object_type, handle, message, log, error_cls, exc) from exc
+    if result is None or result is False:
+        raise _write_failure(rir_config, operation, object_type, handle, message, log, error_cls)
+    return result
+
+
+def _write_failure(rir_config, operation, object_type, handle, message, log, error_cls, refusal=None):
+    detail = f": {refusal}" if refusal else ""
+    sync_log(rir_config, operation, object_type, handle, "error", f"{log or message}{detail}")
+    return error_cls(f"{message}{detail or '.'}")

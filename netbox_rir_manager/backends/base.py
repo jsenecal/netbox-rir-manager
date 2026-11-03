@@ -11,6 +11,10 @@ class RIRDataError(ValueError):
     """The data given to a backend cannot be sent to the RIR; the message is safe to show a user."""
 
 
+class RIRRequestError(Exception):
+    """The RIR refused a request; the message is the RIR's reason and is safe to show a user."""
+
+
 class RIRBackend(ABC):
     """Abstract base class for RIR API backends."""
 
@@ -53,28 +57,41 @@ class RIRBackend(ABC):
 
     @abstractmethod
     def reassign_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
-        """Reassign a subnet from parent NET. Returns ticket info dict or None.
+        """Reassign a subnet from parent NET.
 
-        Raises RIRDataError when the data cannot form a valid payload.
+        Returns ticket info dict, or None if the RIR cannot be reached.
+
+        Raises RIRDataError when the data cannot form a valid payload, and RIRRequestError
+        when the RIR refuses the request.
         """
         ...
 
     @abstractmethod
     def reallocate_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
-        """Reallocate a subnet from parent NET. Returns ticket info dict or None.
+        """Reallocate a subnet from parent NET.
 
-        Raises RIRDataError when the data cannot form a valid payload.
+        Returns ticket info dict, or None if the RIR cannot be reached.
+
+        Raises RIRDataError when the data cannot form a valid payload, and RIRRequestError
+        when the RIR refuses the request.
         """
         ...
 
     @abstractmethod
     def remove_network(self, handle: str) -> bool:
-        """Remove a reassigned/reallocated network. Returns True on success."""
+        """Remove a reassigned/reallocated network.
+
+        Returns True on success, False if the RIR cannot be reached. Raises RIRRequestError
+        when the RIR refuses the request.
+        """
         ...
 
     @abstractmethod
     def delete_network(self, handle: str) -> dict[str, Any] | None:
-        """Delete a network. Returns ticket info dict or None."""
+        """Delete a network. Returns ticket info dict, or None if the RIR cannot be reached.
+
+        Raises RIRRequestError when the RIR refuses the request.
+        """
         ...
 
     @abstractmethod
@@ -84,8 +101,11 @@ class RIRBackend(ABC):
 
     @abstractmethod
     def create_customer(self, parent_net_handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
-        """Create a customer under a parent NET for simple reassignment. Returns customer dict or None.
+        """Create a customer under a parent NET for simple reassignment.
 
-        Raises RIRDataError when the data cannot form a valid payload.
+        Returns customer dict, or None if the RIR cannot be reached.
+
+        Raises RIRDataError when the data cannot form a valid payload, and RIRRequestError
+        when the RIR refuses the request.
         """
         ...

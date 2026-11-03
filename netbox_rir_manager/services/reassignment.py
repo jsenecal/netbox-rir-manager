@@ -7,10 +7,10 @@ from netbox_rir_manager.models import RIRAddress, RIRCustomer
 from netbox_rir_manager.services.arin_results import (
     ARINDataError,
     ARINWriteError,
+    arin_write,
     data_error,
     net_request,
     record_arin_result,
-    sync_log,
 )
 
 CUSTOMER_FIELDS = ("customer_name", *RIRAddress.ADDRESS_FIELDS)
@@ -62,8 +62,9 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
     or org_handle for a detailed one. The child net ARIN returns is linked to prefix.
 
     Returns the ARINOutcome of record_arin_result (its ticket is None when ARIN processed the
-    reassignment immediately), or raises ReassignmentError after logging the failure
-    (ReassignmentDataError when the request's own data cannot be sent to ARIN).
+    reassignment immediately), or raises ReassignmentError after logging the failure, with
+    ARIN's reason when it refused (ReassignmentDataError when the request's own data cannot be
+    sent to ARIN).
     """
     rir_config = parent.rir_config
     net_data = dict(net)
@@ -77,20 +78,17 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
         raise data_error(rir_config, "reassign", "network", parent.handle, exc, ReassignmentDataError) from exc
 
     if customer is not None:
-        try:
-            customer_result = backend.create_customer(parent.handle, customer)
-        except RIRDataError as exc:
-            raise data_error(rir_config, "create", "customer", parent.handle, exc, ReassignmentDataError) from exc
-        if customer_result is None:
-            sync_log(
-                rir_config,
-                "create",
-                "customer",
-                parent.handle,
-                "error",
-                f"Failed to create customer for {net['start_address']}",
-            )
-            raise ReassignmentError("Failed to create customer at ARIN.")
+        customer_result = arin_write(
+            lambda: backend.create_customer(parent.handle, customer),
+            rir_config,
+            "create",
+            "customer",
+            parent.handle,
+            "Failed to create customer at ARIN",
+            log=f"Failed to create customer for {net['start_address']}",
+            error_cls=ReassignmentError,
+            data_error_cls=ReassignmentDataError,
+        )
         address, _ = RIRAddress.objects.get_or_create(**{f: customer[f] for f in RIRAddress.ADDRESS_FIELDS})
         RIRCustomer.objects.create(
             rir_config=rir_config,
@@ -104,15 +102,17 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
         )
         net_data["customer_handle"] = customer_result["handle"]
 
-    try:
-        result = backend.reassign_network(parent.handle, net_data)
-    except RIRDataError as exc:
-        raise data_error(rir_config, "reassign", "network", parent.handle, exc, ReassignmentDataError) from exc
-    if result is None:
-        sync_log(
-            rir_config, "reassign", "network", parent.handle, "error", f"Reassignment of {net['start_address']} failed"
-        )
-        raise ReassignmentError("Reassignment failed at ARIN.")
+    result = arin_write(
+        lambda: backend.reassign_network(parent.handle, net_data),
+        rir_config,
+        "reassign",
+        "network",
+        parent.handle,
+        "Reassignment failed at ARIN",
+        log=f"Reassignment of {net['start_address']} failed",
+        error_cls=ReassignmentError,
+        data_error_cls=ReassignmentDataError,
+    )
 
     return record_arin_result(
         result,

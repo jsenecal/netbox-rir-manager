@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.arin_payloads import EXISTING_TICKET, immediate_result, ticket_result
+from tests.arin_payloads import EXISTING_TICKET, NOT_FOUND, immediate_result, ticket_result
 
 
 def make_runner(cls):
@@ -898,13 +898,15 @@ class TestRemoveNetworkJob:
 
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_remove_failure(self, mock_backend_class, rir_config, rir_user_key):
+        """ARIN's reason for refusing the removal is the job's message."""
+        from netbox_rir_manager.backends.base import RIRRequestError
         from netbox_rir_manager.jobs import RemoveNetworkJob
         from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
 
         net = RIRNetwork.objects.create(rir_config=rir_config, handle="NET-RMFAIL-1", net_name="FAIL-NET")
 
         mock_backend = MagicMock()
-        mock_backend.remove_network.return_value = False
+        mock_backend.remove_network.side_effect = RIRRequestError(NOT_FOUND)
         mock_backend_class.from_rir_config.return_value = mock_backend
 
         runner = make_runner(RemoveNetworkJob)
@@ -912,7 +914,7 @@ class TestRemoveNetworkJob:
         runner.run(network_id=net.pk, user_key_id=rir_user_key.pk)
 
         assert runner.job.data["status"] == "error"
-        assert runner.job.data["message"] == "ARIN removal failed"
+        assert runner.job.data["message"] == f"Failed to remove network from ARIN: {NOT_FOUND}"
 
         log = RIRSyncLog.objects.get(object_handle="NET-RMFAIL-1", operation="remove")
         assert log.status == "error"

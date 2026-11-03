@@ -424,21 +424,22 @@ class TestRIRNetworkAPIActions:
         "failure, action",
         [("reassign", "reassign"), ("reallocate", "reallocate"), ("delete", "delete-arin"), ("remove", "remove-net")],
     )
+    @pytest.mark.parametrize("refused", [False, True], ids=["unreachable", "refused"])
     @patch("netbox_rir_manager.api.views.ARINBackend")
     def test_arin_failure_returns_502_and_logs(
-        self, mock_backend_cls, admin_api_client, rir_network, rir_user_key, failure, action
+        self, mock_backend_cls, admin_api_client, rir_network, rir_user_key, failure, action, refused
     ):
         from netbox_rir_manager.models import RIRSyncLog, RIRTicket
 
         failure = WRITE_FAILURES[failure]
-        getattr(mock_backend_cls.from_rir_config.return_value, failure.method).return_value = failure.returns
+        detail, log = failure.arrange(mock_backend_cls.from_rir_config.return_value, refused)
 
         response = admin_api_client.post(_action_url(action, rir_network), failure.data, format="json")
 
         assert response.status_code == status.HTTP_502_BAD_GATEWAY
-        assert response.json()["detail"] == failure.detail
+        assert response.json()["detail"] == detail
         error = RIRSyncLog.objects.get(status="error")
-        assert (error.operation, error.message, error.object_handle) == (*failure.log, rir_network.handle)
+        assert (error.operation, error.message, error.object_handle) == (*log, rir_network.handle)
         assert not RIRTicket.objects.exists()
 
     def test_ticket_refresh_api(self, admin_api_client, rir_ticket):
