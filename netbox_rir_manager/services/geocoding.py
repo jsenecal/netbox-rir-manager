@@ -206,7 +206,7 @@ def resolve_site_address_candidates(site: Site, query: str | None = None, limit:
         results = geocoder.geocode_many(query, limit=limit)
         if results:
             return _deduplicate_results(results)
-        # Query failed — fall through to site-based resolution
+        # Query failed -- fall through to site-based resolution
 
     # Try reverse geocode from coordinates
     if site.latitude and site.longitude:

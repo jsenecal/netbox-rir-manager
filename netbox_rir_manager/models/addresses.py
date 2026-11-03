@@ -72,7 +72,7 @@ class RIRAddress(NetBoxModel):
         parts = [p for p in (street_line, self.city, self.state_province, self.country) if p]
         label = ", ".join(parts) if parts else f"Address #{self.pk}"
         if self.site:
-            label = f"{self.site.name} — {label}" if parts else self.site.name
+            label = f"{self.site.name} \u2014 {label}" if parts else self.site.name
         return label
 
     def clean(self):
