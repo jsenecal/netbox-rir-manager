@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A config sync fetched and synced a POC once for each role it holds on the org (for
+  example a NOC that is also the Tech contact), writing duplicate sync log rows and
+  making extra ARIN calls. Each POC is now synced once per run; the org still records
+  every role link (#68).
 - The daily **Scheduled RIR Sync** never ran: its module was only imported lazily, so the
   `@system_job` registration had not happened when `rqworker` scheduled system jobs at
   startup. The plugin now imports its jobs when it loads (#54).

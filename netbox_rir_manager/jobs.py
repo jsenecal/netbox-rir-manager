@@ -71,7 +71,6 @@ def sync_rir_config(
 
     if "contacts" in types_to_sync and org:
         poc_links = (org.raw_data or {}).get("poc_links", [])
-        log.info(f"Syncing {len(poc_links)} contacts")
         logs.extend(_sync_contacts(backend, rir_config, poc_links, org, user_key=user_key, log=log))
 
     if "networks" in types_to_sync:
@@ -165,15 +164,17 @@ def _sync_contacts(
     user_key: RIRUserKey | None = None,
     log: logging.Logger = logger,
 ) -> list[RIRSyncLog]:
-    """Sync POC contacts from org poc_links."""
+    """Sync POC contacts from org poc_links.
+
+    A POC can be linked to the org in several roles (one link per role). The
+    role links stay in the org's raw_data; the POC itself is fetched and synced
+    once per run, not once per role.
+    """
     logs: list[RIRSyncLog] = []
-    log.info(f"Syncing {len(poc_links)} POC contacts for {org.handle}")
+    handles = list(dict.fromkeys(link.get("handle") for link in poc_links if link.get("handle")))
+    log.info(f"Syncing {len(handles)} POC contacts for {org.handle}")
 
-    for link in poc_links:
-        handle = link.get("handle")
-        if not handle:
-            continue
-
+    for handle in handles:
         log.debug(f"Fetching POC {handle}")
         poc_data = backend.get_poc(handle)
         if poc_data is None:
