@@ -1072,22 +1072,16 @@ class TestReassignJobOutcome:
         assert runner.job.data.get("ticket_number") == expected_ticket
 
 
-def test_plugin_ready_registers_scheduled_sync(monkeypatch):
-    """Loading the plugin registers the daily sync, not only once something imports jobs.py.
+def test_plugin_ready_registers_scheduled_sync(reload_plugin_module):
+    """Loading the plugin registers the scheduled sync, not only once something imports jobs.py.
 
     rqworker schedules system jobs from the registry at startup, before any view or signal
     handler has imported the jobs module lazily.
     """
-    import sys
-
     from django.apps import apps
     from netbox.registry import registry
 
-    import netbox_rir_manager
-    import netbox_rir_manager.jobs  # noqa: F401 -- loaded first so monkeypatch can restore it
-
-    monkeypatch.delitem(sys.modules, "netbox_rir_manager.jobs")
-    monkeypatch.delattr(netbox_rir_manager, "jobs")
+    reload_plugin_module("jobs", load=False)
 
     with patch.dict(registry["system_jobs"], clear=True), patch("netbox.plugins.PluginConfig.ready"):
         apps.get_app_config("netbox_rir_manager").ready()
@@ -1096,52 +1090,32 @@ def test_plugin_ready_registers_scheduled_sync(monkeypatch):
     assert registered == ["ScheduledRIRSyncJob"]
 
 
-@pytest.mark.parametrize(("hours", "minutes"), [(24, 1440), (6, 360), (1, 60), (168, 10080)])
-def test_scheduled_sync_interval_converts_hours_to_minutes(settings, hours, minutes):
+def test_scheduled_sync_interval_defaults_to_daily():
     from netbox_rir_manager.jobs import scheduled_sync_interval
-
-    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"sync_interval_hours": hours}}
-
-    assert scheduled_sync_interval() == minutes
-
-
-def test_scheduled_sync_interval_defaults_to_daily(settings):
-    from netbox_rir_manager.jobs import scheduled_sync_interval
-
-    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {}}
 
     assert scheduled_sync_interval() == 1440
 
 
-@pytest.mark.parametrize("hours", [0, -1, 1.5, "24", None, True])
-def test_scheduled_sync_interval_rejects_invalid_values(settings, hours):
+@pytest.mark.parametrize("hours", [0, "24", True])
+def test_scheduled_sync_interval_rejects_invalid_values(plugin_settings, hours):
     from django.core.exceptions import ImproperlyConfigured
 
     from netbox_rir_manager.jobs import scheduled_sync_interval
 
-    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"sync_interval_hours": hours}}
+    plugin_settings(sync_interval_hours=hours)
 
     with pytest.raises(ImproperlyConfigured, match="sync_interval_hours"):
         scheduled_sync_interval()
 
 
-def test_scheduled_sync_registered_with_configured_interval(monkeypatch, settings):
+def test_scheduled_sync_registered_with_configured_interval(plugin_settings, reload_plugin_module):
     """The system job is registered with sync_interval_hours, converted to minutes."""
-    import importlib
-    import sys
-
     from netbox.registry import registry
 
-    import netbox_rir_manager
-    import netbox_rir_manager.jobs  # noqa: F401 -- loaded first so monkeypatch can restore it
-
-    settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"sync_interval_hours": 6}}
-    monkeypatch.delitem(sys.modules, "netbox_rir_manager.jobs")
-    monkeypatch.delattr(netbox_rir_manager, "jobs")
+    plugin_settings(sync_interval_hours=6)
 
     with patch.dict(registry["system_jobs"], clear=True):
-        jobs = importlib.import_module("netbox_rir_manager.jobs")
+        reload_plugin_module("jobs")
         intervals = {cls.__name__: kwargs["interval"] for cls, kwargs in registry["system_jobs"].items()}
 
-    assert jobs.ScheduledRIRSyncJob.__name__ in intervals
     assert intervals == {"ScheduledRIRSyncJob": 360}

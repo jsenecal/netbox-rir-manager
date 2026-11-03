@@ -87,12 +87,12 @@ class TestAutoLinkSignal:
         net.refresh_from_db()
         assert net.aggregate == agg2  # should NOT be overwritten
 
-    def test_auto_link_disabled_by_setting(self, rir_config, rir, settings):
+    def test_auto_link_disabled_by_setting(self, rir_config, rir, plugin_settings):
         from ipam.models import Aggregate
 
         from netbox_rir_manager.models import RIRNetwork
 
-        settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"auto_link_networks": False}}
+        plugin_settings(auto_link_networks=False)
         Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
         net = RIRNetwork.objects.create(
             rir_config=rir_config,

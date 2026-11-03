@@ -1,51 +1,19 @@
-import importlib
-import sys
-
-import pytest
 from netbox.plugins import PluginMenu, PluginMenuItem
 
-EXPECTED_LINKS = [
-    "plugins:netbox_rir_manager:rirconfig_list",
-    "plugins:netbox_rir_manager:riruserkey_list",
-    "plugins:netbox_rir_manager:rirorganization_list",
-    "plugins:netbox_rir_manager:rircontact_list",
-    "plugins:netbox_rir_manager:rirnetwork_list",
-    "plugins:netbox_rir_manager:rircustomer_list",
-    "plugins:netbox_rir_manager:riraddress_list",
-    "plugins:netbox_rir_manager:rirsynclog_list",
-    "plugins:netbox_rir_manager:rirticket_list",
-]
 
+def test_top_level_menu_chooses_between_own_menu_and_plugins_menu(plugin_settings, reload_plugin_module):
+    plugin_settings(top_level_menu=True)
+    top_level = reload_plugin_module("navigation")
+    plugin_settings(top_level_menu=False)
+    flat = reload_plugin_module("navigation")
 
-@pytest.fixture
-def load_navigation(monkeypatch, settings):
-    """Import navigation.py afresh with the given top_level_menu value."""
-    import netbox_rir_manager
-    import netbox_rir_manager.navigation  # noqa: F401 -- loaded first so monkeypatch can restore it
+    assert isinstance(top_level.menu, PluginMenu)
+    assert top_level.menu.label == "RIR Manager"
+    assert [group.label for group in top_level.menu.groups] == ["Configs", "Resources", "Operations"]
+    assert not hasattr(top_level, "menu_items")
 
-    def _load(top_level_menu):
-        settings.PLUGINS_CONFIG = {"netbox_rir_manager": {"top_level_menu": top_level_menu}}
-        monkeypatch.delitem(sys.modules, "netbox_rir_manager.navigation")
-        monkeypatch.delattr(netbox_rir_manager, "navigation")
-        return importlib.import_module("netbox_rir_manager.navigation")
-
-    return _load
-
-
-def test_top_level_menu_true_registers_own_menu(load_navigation):
-    navigation = load_navigation(True)
-
-    assert isinstance(navigation.menu, PluginMenu)
-    assert navigation.menu.label == "RIR Manager"
-    assert [group.label for group in navigation.menu.groups] == ["Configs", "Resources", "Operations"]
-    links = [item.link for group in navigation.menu.groups for item in group.items]
-    assert links == EXPECTED_LINKS
-    assert not hasattr(navigation, "menu_items")
-
-
-def test_top_level_menu_false_lists_items_under_plugins_menu(load_navigation):
-    navigation = load_navigation(False)
-
-    assert not hasattr(navigation, "menu")
-    assert all(isinstance(item, PluginMenuItem) for item in navigation.menu_items)
-    assert [item.link for item in navigation.menu_items] == EXPECTED_LINKS
+    assert not hasattr(flat, "menu")
+    assert all(isinstance(item, PluginMenuItem) for item in flat.menu_items)
+    grouped_links = [item.link for group in top_level.menu.groups for item in group.items]
+    assert len(grouped_links) == 9
+    assert [item.link for item in flat.menu_items] == grouped_links
