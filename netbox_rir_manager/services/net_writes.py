@@ -1,6 +1,13 @@
 """Reallocating, removing and deleting nets at ARIN, shared by the UI, the API and the jobs."""
 
-from netbox_rir_manager.services.arin_results import ARINWriteError, net_request, record_arin_result, sync_log
+from netbox_rir_manager.backends.base import RIRDataError
+from netbox_rir_manager.services.arin_results import (
+    ARINWriteError,
+    data_error,
+    net_request,
+    record_arin_result,
+    sync_log,
+)
 
 
 def reallocation_request(data):
@@ -12,9 +19,13 @@ def submit_reallocation(backend, parent, user_key, net):
     """Reallocate part of parent to another org at ARIN and record the outcome.
 
     net comes from reallocation_request. Returns the ARINOutcome of record_arin_result, or
-    raises ARINWriteError after logging the failure.
+    raises ARINWriteError after logging the failure (ARINDataError when the request's own data
+    cannot be sent to ARIN).
     """
-    result = backend.reallocate_network(parent.handle, net)
+    try:
+        result = backend.reallocate_network(parent.handle, net)
+    except RIRDataError as exc:
+        raise data_error(parent.rir_config, "reallocate", "network", parent.handle, exc) from exc
     if result is None:
         sync_log(parent.rir_config, "reallocate", "network", parent.handle, "error", "Reallocation failed")
         raise ARINWriteError("Reallocation failed at ARIN.")

@@ -28,7 +28,6 @@ nav = [
     { "Settings" = "reference/settings.md" },
     { "Models" = "reference/models.md" },
     { "Permissions" = "reference/permissions.md" },
-    { "Background Jobs" = "reference/jobs.md" },
     { "REST API" = "reference/rest-api.md" },
     { "Backends" = "reference/backends.md" },
   ] },

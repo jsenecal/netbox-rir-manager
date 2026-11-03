@@ -7,6 +7,10 @@ if TYPE_CHECKING:
     from netbox_rir_manager.models import RIRConfig
 
 
+class RIRDataError(ValueError):
+    """The data given to a backend cannot be sent to the RIR; the message is safe to show a user."""
+
+
 class RIRBackend(ABC):
     """Abstract base class for RIR API backends."""
 
@@ -49,12 +53,18 @@ class RIRBackend(ABC):
 
     @abstractmethod
     def reassign_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
-        """Reassign a subnet from parent NET. Returns ticket info dict or None."""
+        """Reassign a subnet from parent NET. Returns ticket info dict or None.
+
+        Raises RIRDataError when the data cannot form a valid payload.
+        """
         ...
 
     @abstractmethod
     def reallocate_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
-        """Reallocate a subnet from parent NET. Returns ticket info dict or None."""
+        """Reallocate a subnet from parent NET. Returns ticket info dict or None.
+
+        Raises RIRDataError when the data cannot form a valid payload.
+        """
         ...
 
     @abstractmethod
@@ -74,5 +84,8 @@ class RIRBackend(ABC):
 
     @abstractmethod
     def create_customer(self, parent_net_handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
-        """Create a customer under a parent NET for simple reassignment. Returns customer dict or None."""
+        """Create a customer under a parent NET for simple reassignment. Returns customer dict or None.
+
+        Raises RIRDataError when the data cannot form a valid payload.
+        """
         ...

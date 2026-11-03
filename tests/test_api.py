@@ -304,6 +304,39 @@ class TestRIRNetworkAPIActions:
         response = admin_api_client.post(_action_url("reassign", rir_network), DETAILED, format="json")
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_reassign_api_customer_data_arin_cannot_accept(
+        self, mock_backend_cls, admin_api_client, rir_network, rir_user_key
+    ):
+        """Customer data the backend refuses is a 400 and logged, not a 500 or 502."""
+        from netbox_rir_manager.backends.base import RIRDataError
+        from netbox_rir_manager.models import RIRSyncLog
+
+        mock_backend = mock_backend_cls.from_rir_config.return_value
+        mock_backend.create_customer.side_effect = RIRDataError(
+            "Invalid Customer details for ARIN: iso3166_2: String should have at most 3 characters"
+        )
+
+        response = admin_api_client.post(
+            _action_url("reassign", rir_network),
+            {
+                "reassignment_type": "simple",
+                "customer_name": "Cust",
+                "city": "Laval",
+                "state_province": "Quebec",
+                "country": "CA",
+                "start_address": "192.0.2.0",
+                "end_address": "192.0.2.15",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "iso3166_2" in response.json()["detail"]
+        mock_backend.reassign_network.assert_not_called()
+        error = RIRSyncLog.objects.get(status="error")
+        assert (error.operation, error.object_type) == ("create", "customer")
+
     def test_reassign_api_invalid_data(self, admin_api_client, rir_network, rir_user_key):
         # Missing required fields: start_address, end_address
         response = admin_api_client.post(
@@ -346,6 +379,24 @@ class TestRIRNetworkAPIActions:
             },
         )
         assert RIRTicket.objects.get(ticket_number="TKT-API-REALLOC").ticket_type == "IPV4_REALLOCATE"
+
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_reallocate_api_data_backend_refuses(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
+        """Data the backend cannot send to ARIN is a 400 and logged, not a 500 or 502."""
+        from netbox_rir_manager.backends.base import RIRDataError
+        from netbox_rir_manager.models import RIRSyncLog
+
+        mock_backend = mock_backend_cls.from_rir_config.return_value
+        mock_backend.reallocate_network.side_effect = RIRDataError(
+            "Invalid Net details for ARIN: version: Field required"
+        )
+
+        response = admin_api_client.post(_action_url("reallocate", rir_network), REALLOCATION, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "version" in response.json()["detail"]
+        error = RIRSyncLog.objects.get(status="error")
+        assert (error.operation, error.object_type) == ("reallocate", "network")
 
     @patch("netbox_rir_manager.api.views.ARINBackend")
     def test_remove_api(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
