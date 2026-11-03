@@ -21,7 +21,8 @@ From the `RIRConfig` list view, select rows and choose **Sync Selected**. The pl
 1. Iterates `RIRConfig.objects.filter(is_active=True)`.
 2. For each config, uses its **default key**. No user initiated the run, so no user's own key is borrowed; a config without a default key is skipped with a warning.
 3. Calls `sync_rir_config` once with that key.
-4. Logs failures per config and continues -- one failing config does not abort the rest.
+4. Queues the same per-aggregate prefix discovery as the manual sync (see [Networks](#3-networks-and-customers)), so reassignments made outside NetBox are picked up daily. Each `SyncPrefixesJob` uses the default key and runs as that key's owner.
+5. Logs failures per config and continues -- one failing config does not abort the rest.
 
 Inspect or trigger it manually from **System > Background Jobs**.
 
@@ -52,7 +53,7 @@ Only Nets registered to the config's own org anchor an aggregate. This keeps thi
 
 Customer reassignments beneath an aggregate are picked up by the prefix-level sync below, not here: a Net registered to an org never carries a customer handle.
 
-After the per-config job finishes, `SyncRIRConfigJob` enqueues one `SyncPrefixesJob` per `(aggregate, parent_net)` pair. That job walks every `Prefix` contained in the aggregate, calls `find_net` for each, and creates an `RIRNetwork` row whenever the result is a different handle from the parent (i.e. a real reassignment, not the parent net leaking through).
+After syncing a config, both `SyncRIRConfigJob` and `ScheduledRIRSyncJob` enqueue one `SyncPrefixesJob` per `(aggregate, parent_net)` pair. That job walks every `Prefix` contained in the aggregate, calls `find_net` for each, and creates an `RIRNetwork` row whenever the result is a different handle from the parent (i.e. a real reassignment, not the parent net leaking through).
 
 ## Auto-linking
 

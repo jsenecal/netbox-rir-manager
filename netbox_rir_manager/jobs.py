@@ -418,6 +418,28 @@ def _resolve_owned_net(backend: ARINBackend, net_data: dict, org_handle: str) ->
     return None
 
 
+def enqueue_prefix_syncs(
+    rir_config: RIRConfig,
+    agg_nets: list[tuple],
+    user_key: RIRUserKey,
+    log: logging.Logger = logger,
+) -> None:
+    """Queue one prefix discovery job per (aggregate, parent net) pair a config sync returned.
+
+    Each job runs with the key the config sync used, as that key's owner, so the RIR's audit
+    trail and NetBox's change log name the same account for the whole sync.
+    """
+    for agg, parent_net in agg_nets:
+        SyncPrefixesJob.enqueue(
+            instance=rir_config,
+            user=user_key.user,
+            aggregate_id=agg.pk,
+            parent_handle=parent_net.handle,
+            user_key_id=user_key.pk,
+        )
+        log.info(f"Enqueued prefix sync for aggregate {agg.prefix}")
+
+
 class SyncRIRConfigJob(JobRunner):
     """Background job for syncing RIR data."""
 
@@ -442,16 +464,7 @@ class SyncRIRConfigJob(JobRunner):
         with _changelog_context(self.job.user):
             logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=self.logger)
 
-        # Enqueue per-aggregate prefix discovery sub-jobs
-        for agg, parent_net in agg_nets:
-            SyncPrefixesJob.enqueue(
-                instance=rir_config,
-                user=user_key.user,
-                aggregate_id=agg.pk,
-                parent_handle=parent_net.handle,
-                user_key_id=user_key.pk,
-            )
-            self.logger.info(f"Enqueued prefix sync for aggregate {agg.prefix}")
+        enqueue_prefix_syncs(rir_config, agg_nets, user_key, log=self.logger)
 
         self.job.data["sync_logs_count"] = len(logs)
         self.job.save()
@@ -752,10 +765,11 @@ class ScheduledRIRSyncJob(JobRunner):
 
                 self.logger.info(f"Using default key {user_key.pk} for config {config.name}")
                 try:
-                    logs, _agg_nets = sync_rir_config(
+                    logs, agg_nets = sync_rir_config(
                         config, api_key=user_key.api_key, user_key=user_key, log=self.logger
                     )
                     total_logs += len(logs)
+                    enqueue_prefix_syncs(config, agg_nets, user_key, log=self.logger)
                 except Exception:
                     self.logger.exception(f"Scheduled sync failed for config {config.name}")
 

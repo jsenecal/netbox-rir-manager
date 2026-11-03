@@ -67,6 +67,40 @@ class TestScheduledSyncJob:
 
         mock_backend_class.from_rir_config.assert_called_once_with(rir_config, api_key=default_key.api_key)
 
+    @patch("netbox_rir_manager.jobs.SyncPrefixesJob")
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_scheduled_sync_queues_prefix_discovery_with_default_key(
+        self, mock_backend_class, mock_prefix_job, rir_config, default_key, operator_key, rir
+    ):
+        """Like the manual sync, each owned aggregate gets one prefix sync, run with the default key as its owner."""
+        from ipam.models import Aggregate
+
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+
+        agg = Aggregate.objects.create(prefix="10.0.0.0/8", rir=rir)
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = None
+        mock_backend.find_net.return_value = {
+            "handle": "NET-10-0-0-0-1",
+            "net_name": "BIG-NET",
+            "version": 4,
+            "org_handle": rir_config.org_handle,
+            "parent_net_handle": "",
+            "net_blocks": [],
+            "raw_data": {},
+        }
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        make_runner(ScheduledRIRSyncJob).run()
+
+        mock_prefix_job.enqueue.assert_called_once_with(
+            instance=rir_config,
+            user=default_key.user,
+            aggregate_id=agg.pk,
+            parent_handle="NET-10-0-0-0-1",
+            user_key_id=default_key.pk,
+        )
+
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_scheduled_sync_skips_config_without_default_key(self, mock_backend_class, rir_config, rir_user_key):
         from netbox_rir_manager.jobs import ScheduledRIRSyncJob

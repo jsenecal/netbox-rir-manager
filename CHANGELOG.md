@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The daily **Scheduled RIR Sync** now also queues the per-aggregate prefix sync,
+  as the manual **Sync** does, so reassignments made outside NetBox are discovered on
+  the schedule. Those prefix jobs use the config's default key and run as its owner (#66).
 - The daily **Scheduled RIR Sync** never ran: its module was only imported lazily, so the
   `@system_job` registration had not happened when `rqworker` scheduled system jobs at
   startup. The plugin now imports its jobs when it loads (#54).
