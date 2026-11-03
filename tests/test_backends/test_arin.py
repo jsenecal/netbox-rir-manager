@@ -513,31 +513,33 @@ def test_update_network_no_changes(mock_api_class):
 
 @patch("netbox_rir_manager.backends.arin.Api")
 def test_update_network_error_on_fetch(mock_api_class):
-    """update_network should return None when the fetch returns an Error."""
+    """update_network raises RIRRequestError with ARIN's reason when the lookup returns an Error."""
     mock_api = MagicMock()
     mock_api_class.return_value = mock_api
     mock_api.net.from_handle.return_value = arin_error("not_found")
 
     backend = ARINBackend(api_key="test-key")
-    result = backend.update_network("NET-BAD", {"net_name": "X"})
+    with pytest.raises(RIRRequestError) as excinfo:
+        backend.update_network("NET-BAD", {"net_name": "X"})
 
-    assert result is None
+    assert str(excinfo.value) == NOT_FOUND
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
 def test_update_network_error_on_save(mock_api_class):
-    """update_network should return None when save returns an Error."""
+    """update_network raises RIRRequestError with ARIN's reason when the save returns an Error."""
     mock_api = MagicMock()
     mock_api_class.return_value = mock_api
 
     mock_net = _make_mock_net()
-    mock_net.save.return_value = arin_error("not_found")
+    mock_net.save.return_value = arin_error("overlap")
     mock_api.net.from_handle.return_value = mock_net
 
     backend = ARINBackend(api_key="test-key")
-    result = backend.update_network("NET-TEST", {"net_name": "X"})
+    with pytest.raises(RIRRequestError) as excinfo:
+        backend.update_network("NET-TEST", {"net_name": "X"})
 
-    assert result is None
+    assert str(excinfo.value) == OVERLAP
 
 
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -551,6 +553,20 @@ def test_update_network_none_on_fetch(mock_api_class):
     result = backend.update_network("NET-BAD", {})
 
     assert result is None
+
+
+@patch("netbox_rir_manager.backends.arin.Api")
+def test_update_network_none_on_save(mock_api_class):
+    """update_network should return None when the save returns None (connection failure)."""
+    mock_api = MagicMock()
+    mock_api_class.return_value = mock_api
+    mock_net = _make_mock_net()
+    mock_net.save.return_value = None
+    mock_api.net.from_handle.return_value = mock_net
+
+    backend = ARINBackend(api_key="test-key")
+
+    assert backend.update_network("NET-TEST", {"net_name": "X"}) is None
 
 
 # ------------------------------------------------------------------
