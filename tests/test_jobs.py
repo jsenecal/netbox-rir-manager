@@ -819,7 +819,7 @@ class TestChangelogEntries:
 
 
 def test_plugin_ready_registers_scheduled_sync(monkeypatch):
-    """Loading the plugin registers the daily sync, not only once something imports jobs.py (issue #54).
+    """Loading the plugin registers the daily sync, not only once something imports jobs.py.
 
     rqworker schedules system jobs from the registry at startup, before any view or signal
     handler has imported the jobs module lazily.

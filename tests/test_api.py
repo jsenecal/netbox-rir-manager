@@ -418,7 +418,7 @@ class TestRIRNetworkAPIActions:
 
 @pytest.mark.django_db
 class TestRIRConfigSyncAPI:
-    """POST /configs/<pk>/sync/ queues a sync job for automation (issue #54)."""
+    """POST /configs/<pk>/sync/ queues a sync job for automation."""
 
     @staticmethod
     def _url(config):
