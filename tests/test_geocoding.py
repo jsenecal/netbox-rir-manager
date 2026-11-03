@@ -38,6 +38,7 @@ class TestStateCode:
             pytest.param("fr", {"state": "Somewhere", "ISO3166-2-lvl6": "FR-75"}, "75", id="nominatim-lvl6"),
             pytest.param("de", {"state": "Bavaria", "ISO3166-2-lvl4": "US-NY"}, "BY", id="other-country-code-ignored"),
             pytest.param("sg", {}, "", id="no-subdivision"),
+            pytest.param("", {"ISO3166-2-lvl4": "DE-NW"}, "", id="no-country"),
         ],
     )
     def test_geocode_maps_subdivision(self, country, address, expected):

@@ -730,10 +730,11 @@ class TestRIRAddressStateProvince:
 
         from netbox_rir_manager.models import RIRAddress
 
-        address = RIRAddress(city="Town", country="DE", state_province="North Rhine-Westphalia")
+        address = RIRAddress(city="Town", country="DEU", state_province="North Rhine-Westphalia")
         with pytest.raises(ValidationError) as excinfo:
             address.full_clean()
 
+        assert "country" in excinfo.value.message_dict  # other field errors are still reported
         assert excinfo.value.message_dict["state_province"] == [
             "'North Rhine-Westphalia' is not an ISO 3166-2 subdivision code. Enter the code without "
             "the country prefix, such as NY, QC or NW (at most 10 characters)."
