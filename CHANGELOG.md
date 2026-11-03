@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- REST endpoint to trigger an RIR sync, `POST /api/plugins/rir-manager/configs/{id}/sync/`,
+  so scripts can bring the plugin back in line with ARIN without a browser session. It
+  queues the same job as the config's **Sync** button, run as the requesting user with
+  their own key, and answers `202 Accepted` with the core Job to poll at
+  `/api/core/jobs/{id}/`; `403` when the user has no key on the config (#54).
 - NetBox 4.7 support: CI now also tests against NetBox 4.7.0, with
   Renovate keeping the matrix pinned to the newest release of that
   minor. The README compatibility matrix gains NetBox 4.7 to the
@@ -43,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The daily **Scheduled RIR Sync** never ran: its module was only imported lazily, so the
+  `@system_job` registration had not happened when `rqworker` scheduled system jobs at
+  startup. The plugin now imports its jobs when it loads (#54).
 - Writes ARIN processes immediately, without opening a ticket (NET deletes and
   simple reassignments, for example), no longer fail. The plugin stored a ticket
   with an empty number for the first one, so every later one hit the unique ticket
