@@ -15,7 +15,7 @@ The plugin uses a pluggable backend architecture:
 - `netbox_rir_manager/backends/base.py` -- abstract `RIRBackend` class.
 - `netbox_rir_manager/backends/arin.py` -- ARIN reference implementation.
 
-To add a new backend, subclass `RIRBackend`, implement the required methods, and register it in `enabled_backends`.
+Backend classes subclass `RIRBackend` and register themselves with `@register_backend`. The views, REST API and jobs currently construct the ARIN backend directly, so a new backend also needs those call sites to choose it; see [Reference: Backends](../reference/backends.md).
 
 ## Releasing
 
