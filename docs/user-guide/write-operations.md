@@ -9,7 +9,31 @@ From a **Network** detail view, you can act against the RIR directly:
 | **Remove**    | Remove a previously reassigned/reallocated network                     |
 | **Delete**    | Submit a deletion request to the RIR                                   |
 
-Operations that require RIR-side approval create a ticket. Tickets are visible under **RIR Manager -> Tickets** and update as the RIR transitions them through their states.
+Operations that require RIR-side approval create a ticket. Tickets are visible under **RIR Manager -> Tickets** and update as the RIR transitions them through their states. On success the ticket page opens.
+
+ARIN processes some operations immediately and opens no ticket -- NET deletes and simple reassignments, for example. Those create no ticket: the result is recorded as a `success` sync log under **RIR Manager -> Sync Logs**, any new child network is still linked, and you return to the network (or prefix) page with a message saying ARIN processed the change immediately.
+
+If NetBox cannot record a change ARIN has already accepted, you get a warning that the change succeeded at ARIN but was not recorded, the error is written to the NetBox log and, when possible, to an `error` sync log. Do not resubmit: the change is already in place at ARIN.
+
+### REST API responses
+
+The `reassign`, `reallocate` and `delete-arin` actions on `/api/plugins/rir-manager/networks/<id>/` answer a write ARIN accepted with:
+
+- **A ticket**: `201 Created` and the ticket, as returned by `/api/plugins/rir-manager/tickets/<id>/`.
+- **No ticket**: `200 OK` and
+
+    ```json
+    {
+      "detail": "Reassignment processed immediately by ARIN; no ticket was opened.",
+      "recorded": true,
+      "ticket": null,
+      "net": {"id": 42, "handle": "NET-192-0-2-0-2", "...": "..."}
+    }
+    ```
+
+    `net` is the child network NetBox linked (reassignments only), otherwise `null`. `recorded` is `false` when ARIN made the change but NetBox could not record it; `detail` then says so.
+
+A failure at ARIN returns `502 Bad Gateway` with a `detail` message, as before.
 
 ## Reassigning a prefix
 
@@ -19,7 +43,7 @@ A Prefix detail page has a **Reassign** button for prefixes under an aggregate l
 - **Customer**: the tenant's name and the site's address (for a simple reassignment).
 - **Net name**: generated from the tenant and the prefix (see [Network names](#network-names)).
 
-Edit anything before submitting: the reassignment is sent to the RIR immediately with exactly the values in the form, using your own key. It does not require **Auto reassign** on the parent; that flag only controls the automatic path below. The new child network is linked to the prefix, and the ticket opens on success.
+Edit anything before submitting: the reassignment is sent to the RIR immediately with exactly the values in the form, using your own key. It does not require **Auto reassign** on the parent; that flag only controls the automatic path below. The new child network is linked to the prefix, and the ticket opens on success (or the prefix page, when ARIN processed it immediately).
 
 ## Automatic reassignment and removal
 

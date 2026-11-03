@@ -2,6 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tests.arin_payloads import EXISTING_TICKET, immediate_result, ticket_result
+
 
 def make_runner(cls):
     """Create a job runner with mocked job and logger (bypasses __init__)."""
@@ -918,6 +920,47 @@ class TestChangelogEntries:
 
         # No ObjectChange should be created since user is not a real User
         assert ObjectChange.objects.count() == initial_count
+
+
+@pytest.mark.django_db
+class TestReassignJobOutcome:
+    """The job reports a reassignment ARIN accepted as a success, ticket or not."""
+
+    @pytest.mark.parametrize(
+        "reassign_result, expected_message, expected_ticket",
+        [
+            pytest.param(immediate_result("NET-10-0-1-0-1"), "immediately", None, id="no-ticket"),
+            pytest.param(ticket_result("TKT-JOB-1"), "ticket TKT-JOB-1", "TKT-JOB-1", id="ticket"),
+            pytest.param(ticket_result(EXISTING_TICKET), "could not record", None, id="recording-fails"),
+        ],
+    )
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_reports_success(
+        self,
+        mock_backend_class,
+        rir_user_key,
+        rir_organization,
+        rir_ticket,
+        prefix_under_parent,
+        reassign_result,
+        expected_message,
+        expected_ticket,
+    ):
+        from netbox_rir_manager.jobs import ReassignJob
+
+        setup = prefix_under_parent("10.0.0.0/20", "10.0.1.0/29", "NET-PARENT-20", auto_reassign=True)
+        rir_organization.tenant = setup["tenant"]
+        rir_organization.save()
+        backend = mock_backend_class.from_rir_config.return_value
+        backend.find_net.return_value = None
+        backend.reassign_network.return_value = reassign_result
+
+        runner = make_runner(ReassignJob)
+        runner.run(prefix_id=setup["prefix"].pk, user_key_id=rir_user_key.pk)
+
+        assert runner.job.data["status"] == "success"
+        assert expected_message in runner.job.data["message"]
+        assert runner.job.data.get("ticket_number") == expected_ticket
 
 
 def test_plugin_ready_registers_scheduled_sync(monkeypatch):
