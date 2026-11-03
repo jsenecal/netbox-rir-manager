@@ -530,22 +530,23 @@ class SyncPrefixesJob(JobRunner):
 
 
 class ReassignJob(JobRunner):
-    """Background job for reassigning a prefix at ARIN.
+    """Background job for the automatic reassignment of a prefix at ARIN.
 
-    Accepts prefix_id and user_key_id via kwargs.
-    Determines simple vs detailed based on whether the prefix's tenant
-    has a linked RIROrganization.
+    Queued by the auto_reassign signal, with prefix_id and user_key_id in kwargs. It works out
+    the request itself: detailed when the prefix's tenant has a linked RIROrganization, simple
+    otherwise, with the customer taken from the tenant and the site's address. Manual
+    reassignments do not use this job; they submit what the user entered directly.
     """
 
     class Meta:
         name = "ARIN Reassign"
 
     def run(self, *args, **kwargs):
-        from ipam.models import Aggregate, Prefix
+        from ipam.models import Prefix
 
-        from netbox_rir_manager.choices import normalize_ticket_status
-        from netbox_rir_manager.models import RIRTicket, RIRUserKey
+        from netbox_rir_manager.models import RIRUserKey
         from netbox_rir_manager.services.geocoding import resolve_site_address
+        from netbox_rir_manager.services.reassignment import ReassignmentError, prefix_site, submit_reassignment
 
         prefix_id = kwargs.get("prefix_id")
         user_key_id = kwargs.get("user_key_id")
@@ -558,24 +559,16 @@ class ReassignJob(JobRunner):
         self.logger.info(f"Starting reassignment for prefix {prefix.prefix}")
 
         with _changelog_context(self.job.user):
-            # Find the parent RIRNetwork via Aggregate
-            agg = Aggregate.objects.filter(prefix__net_contains_or_equals=prefix.prefix).first()
-            if not agg:
-                self.logger.error(f"No matching Aggregate found for prefix {prefix.prefix}")
-                self.job.data["status"] = "error"
-                self.job.data["message"] = "No matching Aggregate found"
-                self.job.save()
-                return
-
-            parent_network = RIRNetwork.objects.filter(aggregate=agg, auto_reassign=True).first()
+            parent_network = RIRNetwork.auto_reassign_parent_for(prefix)
             if not parent_network:
-                self.logger.error(f"No parent RIRNetwork with auto_reassign=True for aggregate {agg.prefix}")
+                message = "No parent allocation opted into auto-reassign on an active config"
+                self.logger.error(f"{message} for prefix {prefix.prefix}")
                 self.job.data["status"] = "error"
-                self.job.data["message"] = "No parent RIRNetwork with auto_reassign=True"
+                self.job.data["message"] = message
                 self.job.save()
                 return
 
-            self.logger.info(f"Found parent network {parent_network.handle} (aggregate {agg.prefix})")
+            self.logger.info(f"Found parent network {parent_network.handle}")
             rir_config = parent_network.rir_config
             backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
 
@@ -629,33 +622,23 @@ class ReassignJob(JobRunner):
 
             self.logger.info(f"Reassignment type: {'detailed' if rir_org else 'simple'}")
 
-            net_data = {
+            net = {
                 "net_name": build_net_name(tenant.name, prefix.prefix),
                 "start_address": start_address,
                 "end_address": end_address,
             }
+            customer = None
             if rir_org:
                 # Detailed reassignment - tenant has a known RIR org
                 self.job.data["reassignment_type"] = "detailed"
                 self.job.data["org_handle"] = rir_org.handle
                 self.job.save()
-
-                net_data["org_handle"] = rir_org.handle
             else:
                 # Simple reassignment - create customer from site address
                 self.job.data["reassignment_type"] = "simple"
                 self.job.save()
 
-                # Get the site - use scope for GenericFK
-                site = getattr(prefix, "_site", None) or getattr(prefix, "site", None)
-                if site is None:
-                    # Try scope
-                    scope = getattr(prefix, "scope", None)
-                    from dcim.models import Site
-
-                    if isinstance(scope, Site):
-                        site = scope
-
+                site = prefix_site(prefix)
                 if not site:
                     self.job.data["status"] = "error"
                     self.job.data["message"] = "Prefix has no site"
@@ -673,98 +656,26 @@ class ReassignJob(JobRunner):
                     self.job.save()
                     return
 
-                # Create customer at ARIN
-                customer_data = {
-                    "customer_name": tenant.name,
-                    "street_address": site_address.street_address,
-                    "city": site_address.city,
-                    "state_province": site_address.state_province,
-                    "postal_code": site_address.postal_code,
-                    "country": site_address.country,
-                }
-                customer_result = backend.create_customer(parent_network.handle, customer_data)
-                if customer_result is None:
-                    RIRSyncLog.objects.create(
-                        rir_config=rir_config,
-                        operation="create",
-                        object_type="customer",
-                        object_handle=parent_network.handle,
-                        status="error",
-                        message=f"Failed to create customer for {tenant.name}",
-                    )
-                    self.job.data["status"] = "error"
-                    self.job.data["message"] = "Failed to create customer at ARIN"
-                    self.job.save()
-                    return
+                customer = {"customer_name": tenant.name, **site_address.address_fields()}
 
-                cust_addr, _ = RIRAddress.objects.get_or_create(
-                    street_address=site_address.street_address,
-                    city=site_address.city,
-                    state_province=site_address.state_province,
-                    postal_code=site_address.postal_code,
-                    country=site_address.country,
-                )
-                RIRCustomer.objects.create(
-                    rir_config=rir_config,
-                    handle=customer_result["handle"],
-                    customer_name=tenant.name,
-                    address=cust_addr,
-                    network=parent_network,
-                    tenant=tenant,
-                    raw_data=customer_result,
-                    created_date=timezone.now(),
-                )
-
-                net_data["customer_handle"] = customer_result["handle"]
-
-            # Perform the reassignment
             self.logger.info(f"Submitting reassignment to ARIN for {prefix.prefix}")
-            result = backend.reassign_network(parent_network.handle, net_data)
-            if result is None:
-                self.logger.error(f"Reassignment failed at ARIN for prefix {prefix.prefix}")
-                RIRSyncLog.objects.create(
-                    rir_config=rir_config,
-                    operation="reassign",
-                    object_type="network",
-                    object_handle=parent_network.handle,
-                    status="error",
-                    message=f"Reassignment failed for prefix {prefix.prefix}",
+            try:
+                ticket = submit_reassignment(
+                    backend,
+                    parent_network,
+                    user_key,
+                    net,
+                    customer=customer,
+                    org_handle=rir_org.handle if rir_org else None,
+                    tenant=tenant,
+                    prefix=prefix,
                 )
+            except ReassignmentError as exc:
+                self.logger.error(f"Reassignment of {prefix.prefix} failed: {exc}")
                 self.job.data["status"] = "error"
-                self.job.data["message"] = "Reassignment failed at ARIN"
+                self.job.data["message"] = str(exc)
                 self.job.save()
                 return
-
-            # Create ticket record
-            ticket = RIRTicket.objects.create(
-                rir_config=rir_config,
-                ticket_number=result.get("ticket_number", ""),
-                ticket_type=result.get("ticket_type", "IPV4_SIMPLE_REASSIGN"),
-                status=normalize_ticket_status(result.get("ticket_status", "")),
-                network=parent_network,
-                submitted_by=user_key,
-                created_date=timezone.now(),
-                raw_data=result.get("raw_data", {}),
-            )
-
-            # Create child RIRNetwork if net data was returned
-            net_result = result.get("net")
-            if net_result and net_result.get("handle"):
-                RIRNetwork.sync_from_arin(
-                    net_result,
-                    rir_config,
-                    prefix=prefix,
-                    user_key=user_key,
-                )
-
-            RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="reassign",
-                object_type="network",
-                object_handle=parent_network.handle,
-                status="success",
-                message=f"Reassignment submitted for {prefix.prefix}, ticket {ticket.ticket_number}",
-            )
 
             self.logger.info(f"Reassignment submitted, ticket {ticket.ticket_number}")
             self.job.data["status"] = "success"

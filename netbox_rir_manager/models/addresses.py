@@ -56,6 +56,12 @@ class RIRAddress(NetBoxModel):
             ),
         ]
 
+    ADDRESS_FIELDS = ("street_address", "city", "state_province", "postal_code", "country")
+
+    def address_fields(self):
+        """The postal address as a dict, the shape ARIN customer records and forms use."""
+        return {field: getattr(self, field) for field in self.ADDRESS_FIELDS}
+
     @classmethod
     def get_for_site(cls, site):
         """Return the site-level (no location) address, or None."""

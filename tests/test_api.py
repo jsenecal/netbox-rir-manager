@@ -306,6 +306,27 @@ class TestRIRNetworkAPIActions:
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    @patch("netbox_rir_manager.api.views.ARINBackend")
+    def test_reassign_api_arin_failure(self, mock_backend_cls, admin_api_client, rir_network, rir_user_key):
+        mock_backend = MagicMock()
+        mock_backend.reassign_network.return_value = None
+        mock_backend_cls.from_rir_config.return_value = mock_backend
+
+        url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-reassign", args=[rir_network.pk])
+        response = admin_api_client.post(
+            url,
+            {
+                "reassignment_type": "detailed",
+                "org_handle": "CUST-ARIN",
+                "start_address": "192.0.2.0",
+                "end_address": "192.0.2.15",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert response.json()["detail"] == "Reassignment failed at ARIN."
+
     def test_reassign_api_invalid_data(self, admin_api_client, rir_network, rir_user_key):
         url = reverse("plugins-api:netbox_rir_manager-api:rirnetwork-reassign", args=[rir_network.pk])
         response = admin_api_client.post(

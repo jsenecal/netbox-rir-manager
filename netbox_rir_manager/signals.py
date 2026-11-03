@@ -74,16 +74,11 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     if instance.status != "active":
         return
 
-    from dcim.models import Site
-
     from netbox_rir_manager.models import RIRNetwork
+    from netbox_rir_manager.services.reassignment import prefix_site
 
-    # 1. Check for site - Prefix.scope is a GenericFK via CachedScopeMixin
-    site = getattr(instance, "_site", None)
-    if site is None:
-        scope = getattr(instance, "scope", None)
-        if isinstance(scope, Site):
-            site = scope
+    # 1. Check for site
+    site = prefix_site(instance)
     if not site:
         return
 
