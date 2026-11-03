@@ -302,23 +302,23 @@ class TestRIRSyncJob:
         [
             pytest.param(
                 "TESTORG-ARIN",
-                {"handle": "NET-CUST-1", "customer_handle": "C01234567", "parent_net_handle": "NET-THEIRS-1"},
-                {"handle": "NET-THEIRS-1", "org_handle": "OTHER-ARIN", "parent_net_handle": ""},
+                arin_net("NET-CUST-1", customer_handle="C01234567", parent_handle="NET-THEIRS-1"),
+                arin_net("NET-THEIRS-1", org_handle="OTHER-ARIN"),
                 1,
                 "C01234567",
                 id="chain-owned-by-another-org",
             ),
             pytest.param(
                 "TESTORG-ARIN",
-                {"handle": "NET-A", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-B"},
-                {"handle": "NET-B", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-A"},
+                arin_net("NET-A", org_handle="OTHER-ARIN", parent_handle="NET-B"),
+                arin_net("NET-B", org_handle="OTHER-ARIN", parent_handle="NET-A"),
                 1,
                 "OTHER-ARIN",
                 id="parent-chain-cycle",
             ),
             pytest.param(
                 "TESTORG-ARIN",
-                {"handle": "NET-A", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-B"},
+                arin_net("NET-A", org_handle="OTHER-ARIN", parent_handle="NET-B"),
                 None,
                 1,
                 "OTHER-ARIN",
@@ -326,7 +326,7 @@ class TestRIRSyncJob:
             ),
             pytest.param(
                 "",
-                {"handle": "NET-A", "org_handle": "OTHER-ARIN", "parent_net_handle": "NET-B"},
+                arin_net("NET-A", org_handle="OTHER-ARIN", parent_handle="NET-B"),
                 None,
                 0,
                 "OTHER-ARIN",

@@ -378,7 +378,7 @@ class TestAggregateSyncView:
     @pytest.mark.parametrize(
         "found",
         [
-            pytest.param({"handle": "NET-THEIRS-1", "org_handle": "OTHER-ARIN", "parent_net_handle": ""}, id="foreign"),
+            pytest.param(arin_net("NET-THEIRS-1", org_handle="OTHER-ARIN"), id="foreign"),
             pytest.param(None, id="no-net-at-arin"),
         ],
     )
