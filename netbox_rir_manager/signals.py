@@ -74,7 +74,7 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     if instance.status != "active":
         return
 
-    from netbox_rir_manager.models import RIRNetwork
+    from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
     from netbox_rir_manager.services.reassignment import prefix_site
 
     # 1. Check for site
@@ -102,7 +102,7 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     if not user_key:
         reason = rir_config.no_key_reason(user)
         logger.warning("Auto-reassign skipped for prefix %s: %s", instance.prefix, reason)
-        _log_skipped(
+        RIRSyncLog.log_skipped(
             rir_config, "reassign", str(instance.prefix), f"Auto-reassign of {instance.prefix} skipped: {reason}"
         )
         return
@@ -154,7 +154,7 @@ def _remove_child_networks(prefix, reason):
     active. Otherwise the ARIN net is left in place and a skipped sync log records why.
     Parent allocations (networks linked to an aggregate) are never removed this way.
     """
-    from netbox_rir_manager.models import RIRNetwork
+    from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
 
     rir_networks = RIRNetwork.objects.filter(prefix=prefix, aggregate__isnull=True)
     if not rir_networks.exists():
@@ -165,7 +165,7 @@ def _remove_child_networks(prefix, reason):
 
     for network in rir_networks:
         if not opted_in:
-            _log_skipped(
+            RIRSyncLog.log_skipped(
                 network.rir_config,
                 "remove",
                 network.handle,
@@ -177,7 +177,7 @@ def _remove_child_networks(prefix, reason):
             logger.warning(
                 "Cannot remove ARIN network %s for %s prefix %s: %s", network.handle, reason, prefix.prefix, no_key
             )
-            _log_skipped(
+            RIRSyncLog.log_skipped(
                 network.rir_config,
                 "remove",
                 network.handle,
@@ -191,16 +191,3 @@ def _acting_user():
 
     user = getattr(current_request.get(), "user", None)
     return user if user is not None and user.is_authenticated else None
-
-
-def _log_skipped(rir_config, operation, handle, message):
-    from netbox_rir_manager.models import RIRSyncLog
-
-    RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation=operation,
-        object_type="network",
-        object_handle=handle,
-        status="skipped",
-        message=message,
-    )

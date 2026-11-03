@@ -30,3 +30,15 @@ class RIRSyncLog(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_rir_manager:rirsynclog", args=[self.pk])
+
+    @classmethod
+    def log_skipped(cls, rir_config, operation, handle, message):
+        """Record a network operation that was deliberately not performed, and why."""
+        return cls.objects.create(
+            rir_config=rir_config,
+            operation=operation,
+            object_type="network",
+            object_handle=handle,
+            status="skipped",
+            message=message,
+        )

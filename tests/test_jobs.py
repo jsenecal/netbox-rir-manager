@@ -14,6 +14,25 @@ def make_runner(cls):
     return runner
 
 
+def wire_org(mock_backend_class, handle, name):
+    """Make ARIN return one organization with no POCs and no nets."""
+    mock_backend = MagicMock()
+    mock_backend.get_organization.return_value = {
+        "handle": handle,
+        "name": name,
+        "street_address": "",
+        "city": "",
+        "state_province": "",
+        "postal_code": "",
+        "country": "",
+        "poc_links": [],
+        "raw_data": {},
+    }
+    mock_backend.find_net.return_value = None
+    mock_backend_class.from_rir_config.return_value = mock_backend
+    return mock_backend
+
+
 def wire_owned_net(mock_backend_class, org_handle, handle="NET-10-0-0-0-1"):
     """Make every ARIN lookup return one net registered to org_handle, with no organization."""
     mock_backend = MagicMock()
@@ -38,20 +57,7 @@ class TestScheduledSyncJob:
         from netbox_rir_manager.jobs import ScheduledRIRSyncJob
         from netbox_rir_manager.models import RIROrganization
 
-        mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = {
-            "handle": "SCHED-ARIN",
-            "name": "Scheduled Org",
-            "street_address": "",
-            "city": "",
-            "state_province": "",
-            "postal_code": "",
-            "country": "",
-            "poc_links": [],
-            "raw_data": {},
-        }
-        mock_backend.find_net.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        wire_org(mock_backend_class, "SCHED-ARIN", "Scheduled Org")
 
         runner = make_runner(ScheduledRIRSyncJob)
 
@@ -302,20 +308,7 @@ class TestRIRSyncJob:
         from netbox_rir_manager.jobs import sync_rir_config
         from netbox_rir_manager.models import RIROrganization
 
-        mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = {
-            "handle": "SYNCBY-ARIN",
-            "name": "Sync By Org",
-            "street_address": "",
-            "city": "",
-            "state_province": "",
-            "postal_code": "",
-            "country": "",
-            "poc_links": [],
-            "raw_data": {},
-        }
-        mock_backend.find_net.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        wire_org(mock_backend_class, "SYNCBY-ARIN", "Sync By Org")
 
         sync_rir_config(rir_config, api_key="test-key", user_key=rir_user_key)
 
@@ -923,10 +916,7 @@ class TestRemoveNetworkJob:
 def _prefix_sync_kwargs(rir_config, rir):
     from ipam.models import Aggregate
 
-    from netbox_rir_manager.models import RIRNetwork
-
     agg = Aggregate.objects.create(prefix="10.70.0.0/16", rir=rir)
-    RIRNetwork.objects.create(rir_config=rir_config, handle="NET-KEYCHECK-AGG", aggregate=agg)
     return {"aggregate_id": agg.pk, "parent_handle": "NET-KEYCHECK-AGG"}
 
 
@@ -969,7 +959,7 @@ def test_queued_job_refuses_key_of_deactivated_owner(
 
     mock_backend_class.from_rir_config.assert_not_called()
     assert runner.job.data["status"] == "skipped"
-    assert "admin is deactivated" in runner.job.data["message"]
+    assert f"{rir_user_key.user.username} is deactivated" in runner.job.data["message"]
     log = RIRSyncLog.objects.get(rir_config=rir_config, status="skipped")
     assert log.message == runner.job.data["message"]
 
@@ -986,20 +976,7 @@ class TestChangelogEntries:
         from netbox_rir_manager.jobs import SyncRIRConfigJob
         from netbox_rir_manager.models import RIROrganization
 
-        mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = {
-            "handle": "CHANGELOG-ARIN",
-            "name": "Changelog Org",
-            "street_address": "",
-            "city": "",
-            "state_province": "",
-            "postal_code": "",
-            "country": "",
-            "poc_links": [],
-            "raw_data": {},
-        }
-        mock_backend.find_net.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        wire_org(mock_backend_class, "CHANGELOG-ARIN", "Changelog Org")
 
         runner = make_runner(SyncRIRConfigJob)
         runner.job.object_id = rir_config.pk
@@ -1023,20 +1000,7 @@ class TestChangelogEntries:
 
         from netbox_rir_manager.jobs import SyncRIRConfigJob
 
-        mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = {
-            "handle": "NOLOG-ARIN",
-            "name": "No Log Org",
-            "street_address": "",
-            "city": "",
-            "state_province": "",
-            "postal_code": "",
-            "country": "",
-            "poc_links": [],
-            "raw_data": {},
-        }
-        mock_backend.find_net.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        wire_org(mock_backend_class, "NOLOG-ARIN", "No Log Org")
 
         runner = make_runner(SyncRIRConfigJob)
         runner.job.object_id = rir_config.pk
@@ -1056,20 +1020,7 @@ class TestChangelogEntries:
         from netbox_rir_manager.jobs import ScheduledRIRSyncJob
         from netbox_rir_manager.models import RIROrganization
 
-        mock_backend = MagicMock()
-        mock_backend.get_organization.return_value = {
-            "handle": "SCHEDLOG-ARIN",
-            "name": "Scheduled Log Org",
-            "street_address": "",
-            "city": "",
-            "state_province": "",
-            "postal_code": "",
-            "country": "",
-            "poc_links": [],
-            "raw_data": {},
-        }
-        mock_backend.find_net.return_value = None
-        mock_backend_class.from_rir_config.return_value = mock_backend
+        wire_org(mock_backend_class, "SCHEDLOG-ARIN", "Scheduled Log Org")
 
         runner = make_runner(ScheduledRIRSyncJob)
         runner.job.user = None

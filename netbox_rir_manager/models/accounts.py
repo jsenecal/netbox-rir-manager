@@ -45,6 +45,10 @@ class RIRConfig(JobsMixin, NetBoxModel):
         super().clean()
         if self.default_key_id and self.default_key.rir_config_id != self.pk:
             raise ValidationError({"default_key": "The default key must belong to this RIR config."})
+        if self.default_key_id and not self.default_key.user.is_active:
+            raise ValidationError(
+                {"default_key": f"The default key belongs to deactivated user {self.default_key.user}; choose another."}
+            )
 
     def resolve_key(self, user=None):
         """Return the key an RIR operation should run with, or None if it must not run.

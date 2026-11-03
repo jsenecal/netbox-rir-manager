@@ -60,14 +60,7 @@ def _queued_user_key(runner: JobRunner, user_key_id: int, operation: str, object
     runner.logger.warning(reason)
     runner.job.data = {"status": "skipped", "message": reason}
     runner.job.save()
-    RIRSyncLog.objects.create(
-        rir_config=user_key.rir_config,
-        operation=operation,
-        object_type="network",
-        object_handle=object_handle,
-        status="skipped",
-        message=reason,
-    )
+    RIRSyncLog.log_skipped(user_key.rir_config, operation, object_handle, reason)
     return None
 
 
@@ -396,15 +389,7 @@ def sync_aggregate(
             handle = found["handle"]
             message = f"Aggregate {agg.prefix} is not registered to {rir_config.org_handle} (owned by {owner})"
         log.info(message)
-        sync_log = RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="network",
-            object_handle=handle,
-            status="skipped",
-            message=message,
-        )
-        return sync_log, None
+        return RIRSyncLog.log_skipped(rir_config, "sync", handle, message), None
 
     rir_network, created = RIRNetwork.sync_from_arin(
         net_data,
@@ -497,8 +482,9 @@ class SyncRIRConfigJob(JobRunner):
         rir_config = RIRConfig.objects.get(pk=self.job.object_id)
         user_key = rir_config.resolve_key(self.job.user)
         if not user_key:
-            self.logger.error(f"{rir_config.no_key_reason(self.job.user)}; nothing synced")
-            self.job.data = {"rir_config": rir_config.name, "status": "error", "message": "No API key"}
+            reason = rir_config.no_key_reason(self.job.user)
+            self.logger.error(f"{reason}; nothing synced")
+            self.job.data = {"rir_config": rir_config.name, "status": "error", "message": reason}
             self.job.save()
             return
 
@@ -599,7 +585,7 @@ class ReassignJob(JobRunner):
         from netbox_rir_manager.services.reassignment import ReassignmentError, prefix_site, submit_reassignment
 
         prefix = Prefix.objects.get(pk=kwargs.get("prefix_id"))
-        user_key = _queued_user_key(self, kwargs.get("user_key_id"), "reassign", str(prefix.prefix))
+        user_key = _queued_user_key(self, kwargs["user_key_id"], "reassign", str(prefix.prefix))
         if not user_key:
             return
 
@@ -649,16 +635,12 @@ class ReassignJob(JobRunner):
                     )
                     self.job.save()
 
-                    RIRSyncLog.objects.create(
-                        rir_config=rir_config,
-                        operation="reassign",
-                        object_type="network",
-                        object_handle=actual_handle,
-                        status="skipped",
-                        message=(
-                            f"Prefix {prefix.prefix} already reassigned at ARIN as "
-                            f"{actual_handle}. Synced instead of re-reassigning."
-                        ),
+                    RIRSyncLog.log_skipped(
+                        rir_config,
+                        "reassign",
+                        actual_handle,
+                        f"Prefix {prefix.prefix} already reassigned at ARIN as "
+                        f"{actual_handle}. Synced instead of re-reassigning.",
                     )
                     return
 
@@ -743,7 +725,7 @@ class RemoveNetworkJob(JobRunner):
         from netbox_rir_manager.services.net_writes import submit_net_remove
 
         network = RIRNetwork.objects.get(pk=kwargs.get("network_id"))
-        user_key = _queued_user_key(self, kwargs.get("user_key_id"), "remove", network.handle)
+        user_key = _queued_user_key(self, kwargs["user_key_id"], "remove", network.handle)
         if not user_key:
             return
 
