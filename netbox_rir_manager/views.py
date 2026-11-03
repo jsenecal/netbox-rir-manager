@@ -2,6 +2,7 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -770,6 +771,26 @@ class SiteAddressSelectView(LoginRequiredMixin, View):
             raw_geocode = json.loads(raw_geocode_str)
         except (json.JSONDecodeError, TypeError):
             raw_geocode = {}
+
+        # The dialog offers no Select for a candidate without a subdivision code; this refuses a
+        # posted address that still cannot be stored, before the existing one is replaced.
+        try:
+            RIRAddress(
+                street_address=street_address,
+                city=city,
+                state_province=state_province,
+                postal_code=postal_code,
+                country=country,
+            ).clean_fields(exclude=["site", "location", "raw_geocode", "last_resolved"])
+        except ValidationError as exc:
+            response = render(
+                request,
+                "netbox_rir_manager/htmx/site_address_resolve_error.html",
+                {"errors": exc.messages},
+            )
+            response.headers["HX-Retarget"] = "#site-address-resolve-error"
+            response.headers["HX-Reswap"] = "innerHTML"
+            return response
 
         # Delete existing site-level address (not location-specific ones)
         RIRAddress.objects.filter(site=site, location__isnull=True).delete()
