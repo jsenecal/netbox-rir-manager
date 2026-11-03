@@ -17,7 +17,7 @@ on:
   # docs-only PR can never merge. The `changes` job below decides whether
   # the expensive steps actually run.
   pull_request:
-    branches: [main]
+    branches: [main, 'tmp/ci-docs-base']
 
 permissions:
   contents: read
