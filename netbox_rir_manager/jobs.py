@@ -706,7 +706,7 @@ class RemoveNetworkJob(JobRunner):
             try:
                 submit_net_remove(backend, network)
             except ARINWriteError as exc:
-                self.logger.error(f"Failed to remove network {network.handle}: {exc}")
+                self.logger.error(f"{network.handle}: {exc}")
                 self.job.data["status"] = "error"
                 self.job.data["message"] = str(exc)
             else:

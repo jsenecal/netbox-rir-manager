@@ -66,8 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ARIN's reason for refusing a write is no longer discarded (#65). Customer
   create, reassign, reallocate, remove and delete now append it to the usual
   message, in the UI error, the REST API `detail` and the `error` sync log, for
-  example `Failed to create customer at ARIN: iso3166-1: A valid country code is
-  required.` A write ARIN cannot be reached for keeps the old message. The
+  example `Reassignment failed at ARIN: startAddress: IP range overlaps with
+  existing network(s).` A write ARIN cannot be reached for keeps the old message. The
   **ARIN Remove** job now records the same message instead of "ARIN removal
   failed".
 - A simple reassignment's customer country is now checked against ISO 3166-1

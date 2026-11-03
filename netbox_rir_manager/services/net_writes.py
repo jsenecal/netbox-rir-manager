@@ -1,13 +1,6 @@
 """Reallocating, removing and deleting nets at ARIN, shared by the UI, the API and the jobs."""
 
-from netbox_rir_manager.backends.base import RIRDataError, RIRRequestError
-from netbox_rir_manager.services.arin_results import (
-    data_error,
-    net_request,
-    record_arin_result,
-    sync_log,
-    write_failure,
-)
+from netbox_rir_manager.services.arin_results import arin_write, net_request, record_arin_result, sync_log
 
 
 def reallocation_request(data):
@@ -22,23 +15,15 @@ def submit_reallocation(backend, parent, user_key, net):
     raises ARINWriteError after logging the failure, with ARIN's reason when it refused
     (ARINDataError when the request's own data cannot be sent to ARIN).
     """
-    refusal = None
-    try:
-        result = backend.reallocate_network(parent.handle, net)
-    except RIRDataError as exc:
-        raise data_error(parent.rir_config, "reallocate", "network", parent.handle, exc) from exc
-    except RIRRequestError as exc:
-        result, refusal = None, exc
-    if result is None:
-        raise write_failure(
-            parent.rir_config,
-            "reallocate",
-            "network",
-            parent.handle,
-            "Reallocation failed at ARIN",
-            log="Reallocation failed",
-            refusal=refusal,
-        ) from refusal
+    result = arin_write(
+        lambda: backend.reallocate_network(parent.handle, net),
+        parent.rir_config,
+        "reallocate",
+        "network",
+        parent.handle,
+        "Reallocation failed at ARIN",
+        log="Reallocation failed",
+    )
     return record_arin_result(
         result,
         network=parent,
@@ -55,15 +40,14 @@ def submit_net_delete(backend, network, user_key):
     Returns the ARINOutcome of record_arin_result, or raises ARINWriteError after logging the
     failure, with ARIN's reason when it refused.
     """
-    refusal = None
-    try:
-        result = backend.delete_network(network.handle)
-    except RIRRequestError as exc:
-        result, refusal = None, exc
-    if result is None:
-        raise write_failure(
-            network.rir_config, "delete", "network", network.handle, "Failed to delete network at ARIN", refusal=refusal
-        ) from refusal
+    result = arin_write(
+        lambda: backend.delete_network(network.handle),
+        network.rir_config,
+        "delete",
+        "network",
+        network.handle,
+        "Failed to delete network at ARIN",
+    )
     return record_arin_result(
         result,
         network=network,
@@ -79,20 +63,14 @@ def submit_net_remove(backend, network):
 
     Raises ARINWriteError after logging a failure, with ARIN's reason when it refused.
     """
-    refusal = None
-    try:
-        removed = backend.remove_network(network.handle)
-    except RIRRequestError as exc:
-        removed, refusal = False, exc
-    if not removed:
-        raise write_failure(
-            network.rir_config,
-            "remove",
-            "network",
-            network.handle,
-            "Failed to remove network from ARIN",
-            refusal=refusal,
-        ) from refusal
+    arin_write(
+        lambda: backend.remove_network(network.handle),
+        network.rir_config,
+        "remove",
+        "network",
+        network.handle,
+        "Failed to remove network from ARIN",
+    )
     sync_log(
         network.rir_config,
         "remove",
