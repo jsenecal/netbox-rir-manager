@@ -610,9 +610,8 @@ class TestReassignJobPreFlight:
         assert runner.job.data.get("ticket_number") == expected_ticket
 
     @patch("netbox_rir_manager.services.geocoding.NominatimGeocoder._get_geocoder")
-    @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_unmappable_subdivision_fails_cleanly(
-        self, mock_backend_class, mock_get_geocoder, reassign_setup, rir_organization, rir_user_key
+        self, mock_get_geocoder, mock_arin, reassign_setup, rir_organization, rir_user_key
     ):
         """Issue #83: an unmappable state name stops the job with a clear error, not a DataError."""
         from types import SimpleNamespace
@@ -631,8 +630,7 @@ class TestReassignJobPreFlight:
         mock_get_geocoder.return_value.geocode.return_value = SimpleNamespace(
             raw={"address": {"country_code": "de", "city": "Town", "state": "North Rhine-Westphalia"}}
         )
-        mock_backend = mock_backend_class.from_rir_config.return_value
-        mock_backend.find_net.return_value = None
+        mock_backend = mock_arin("jobs").backend
 
         runner = make_runner(ReassignJob)
         runner.run(prefix_id=prefix.pk, user_key_id=rir_user_key.pk)

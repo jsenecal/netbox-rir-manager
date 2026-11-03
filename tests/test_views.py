@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from django.urls import reverse
 
@@ -609,9 +611,9 @@ class TestPrefixReassignView:
         assert response.context["form"].initial["net_name"] == "TENANT-NAME-198-51-100-16-28"
         assert response.context["parent_network"] == setup["parent"]
 
-    @patch("netbox_rir_manager.views.ARINBackend")
-    def test_overlong_state_is_refused_before_arin(self, mock_backend_cls, admin_client, setup):
+    def test_overlong_state_is_refused_before_arin(self, mock_arin, admin_client, setup):
         """Issue #83: a state that cannot be stored never reaches ARIN, which would orphan the customer."""
+        backend_cls = mock_arin("views")
         response = self._post(
             admin_client,
             setup["prefix"],
@@ -624,7 +626,7 @@ class TestPrefixReassignView:
 
         assert response.status_code == 200
         assert "state_province" in response.context["form"].errors
-        mock_backend_cls.from_rir_config.assert_not_called()
+        backend_cls.for_user_key.assert_not_called()
 
 
 @pytest.mark.django_db
