@@ -88,18 +88,16 @@ def arin_error(name):
 
 @dataclass(frozen=True)
 class WriteFailure:
-    """A write ARIN fails or refuses: the backend method, and what the user and the sync log see.
+    """A write ARIN fails or refuses: the backend method, and the message the user and the sync log see.
 
-    The sync log records the user's message verbatim. returns is what the backend method
-    returns when ARIN cannot be reached, giving detail. refusal is ARIN's reason when it
-    refuses the write, giving refused_detail.
+    message lacks its ending: a period when ARIN cannot be reached (the backend method then
+    returns returns), or ": <refusal>" when ARIN refuses the write.
     """
 
     method: str
     operation: str
-    detail: str
+    message: str
     refusal: str
-    refused_detail: str
     data: dict = field(default_factory=dict)
     returns: object = None
 
@@ -110,43 +108,20 @@ class WriteFailure:
         method = getattr(backend, self.method)
         if refused:
             method.side_effect = RIRRequestError(self.refusal)
-            detail = self.refused_detail
+            detail = f"{self.message}: {self.refusal}"
         else:
             method.return_value = self.returns
-            detail = self.detail
+            detail = f"{self.message}."
         return detail, (self.operation, detail)
 
 
 WRITE_FAILURES = {
     "reassign": WriteFailure(
-        "reassign_network",
-        "reassign",
-        "Reassignment of 192.0.2.0 failed at ARIN.",
-        OVERLAP,
-        f"Reassignment of 192.0.2.0 failed at ARIN: {OVERLAP}",
-        DETAILED,
+        "reassign_network", "reassign", "Reassignment of 192.0.2.0 failed at ARIN", OVERLAP, DETAILED
     ),
     "reallocate": WriteFailure(
-        "reallocate_network",
-        "reallocate",
-        "Reallocation of 192.0.2.0 failed at ARIN.",
-        OVERLAP,
-        f"Reallocation of 192.0.2.0 failed at ARIN: {OVERLAP}",
-        REALLOCATION,
+        "reallocate_network", "reallocate", "Reallocation of 192.0.2.0 failed at ARIN", OVERLAP, REALLOCATION
     ),
-    "delete": WriteFailure(
-        "delete_network",
-        "delete",
-        "Failed to delete network at ARIN.",
-        NOT_FOUND,
-        f"Failed to delete network at ARIN: {NOT_FOUND}",
-    ),
-    "remove": WriteFailure(
-        "remove_network",
-        "remove",
-        "Failed to remove network from ARIN.",
-        NOT_FOUND,
-        f"Failed to remove network from ARIN: {NOT_FOUND}",
-        returns=False,
-    ),
+    "delete": WriteFailure("delete_network", "delete", "Failed to delete network at ARIN", NOT_FOUND),
+    "remove": WriteFailure("remove_network", "remove", "Failed to remove network from ARIN", NOT_FOUND, returns=False),
 }

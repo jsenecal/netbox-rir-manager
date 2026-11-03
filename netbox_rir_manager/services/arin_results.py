@@ -119,8 +119,7 @@ def sync_log(rir_config, operation, object_type, handle, status, message):
 
 def data_error(rir_config, operation, object_type, handle, exc, error_cls=ARINDataError):
     """Log a request-data problem the backend reported (RIRDataError) and wrap it for the caller."""
-    sync_log(rir_config, operation, object_type, handle, "error", str(exc))
-    return error_cls(str(exc))
+    return _logged_error(rir_config, operation, object_type, handle, str(exc), error_cls)
 
 
 def arin_write(
@@ -154,5 +153,10 @@ def arin_write(
 
 def _write_failure(rir_config, operation, object_type, handle, message, error_cls, refusal=None):
     text = f"{message}: {refusal}" if refusal else f"{message}."
+    return _logged_error(rir_config, operation, object_type, handle, text, error_cls)
+
+
+def _logged_error(rir_config, operation, object_type, handle, text, error_cls):
+    """Write text to an error sync log and return error_cls(text), so the user sees what was logged."""
     sync_log(rir_config, operation, object_type, handle, "error", text)
     return error_cls(text)
