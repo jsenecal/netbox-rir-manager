@@ -16,10 +16,14 @@ _NET_NAME_RE = re.compile(r"^[A-Za-z0-9 -]+$")
 _NON_ALNUM_RE = re.compile(r"[^A-Z0-9]+")
 
 
+def to_ascii(text) -> str:
+    """Transliterate accented letters to their ASCII base letter and drop any other non-ASCII character."""
+    return unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode()
+
+
 def _slug(text) -> str:
     """Uppercase ASCII with every run of other characters collapsed to a single hyphen."""
-    ascii_text = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode()
-    return _NON_ALNUM_RE.sub("-", ascii_text.upper()).strip("-")
+    return _NON_ALNUM_RE.sub("-", to_ascii(text).upper()).strip("-")
 
 
 def build_net_name(label, prefix) -> str:

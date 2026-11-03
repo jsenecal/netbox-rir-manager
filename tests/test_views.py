@@ -329,6 +329,24 @@ class TestRIRNetworkActionViews:
         assert (error.operation, error.message, error.object_handle) == (*failure.log, rir_network.handle)
         assert not RIRTicket.objects.exists()
 
+    @patch("netbox_rir_manager.views.ARINBackend")
+    def test_reallocate_data_backend_refuses(self, mock_backend_cls, admin_client, rir_network, rir_user_key):
+        """Data the backend cannot send to ARIN is shown as an error and logged, not a 500."""
+        from netbox_rir_manager.backends.base import RIRDataError
+        from netbox_rir_manager.models import RIRSyncLog, RIRTicket
+
+        mock_backend_cls.from_rir_config.return_value.reallocate_network.side_effect = RIRDataError(
+            "Invalid Net details for ARIN: version: Field required"
+        )
+
+        response = admin_client.post(_action_url("reallocate", rir_network), REALLOCATION)
+
+        assert response.status_code == 302
+        assert response.url == rir_network.get_absolute_url()
+        assert not RIRTicket.objects.exists()
+        assert _messages(response) == [("danger", "Invalid Net details for ARIN: version: Field required")]
+        assert RIRSyncLog.objects.get(status="error").operation == "reallocate"
+
 
 @pytest.fixture
 def legacy_setup(rir, rir_config, rir_user_key, admin_user):

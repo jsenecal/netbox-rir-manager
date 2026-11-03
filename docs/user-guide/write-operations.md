@@ -45,6 +45,12 @@ A Prefix detail page has a **Reassign** button for prefixes under an aggregate l
 
 Edit anything before submitting: the reassignment is sent to the RIR immediately with exactly the values in the form, using your own key. It does not require **Auto reassign** on the parent; that flag only controls the automatic path below. The new child network is linked to the prefix, and the ticket opens on success (or the prefix page, when ARIN processed it immediately).
 
+### Customer details (simple reassignment)
+
+ARIN accepts customer payloads in ASCII only. Accented letters in the customer name, street address, city and postal code are sent without their accents (an accented "Montreal" is sent as plain `Montreal`); NetBox keeps the original spelling. Each line of the street address becomes a numbered address line at ARIN, and blank lines are dropped.
+
+The country must be an ISO 3166-1 two-letter code (`CA`) and the state/province an ISO 3166-2 subdivision code of up to three characters (`QC`, not `Quebec`). ARIN also requires the state/province and postal code for customers in the United States and Canada. When the details cannot form a valid ARIN payload, nothing is sent: the form shows the problem, the REST API returns `400` with it in `detail`, and the automatic job records it as its error. A refusal from ARIN itself is still a `502` in the API.
+
 ## Automatic reassignment and removal
 
 Both are opt-in per parent allocation: set **Auto reassign** on the `RIRNetwork` linked to the aggregate. The flag only takes effect while that network's RIR config is active.

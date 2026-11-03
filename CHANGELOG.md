@@ -43,6 +43,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reassign and reallocate now reach ARIN (#57). Their network payloads never
+  validated against pyregrws (no IP version, and the range was not in a net
+  block), so every request failed with a server error before anything was sent.
+  The range now goes in a net block typed `S` (reassigned) or `A` (reallocated),
+  with the version taken from the start address. For a simple reassignment, the
+  customer details are now mapped to the payload ARIN expects (ISO 3166-1 country
+  code, numbered street address lines, ISO 3166-2 subdivision code), and accented
+  letters in the customer name, street address, city and postal code are
+  transliterated to ASCII, since Reg-RWS payloads are ASCII-only. Network or
+  customer details that still cannot form a valid payload are reported as a clear
+  error, a `400` in the REST API, without contacting ARIN, and the network is
+  checked before the customer is created, so a refused network no longer leaves an
+  orphan customer at ARIN.
 - Writes ARIN processes immediately, without opening a ticket (NET deletes and
   simple reassignments, for example), no longer fail. The plugin stored a ticket
   with an empty number for the first one, so every later one hit the unique ticket

@@ -1,6 +1,6 @@
 import pytest
 
-from netbox_rir_manager.net_names import ARIN_NET_NAME_MAX_LENGTH, build_net_name, validate_net_name
+from netbox_rir_manager.net_names import ARIN_NET_NAME_MAX_LENGTH, build_net_name, to_ascii, validate_net_name
 
 
 class TestBuildNetName:
@@ -30,6 +30,10 @@ class TestBuildNetName:
         assert len(name) == ARIN_NET_NAME_MAX_LENGTH
         assert name.endswith("-198-51-100-128-25")
         assert "--" not in name
+
+
+def test_to_ascii_transliterates_accents_and_drops_the_rest():
+    assert to_ascii("Montr\u00e9al, Qu\u00e9bec \u2013 \u00c9cole") == "Montreal, Quebec  Ecole"
 
 
 class TestValidateNetName:

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import logging
+from ipaddress import ip_address
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
 from regrws.api.core import Api
-from regrws.models import Error
+from regrws.models import Customer, Error, Net
 from tenacity import RetryError, Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from netbox_rir_manager.backends import register_backend
-from netbox_rir_manager.backends.base import RIRBackend
+from netbox_rir_manager.backends.base import RIRBackend, RIRDataError
+from netbox_rir_manager.net_names import to_ascii
 
 logger = logging.getLogger(__name__)
 
@@ -107,25 +110,18 @@ class ARINBackend(RIRBackend):
         return self._net_to_dict(result)
 
     def reassign_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
-        parent = self._call_with_retry(self.api.net.from_handle, parent_handle)
-        if parent is None or isinstance(parent, Error):
-            return None
-        from regrws.models import Net
-
-        child_net = Net(**net_data)
-        result = self._call_with_retry(self.api.net.reassign, parent, child_net)
-        if result is None or isinstance(result, Error):
-            return None
-        return self._ticket_request_to_dict(result)
+        return self._write_child_net(parent_handle, net_data, "S", self.api.net.reassign)
 
     def reallocate_network(self, parent_handle: str, net_data: dict[str, Any]) -> dict[str, Any] | None:
+        return self._write_child_net(parent_handle, net_data, "A", self.api.net.reallocate)
+
+    def _write_child_net(self, parent_handle: str, net_data: dict[str, Any], block_type: str, submit):
+        """Build the child net (raising RIRDataError before any call), then submit it under the parent."""
+        child_net = self._build_net(net_data, block_type)
         parent = self._call_with_retry(self.api.net.from_handle, parent_handle)
         if parent is None or isinstance(parent, Error):
             return None
-        from regrws.models import Net
-
-        child_net = Net(**net_data)
-        result = self._call_with_retry(self.api.net.reallocate, parent, child_net)
+        result = self._call_with_retry(submit, parent, child_net)
         if result is None or isinstance(result, Error):
             return None
         return self._ticket_request_to_dict(result)
@@ -153,17 +149,78 @@ class ARINBackend(RIRBackend):
         return self._customer_to_dict(result)
 
     def create_customer(self, parent_net_handle: str, data: dict[str, Any]) -> dict[str, Any] | None:
+        """Create a recipient customer under the parent net.
+
+        Raises RIRDataError when the customer details cannot form a valid Reg-RWS payload,
+        before anything is sent to ARIN.
+        """
+        payload = self._customer_payload(data)
         parent = self._call_with_retry(self.api.net.from_handle, parent_net_handle)
         if parent is None or isinstance(parent, Error):
             return None
-        result = self._call_with_retry(self.api.customer.create_for_net, parent, **data)
+        result = self._call_with_retry(self.api.customer.create_for_net, parent, **payload)
         if result is None or isinstance(result, Error):
             return None
         return self._customer_to_dict(result)
 
-    # ------------------------------------------------------------------
-    # Internal helpers to normalise pyregrws models to plain dicts
-    # ------------------------------------------------------------------
+    def validate_reassignment(self, net_data: dict[str, Any]) -> None:
+        """Raise RIRDataError if reassign_network would refuse net_data, without contacting ARIN."""
+        if not (net_data.get("customer_handle") or net_data.get("org_handle")):
+            # A simple reassignment's customer handle only exists after create_customer.
+            net_data = {**net_data, "customer_handle": "C-PENDING"}
+        self._build_net(net_data, "S")
+
+    @classmethod
+    def _build_net(cls, net_data: dict[str, Any], block_type: str) -> Net:
+        """Build the child Net from the plugin's flat net data.
+
+        The range goes in a single net block typed S for a reassignment or A for a
+        reallocation, and the IP version comes from its start address.
+        """
+        start = net_data.get("start_address")
+        try:
+            version = ip_address(start).version
+        except ValueError as exc:
+            raise RIRDataError(f"Invalid Net details for ARIN: start_address: {exc}") from exc
+        payload = {
+            "version": version,
+            "net_name": net_data.get("net_name") or None,
+            "customer_handle": net_data.get("customer_handle") or None,
+            "org_handle": net_data.get("org_handle") or None,
+            "net_blocks": [{"type": block_type, "start_address": start, "end_address": net_data.get("end_address")}],
+        }
+        return cls._build_model(Net, payload)
+
+    @staticmethod
+    def _build_model(model_cls, data: dict[str, Any]):
+        """Build a pyregrws model, raising RIRDataError with a readable message if it refuses the data."""
+        try:
+            return model_cls(**data)
+        except ValidationError as exc:
+            problems = "; ".join(
+                f"{'.'.join(map(str, err['loc']))}: {err['msg']}" if err["loc"] else err["msg"] for err in exc.errors()
+            )
+            raise RIRDataError(f"Invalid {model_cls.__name__} details for ARIN: {problems}") from exc
+
+    @classmethod
+    def _customer_payload(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Map the plugin's flat customer dict to pyregrws Customer keyword arguments.
+
+        Reg-RWS payloads are ASCII-only (only comments may carry accented letters), so the
+        free-text fields are transliterated. Empty optional fields become None, which pyregrws
+        omits from the XML.
+        """
+        lines = [to_ascii(line).strip() for line in (data.get("street_address") or "").splitlines()]
+        payload = {
+            "customer_name": to_ascii(data.get("customer_name") or "").strip(),
+            "iso3166_1": {"code2": data.get("country") or None},
+            "street_address": [{"number": n, "line": line} for n, line in enumerate(filter(None, lines), start=1)],
+            "city": to_ascii(data.get("city") or "").strip(),
+            "iso3166_2": data.get("state_province") or None,
+            "postal_code": to_ascii(data.get("postal_code") or "").strip() or None,
+        }
+        cls._build_model(Customer, payload)
+        return payload
 
     # ------------------------------------------------------------------
     # Internal helpers to normalise pyregrws models to plain dicts
