@@ -7,6 +7,9 @@ from netbox.models import NetBoxModel
 class RIRAddress(NetBoxModel):
     """Structured address for RIR records, optionally linked to a NetBox Site and/or Location."""
 
+    # An ISO 3166-2 subdivision code is at most three characters after the country prefix.
+    STATE_PROVINCE_MAX_LENGTH = 10
+
     site = models.ForeignKey(
         "dcim.Site",
         on_delete=models.CASCADE,
@@ -24,7 +27,7 @@ class RIRAddress(NetBoxModel):
     street_address = models.TextField(blank=True, default="")
     city = models.CharField(max_length=100, blank=True, default="")
     state_province = models.CharField(
-        max_length=10,
+        max_length=STATE_PROVINCE_MAX_LENGTH,
         blank=True,
         default="",
         help_text="ISO-3166-2 subdivision code (e.g. NY, QC)",
@@ -74,6 +77,29 @@ class RIRAddress(NetBoxModel):
         if self.site:
             label = f"{self.site.name} — {label}" if parts else self.site.name
         return label
+
+    def clean_fields(self, exclude=None):
+        """Validate the fields, saying what belongs in state_province when it is too long.
+
+        Django's generic max-length message does not tell a user who typed a region name that
+        the field takes a subdivision code. The check replaces it rather than adding to it, so
+        the field shows one message.
+        """
+        exclude = set(exclude or ())
+        errors = {}
+        max_length = self.STATE_PROVINCE_MAX_LENGTH
+        if "state_province" not in exclude and len(self.state_province or "") > max_length:
+            errors["state_province"] = [
+                f"'{self.state_province}' is not an ISO 3166-2 subdivision code. Enter the code without "
+                f"the country prefix, such as NY, QC or NW (at most {max_length} characters)."
+            ]
+            exclude.add("state_province")
+        try:
+            super().clean_fields(exclude=exclude)
+        except ValidationError as exc:
+            errors = exc.update_error_dict(errors)
+        if errors:
+            raise ValidationError(errors)
 
     def clean(self):
         super().clean()

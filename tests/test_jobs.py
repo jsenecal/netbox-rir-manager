@@ -609,6 +609,50 @@ class TestReassignJobPreFlight:
         assert expected_message in runner.job.data["message"]
         assert runner.job.data.get("ticket_number") == expected_ticket
 
+    @patch("netbox_rir_manager.services.geocoding.NominatimGeocoder._get_geocoder")
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_unmappable_subdivision_fails_cleanly(
+        self, mock_backend_class, mock_get_geocoder, reassign_setup, rir_organization, rir_user_key
+    ):
+        """Issue #83: an unmappable state name stops the job with a clear error, not a DataError."""
+        from types import SimpleNamespace
+
+        from dcim.models import Site
+
+        from netbox_rir_manager.jobs import ReassignJob
+        from netbox_rir_manager.models import RIRAddress, RIRSyncLog
+
+        rir_organization.tenant = None  # no linked org, so the simple path runs
+        rir_organization.save()
+        site = Site.objects.create(name="Site NRW", slug="site-nrw", physical_address="1 Main Street, Town")
+        prefix = reassign_setup["prefix"]
+        prefix.scope = site
+        prefix.save()
+        mock_get_geocoder.return_value.geocode.return_value = SimpleNamespace(
+            raw={"address": {"country_code": "de", "city": "Town", "state": "North Rhine-Westphalia"}}
+        )
+        mock_backend = mock_backend_class.from_rir_config.return_value
+        mock_backend.find_net.return_value = None
+
+        runner = make_runner(ReassignJob)
+        runner.run(prefix_id=prefix.pk, user_key_id=rir_user_key.pk)
+
+        message = (
+            "Could not determine the ISO 3166-2 subdivision code for 'North Rhine-Westphalia'; "
+            "enter it on the Site's RIR address."
+        )
+        assert (runner.job.data["status"], runner.job.data["message"]) == ("error", message)
+        log = RIRSyncLog.objects.get(status="error")
+        assert (log.operation, log.object_type, log.object_handle, log.message) == (
+            "reassign",
+            "customer",
+            "NET-PARENT-20",
+            f"{prefix.prefix}: {message}",
+        )
+        assert not RIRAddress.objects.filter(site=site).exists()
+        mock_backend.create_customer.assert_not_called()
+        mock_backend.reassign_network.assert_not_called()
+
 
 @pytest.mark.django_db
 class TestRemoveNetworkJob:

@@ -19,6 +19,8 @@
         </div>
     </form>
 
+    <div id="site-address-resolve-error"></div>
+
     {% if candidates %}
     <div class="list-group">
         {% for c in candidates %}
@@ -33,7 +35,11 @@
                     {% if c.display_name %}
                     <div class="text-muted small mt-1">{{ c.display_name }}</div>
                     {% endif %}
+                    {% if c.subdivision_error %}
+                    <div class="text-danger small mt-1"><i class="mdi mdi-alert"></i> {{ c.subdivision_error }}</div>
+                    {% endif %}
                 </div>
+                {% if not c.subdivision_error %}
                 <form hx-post="{% url 'plugins:netbox_rir_manager:site_select_address' site.pk %}"
                       hx-swap="none" class="ms-3 flex-shrink-0">
                     {% csrf_token %}
@@ -47,6 +53,7 @@
                         <i class="mdi mdi-check"></i> Select
                     </button>
                 </form>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
