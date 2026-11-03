@@ -603,14 +603,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
             user_key=user_key,
         )
 
-        RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="network",
-            object_handle=net_data["handle"],
-            status="success",
-            message=f"{'Created' if created else 'Updated'} network {net_data['handle']} for prefix {prefix.prefix}",
-        )
+        RIRSyncLog.log_synced(rir_config, "network", net_data["handle"], created, f" for prefix {prefix.prefix}")
 
         action = "Created" if created else "Updated"
         messages.success(request, f"{action} RIR network {net.handle} from ARIN.")

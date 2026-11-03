@@ -143,15 +143,7 @@ def _sync_organization(
 
     log.info(f"{'Created' if created else 'Updated'} organization {org_data['handle']}")
 
-    sync_log = RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation="sync",
-        object_type="organization",
-        object_handle=org_data["handle"],
-        status="success",
-        message=f"{'Created' if created else 'Updated'} organization {org_data['handle']}",
-    )
-    logs.append(sync_log)
+    logs.append(RIRSyncLog.log_synced(rir_config, "organization", org_data["handle"], created))
 
     return logs, org
 
@@ -229,15 +221,7 @@ def _sync_contacts(
                 contact.save(update_fields=["address"])
 
         log.info(f"{'Created' if created else 'Updated'} contact {poc_data['handle']}")
-        sync_log = RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="contact",
-            object_handle=poc_data["handle"],
-            status="success",
-            message=f"{'Created' if created else 'Updated'} contact {poc_data['handle']}",
-        )
-        logs.append(sync_log)
+        logs.append(RIRSyncLog.log_synced(rir_config, "contact", poc_data["handle"], created))
 
     return logs
 
@@ -312,14 +296,7 @@ def _sync_customer_for_net(
             _customer.save(update_fields=["address"])
 
     log.info(f"{'Created' if created else 'Updated'} customer {cust_data['handle']}")
-    return RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation="sync",
-        object_type="customer",
-        object_handle=cust_data["handle"],
-        status="success",
-        message=f"{'Created' if created else 'Updated'} customer {cust_data['handle']}",
-    )
+    return RIRSyncLog.log_synced(rir_config, "customer", cust_data["handle"], created)
 
 
 def _sync_aggregate_nets(
@@ -386,15 +363,7 @@ def sync_aggregate(
         user_key=user_key,
     )
     log.info(f"{'Created' if created else 'Updated'} network {net_data['handle']} for aggregate {agg.prefix}")
-    sync_log = RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation="sync",
-        object_type="network",
-        object_handle=net_data["handle"],
-        status="success",
-        message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
-    )
-    return sync_log, rir_network
+    return RIRSyncLog.log_synced(rir_config, "network", net_data["handle"], created), rir_network
 
 
 def find_existing_child_net(backend: ARINBackend, parent: RIRNetwork, prefix) -> dict | None:
@@ -537,21 +506,10 @@ class SyncPrefixesJob(JobRunner):
                     prefix=pfx,
                     user_key=user_key,
                 )
-                self.logger.info(
-                    f"{'Created' if created else 'Updated'} network {pfx_net_data['handle']} for prefix {pfx.prefix}"
+                synced = RIRSyncLog.log_synced(
+                    rir_config, "network", pfx_net_data["handle"], created, f" for prefix {pfx.prefix}"
                 )
-
-                RIRSyncLog.objects.create(
-                    rir_config=rir_config,
-                    operation="sync",
-                    object_type="network",
-                    object_handle=pfx_net_data["handle"],
-                    status="success",
-                    message=(
-                        f"{'Created' if created else 'Updated'} network "
-                        f"{pfx_net_data['handle']} for prefix {pfx.prefix}"
-                    ),
-                )
+                self.logger.info(synced.message)
 
                 _sync_customer_for_net(
                     backend,

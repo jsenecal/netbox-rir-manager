@@ -30,3 +30,15 @@ class RIRSyncLog(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_rir_manager:rirsynclog", args=[self.pk])
+
+    @classmethod
+    def log_synced(cls, rir_config, object_type, handle, created, suffix=""):
+        """Log that a sync created or updated the object_type with handle; suffix ends the message."""
+        return cls.objects.create(
+            rir_config=rir_config,
+            operation="sync",
+            object_type=object_type,
+            object_handle=handle,
+            status="success",
+            message=f"{'Created' if created else 'Updated'} {object_type} {handle}{suffix}",
+        )
