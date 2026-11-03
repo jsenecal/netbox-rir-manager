@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The RIR config **Sync** button now reports a missing key as "No API key configured
+  for this RIR config.", the same wording as every other UI action and the REST API,
+  which now all read it from one shared constant (#69).
 - The daily **Scheduled RIR Sync** now also queues the per-aggregate prefix sync,
   as the manual **Sync** does, so reassignments made outside NetBox are discovered on
   the schedule. Those prefix jobs use the config's default key and run as its owner (#66).

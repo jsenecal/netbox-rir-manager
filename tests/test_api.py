@@ -5,6 +5,7 @@ import pytest
 from django.urls import reverse
 from rest_framework import status
 
+from netbox_rir_manager.constants import NO_API_KEY_MESSAGE
 from tests.arin_payloads import (
     DETAILED,
     EXISTING_TICKET,
@@ -559,5 +560,5 @@ class TestRIRConfigSyncAPI:
         response = admin_api_client.post(self._url(rir_config), format="json")
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert response.json()["detail"] == "No API key configured for this RIR config."
+        assert response.json()["detail"] == NO_API_KEY_MESSAGE
         mock_job_cls.enqueue.assert_not_called()
