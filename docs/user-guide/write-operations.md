@@ -9,7 +9,7 @@ From a **Network** detail view, you can act against the RIR directly:
 | **Remove**    | Remove a previously reassigned/reallocated network                     |
 | **Delete**    | Submit a deletion request to the RIR                                   |
 
-Operations that require RIR-side approval create a ticket. Tickets are visible under **RIR Manager -> Tickets** and update as the RIR transitions them through their states. On success the ticket page opens.
+Operations that require RIR-side approval create a ticket. Tickets are visible under **RIR Manager -> Tickets**, with the ticket number, type and the status ARIN returned when the request was submitted. The plugin does not poll ARIN afterwards, so the status stays as recorded; the **Refresh** button on a ticket, and `POST /api/plugins/rir-manager/tickets/<id>/refresh/`, return the stored status without contacting ARIN. Follow the ticket's progress at ARIN. On success the ticket page opens.
 
 ARIN processes some operations immediately and opens no ticket -- NET deletes and simple reassignments, for example. Those create no ticket: the result is recorded as a `success` sync log under **RIR Manager -> Sync Logs**, any new child network is still linked, and you return to the network (or prefix) page with a message saying ARIN processed the change immediately.
 

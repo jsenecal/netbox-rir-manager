@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Documentation: every page in the navigation now exists. New reference pages cover
+  settings, models, permissions, background jobs and backends, plus a user guide page
+  for addresses and geocoding; nav entries whose content already lives on other pages
+  are removed. The settings, backend, permission and ticket descriptions now match
+  what the plugin does today (#79).
 - The RIR config **Sync** button now reports a missing key as "No API key configured
   for this RIR config.", the same wording as every other UI action and the REST API,
   which now all read it from one shared constant (#69).

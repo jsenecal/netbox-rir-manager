@@ -1,6 +1,6 @@
 # Configuration
 
-All configuration lives in NetBox's `configuration.py` under the `PLUGINS_CONFIG` dictionary. Every key is optional -- the defaults match what the plugin uses internally.
+All configuration lives in NetBox's `configuration.py` under the `PLUGINS_CONFIG` dictionary. Every key is optional -- the defaults match what the plugin uses internally. Four of the declared keys are not read by the plugin today; they are marked below.
 
 ```python
 PLUGINS_CONFIG = {
@@ -22,15 +22,15 @@ PLUGINS_CONFIG = {
 
 | Setting                    | Default       | Description                                                                                       |
 |----------------------------|---------------|---------------------------------------------------------------------------------------------------|
-| `top_level_menu`           | `True`        | Render **RIR Manager** as a top-level menu item in the NetBox sidebar.                            |
-| `sync_interval_hours`      | `24`          | Cadence (hours) for the daily `ScheduledRIRSyncJob`. The job interval is fixed daily today; the value is reserved for future use. |
+| `top_level_menu`           | `True`        | Not read. **RIR Manager** is always a top-level menu in the NetBox sidebar.                       |
+| `sync_interval_hours`      | `24`          | Not read. `ScheduledRIRSyncJob` runs at a fixed daily interval.                                   |
 | `auto_link_networks`       | `True`        | Auto-link freshly synced `RIRNetwork` records to `ipam.Aggregate` and `ipam.Prefix` based on `net_blocks` in the raw RIR payload. |
-| `enabled_backends`         | `["ARIN"]`    | Backend names the plugin will activate. Values must match a registered `RIRBackend.name`.         |
+| `enabled_backends`         | `["ARIN"]`    | Not read. The plugin uses the ARIN backend for every config.                                      |
 | `encryption_key`           | `""`          | Secret used to derive the Fernet key that encrypts `RIRUserKey.api_key`. Empty falls back to NetBox `SECRET_KEY`. |
 | `api_retry_count`          | `3`           | Number of attempts for transient failures (`ConnectionError`, `OSError`, `TimeoutError`) when calling the RIR. |
 | `api_retry_backoff`        | `2`           | Cap (seconds) for exponential backoff between retries. Effective wait is `min(2^attempt, backoff * api_retry_count)`. |
 | `geocoding_provider`       | `"nominatim"` | Geocoding service used to resolve Site addresses. Currently only `nominatim` is implemented; unknown values fall back to Nominatim. |
-| `google_geocoding_api_key` | `""`          | Reserved for a future Google Maps geocoding backend. Has no effect today.                         |
+| `google_geocoding_api_key` | `""`          | Not read. There is no Google geocoding provider.                                                  |
 
 ## Encryption and key rotation
 
@@ -54,7 +54,7 @@ Implications:
 
 ## Backends
 
-`enabled_backends` is a list of names to register at startup. Backends self-register via the `@register_backend` decorator in `netbox_rir_manager/backends/__init__.py`; the setting controls which appear in user-facing forms. Today the only built-in option is `"ARIN"`. See [Reference: Backends](../reference/backends.md) and [Adding a Backend](../development/adding-a-backend.md).
+The plugin ships one backend, ARIN, and uses it for every config. Backend classes register themselves with the `@register_backend` decorator in `netbox_rir_manager/backends/__init__.py`, but the views, REST API and jobs construct the ARIN backend directly, and the `enabled_backends` setting is not read. See [Reference: Backends](../reference/backends.md).
 
 ## API retries
 
@@ -75,7 +75,7 @@ Tuning notes:
 
 When a NetBox `Site` has a `physical_address` or `latitude`/`longitude`, the plugin can resolve it to a structured `RIRAddress` automatically. The default provider is OpenStreetMap Nominatim via `geopy`. State and province names are mapped to ISO-3166-2 subdivision codes via `pycountry`.
 
-Set `geocoding_provider = "nominatim"` (the default) or leave it unset. Other values are reserved for future backends. Nominatim has a strict usage policy; see [Addresses and Geocoding](../user-guide/addresses.md) for guidance.
+Set `geocoding_provider = "nominatim"` (the default) or leave it unset; any other value also selects Nominatim. Nominatim has a strict usage policy; see [Addresses and Geocoding](../user-guide/addresses.md) for guidance.
 
 ## A minimal production config
 
