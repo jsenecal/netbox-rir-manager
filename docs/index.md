@@ -67,3 +67,5 @@ netbox-rir-manager bridges your NetBox IPAM data and the RIR's own database. Syn
 ## License
 
 Apache License 2.0. See [LICENSE](https://github.com/jsenecal/netbox-rir-manager/blob/main/LICENSE).
+
+<!-- throwaway docs-only change to exercise CI, do not merge -->
