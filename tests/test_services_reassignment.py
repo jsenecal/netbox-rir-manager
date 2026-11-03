@@ -35,10 +35,12 @@ def test_invalid_net_is_refused_before_the_customer_is_created(mock_api_class, r
         pytest.param(
             {"customer": {"customer_name": "Cust"}},
             "create_customer",
-            "Failed to create customer at ARIN.",
+            "Failed to create customer for 192.0.2.0 at ARIN.",
             id="simple-creates-customer",
         ),
-        pytest.param({"org_handle": "ORG-X"}, "reassign_network", "Reassignment failed at ARIN.", id="detailed"),
+        pytest.param(
+            {"org_handle": "ORG-X"}, "reassign_network", "Reassignment of 192.0.2.0 failed at ARIN.", id="detailed"
+        ),
     ],
 )
 @patch("netbox_rir_manager.backends.arin.Api")
@@ -95,12 +97,9 @@ def test_customer_refused_by_arin_reports_arins_reason(mock_api_class, rir_netwo
     ):
         submit_reassignment(backend, rir_network, rir_user_key, NET, customer={"customer_name": "Cust"})
 
-    assert str(excinfo.value) == f"Failed to create customer at ARIN: {BAD_COUNTRY}"
+    message = f"Failed to create customer for 192.0.2.0 at ARIN: {BAD_COUNTRY}"
+    assert str(excinfo.value) == message
     error = RIRSyncLog.objects.get(status="error")
-    assert (error.operation, error.object_type, error.message) == (
-        "create",
-        "customer",
-        f"Failed to create customer for 192.0.2.0: {BAD_COUNTRY}",
-    )
+    assert (error.operation, error.object_type, error.message) == ("create", "customer", message)
     reassign.assert_not_called()
     assert not RIRCustomer.objects.exists()
