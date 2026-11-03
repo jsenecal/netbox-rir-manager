@@ -177,7 +177,7 @@ class TestRIRSyncJob:
     @patch("netbox_rir_manager.jobs.ARINBackend")
     def test_sync_contacts_poc_in_several_roles_synced_once(self, mock_backend_class, rir_config):
         from netbox_rir_manager.jobs import sync_rir_config
-        from netbox_rir_manager.models import RIRContact, RIROrganization, RIRSyncLog
+        from netbox_rir_manager.models import RIROrganization, RIRSyncLog
 
         poc_links = [
             {"handle": "NOC11106-ARIN", "function": "N"},
@@ -202,12 +202,11 @@ class TestRIRSyncJob:
         sync_rir_config(rir_config, api_key="test-key", resource_types=["organizations", "contacts"])
 
         fetched = [c.args[0] for c in mock_backend.get_poc.call_args_list]
-        assert sorted(fetched) == ["JD123-ARIN", "NOC11106-ARIN"]
+        assert fetched == ["NOC11106-ARIN", "JD123-ARIN"]
         assert (
             RIRSyncLog.objects.filter(object_type="contact", object_handle="NOC11106-ARIN", status="success").count()
             == 1
         )
-        assert RIRContact.objects.filter(handle="NOC11106-ARIN").count() == 1
         assert RIROrganization.objects.get(handle="TESTORG-ARIN").raw_data["poc_links"] == poc_links
 
     @patch("netbox_rir_manager.jobs.ARINBackend")

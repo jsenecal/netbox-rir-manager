@@ -171,7 +171,7 @@ def _sync_contacts(
     once per run, not once per role.
     """
     logs: list[RIRSyncLog] = []
-    handles = list(dict.fromkeys(link.get("handle") for link in poc_links if link.get("handle")))
+    handles = [handle for handle in dict.fromkeys(link.get("handle") for link in poc_links) if handle]
     log.info(f"Syncing {len(handles)} POC contacts for {org.handle}")
 
     for handle in handles:
