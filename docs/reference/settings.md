@@ -22,13 +22,13 @@ For a minimal setup and how to rotate the encryption key, see [Configuration](..
 
 Default: `True`. Read by `netbox_rir_manager/navigation.py` when NetBox loads the plugin.
 
-With `True`, the plugin registers its own top-level **RIR Manager** menu, with its items grouped under **Configs**, **Resources** and **Operations**. With `False`, the same items are listed, without the groups, under the **RIR Manager** section of NetBox's shared **Plugins** menu. Restart NetBox after changing it.
+With `True`, the plugin registers its own top-level **RIR Manager** menu, with its items grouped under **Configs**, **Resources** and **Operations**. With `False`, the same items are listed, without the groups, under the **NetBox RIR Manager** section of NetBox's shared **Plugins** menu. Restart NetBox after changing it.
 
 ### `sync_interval_hours`
 
 Default: `24`. Read by `netbox_rir_manager/jobs.py` when the plugin loads, to register `ScheduledRIRSyncJob` as a NetBox system job.
 
-The number of hours between two runs of the scheduled sync. It must be a whole number of hours, at least `1`; any other value stops NetBox from starting with an `ImproperlyConfigured` error. The RQ worker schedules the job when it starts, so restart it after changing the value. If a run is already scheduled at the old interval, the worker replaces it with one at the new interval. See [Background Jobs](jobs.md#scheduled-rir-sync).
+The number of hours between two runs of the scheduled sync. It must be a whole number of hours, at least `1`; any other value stops NetBox from starting with an `ImproperlyConfigured` error. The RQ worker schedules the job when it starts, so restart it after changing the value. If a run is already scheduled at the old interval, the worker deletes it and enqueues a replacement at the new interval without a scheduled time, so a sync runs as soon as the worker restarts and the following runs come every `sync_interval_hours` hours. See [Background Jobs](jobs.md#scheduled-rir-sync).
 
 ### `auto_link_networks`
 
