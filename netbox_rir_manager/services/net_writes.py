@@ -1,6 +1,7 @@
 """Reallocating, removing and deleting nets at ARIN, shared by the UI, the API and the jobs."""
 
-from netbox_rir_manager.services.arin_results import arin_write, net_request, record_arin_result, sync_log
+from netbox_rir_manager.models import RIRSyncLog
+from netbox_rir_manager.services.arin_results import arin_write, net_request, record_arin_result
 
 
 def reallocation_request(data):
@@ -72,7 +73,7 @@ def submit_net_remove(backend, network):
         network.handle,
         "Failed to remove network from ARIN",
     )
-    sync_log(
+    RIRSyncLog.record(
         network.rir_config,
         "remove",
         "network",

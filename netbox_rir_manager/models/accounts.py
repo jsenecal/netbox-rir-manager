@@ -45,6 +45,10 @@ class RIRConfig(JobsMixin, NetBoxModel):
         super().clean()
         if self.default_key_id and self.default_key.rir_config_id != self.pk:
             raise ValidationError({"default_key": "The default key must belong to this RIR config."})
+        if self.default_key_id and not self.default_key.user.is_active:
+            raise ValidationError(
+                {"default_key": f"The default key belongs to deactivated user {self.default_key.user}; choose another."}
+            )
 
     def resolve_key(self, user=None):
         """Return the key an RIR operation should run with, or None if it must not run.
@@ -52,7 +56,20 @@ class RIRConfig(JobsMixin, NetBoxModel):
         An operation a user initiated runs only with that user's own key, so the RIR's audit
         trail names the person who acted. The default key is reserved for work no user
         initiated, such as the scheduled sync.
+
+        A key whose owner is deactivated never resolves, the same as if the owner were deleted.
         """
         if user is not None:
-            return self.user_keys.filter(user=user).first()
-        return self.default_key
+            return self.user_keys.filter(user=user, user__is_active=True).first()
+        key = self.default_key
+        return key if key is not None and key.user.is_active else None
+
+    def no_key_reason(self, user=None):
+        """Explain why resolve_key(user) returned None, for logs and skipped sync log rows."""
+        if user is not None:
+            if not user.is_active:
+                return f"{user} is deactivated, so none of their API keys are used for RIR config {self}"
+            return f"{user} has no API key for RIR config {self}"
+        if self.default_key is not None:
+            return f"The default key for RIR config {self} belongs to deactivated user {self.default_key.user}"
+        return f"RIR config {self} has no default key"

@@ -1,6 +1,7 @@
 from dcim.models import Location, Site
 from django import forms
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from ipam.models import RIR
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Contact, Tenant
@@ -41,9 +42,12 @@ class RIRConfigForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only this config's own keys can be its default; a new config has none yet.
+        # Only this config's own keys of active users can be its default; a new config has none
+        # yet. The current default stays listed so the rest of the config can still be edited.
         if self.instance.pk:
-            self.fields["default_key"].queryset = RIRUserKey.objects.filter(rir_config=self.instance)
+            self.fields["default_key"].queryset = RIRUserKey.objects.filter(
+                Q(user__is_active=True) | Q(pk=self.instance.default_key_id), rir_config=self.instance
+            )
 
 
 class RIRConfigFilterForm(NetBoxModelFilterSetForm):
