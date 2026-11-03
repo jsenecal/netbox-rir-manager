@@ -16,7 +16,7 @@ CASES = [
 
 
 class TestPrefixRange:
-    """prefix_range returns the first and last address for every prefix length (#55)."""
+    """prefix_range returns the first and last address for every prefix length."""
 
     @pytest.mark.parametrize("prefix, expected", CASES)
     @pytest.mark.parametrize(
