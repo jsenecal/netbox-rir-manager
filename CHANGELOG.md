@@ -45,6 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The daily **Scheduled RIR Sync** never ran: its module was only imported lazily, so the
   `@system_job` registration had not happened when `rqworker` scheduled system jobs at
   startup. The plugin now imports its jobs when it loads (#54).
+- The prefix and aggregate syncs skipped every IPv4 /31 and /32 (and IPv6 /127 and
+  /128): the ARIN lookup was sent `None` as the end address, so it found nothing
+  and the reassignment never got an RIR network, with nothing in the sync logs.
+  Every place that computes a prefix's address range now uses one helper that
+  returns the real last address for any prefix length (#55).
 - The Prefix **Reassign** form now submits exactly what it shows, immediately, with
   the user's own key. It used to discard the form, queue the automatic reassign job
   (which derived its own values), and fail unless the parent allocation had

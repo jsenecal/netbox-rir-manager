@@ -12,6 +12,7 @@ from netbox.jobs import JobRunner, system_job
 from utilities.request import NetBoxFakeRequest, apply_request_processors
 
 from netbox_rir_manager.backends.arin import ARINBackend
+from netbox_rir_manager.ip_ranges import prefix_range
 from netbox_rir_manager.models import RIRAddress, RIRContact, RIRCustomer, RIRNetwork, RIROrganization, RIRSyncLog
 from netbox_rir_manager.net_names import build_net_name
 
@@ -356,9 +357,8 @@ def sync_aggregate(
     Returns (sync_log, network). network is None, and sync_log is a skipped row, unless the
     aggregate belongs to this config's org.
     """
-    network = agg.prefix
     log.debug(f"Querying ARIN for aggregate {agg.prefix}")
-    found = backend.find_net(str(network.network), str(network.broadcast))
+    found = backend.find_net(*prefix_range(agg.prefix))
     net_data = _resolve_owned_net(backend, found, rir_config.org_handle) if found else None
     if net_data is None:
         if found is None:
@@ -484,12 +484,8 @@ class SyncPrefixesJob(JobRunner):
 
         with _changelog_context(self.job.user):
             for pfx in prefixes:
-                pfx_network = pfx.prefix
-                pfx_start = str(pfx_network.network)
-                pfx_end = str(pfx_network.broadcast)
-
                 self.logger.debug(f"Querying ARIN for prefix {pfx.prefix}")
-                pfx_net_data = backend.find_net(pfx_start, pfx_end)
+                pfx_net_data = backend.find_net(*prefix_range(pfx.prefix))
                 if pfx_net_data is None:
                     continue
 
@@ -576,12 +572,7 @@ class ReassignJob(JobRunner):
             tenant = prefix.tenant
             rir_org = RIROrganization.objects.filter(tenant=tenant).first() if tenant else None
 
-            # Compute subnet range from prefix
-            import ipaddress
-
-            network = ipaddress.ip_network(str(prefix.prefix), strict=False)
-            start_address = str(network.network_address)
-            end_address = str(network.broadcast_address)
+            start_address, end_address = prefix_range(prefix.prefix)
 
             # Pre-flight: check what ARIN actually has for this range
             self.logger.info(f"Pre-flight: querying ARIN for existing net at {start_address}-{end_address}")
