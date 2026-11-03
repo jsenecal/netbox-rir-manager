@@ -21,17 +21,7 @@ RIRAddress --> dcim.Site / dcim.Location
 
 ## RIRConfig
 
-One set of RIR API settings for one organization. See [RIR Configs](../user-guide/rir-configs.md).
-
-| Field         | Notes                                                                 |
-|---------------|-----------------------------------------------------------------------|
-| `rir`         | The NetBox `ipam.RIR`. Deleting the RIR deletes the config.           |
-| `name`        | Unique per RIR.                                                       |
-| `api_url`     | Optional override of the backend's API URL.                           |
-| `org_handle`  | The RIR org handle this config syncs and acts for.                    |
-| `is_active`   | Inactive configs are skipped by the scheduled sync and disable automatic reassignment. |
-| `default_key` | One of this config's own `RIRUserKey`s, used for work no user initiated, such as the scheduled sync. |
-| `last_sync`   | When the config was last synced.                                      |
+One set of RIR API settings for one organization, and the parent of every other plugin model that holds RIR data. Its fields, and what deleting a config removes, are described in [RIR Configs](../user-guide/rir-configs.md).
 
 ## RIRUserKey
 
@@ -94,7 +84,7 @@ A customer record at the RIR, the holder of a simple reassignment.
 | `handle`        | RIR handle, unique.                                         |
 | `customer_name` | Customer name.                                              |
 | `address`       | `RIRAddress`.                                               |
-| `network`       | The `RIRNetwork` reassigned to the customer. Deleting the network deletes the customer. |
+| `network`       | For a customer the plugin creates during a simple reassignment, the parent allocation the reassignment was made from. For a customer the prefix sync discovers, the child network reassigned to it; the prefix sync re-links a customer it finds to that child network. Deleting the network deletes the customer. |
 | `tenant`        | Optional NetBox Tenant. A tenant linked to a customer cannot be deleted. |
 | `raw_data`      | The record as the backend returned it.                      |
 | `created_date`  | When the customer was created.                              |
@@ -135,15 +125,4 @@ A request the RIR opened a ticket for. See [Write Operations](../user-guide/writ
 
 ## RIRSyncLog
 
-One row per operation the plugin performs against the RIR. See [Sync logs](../user-guide/syncing.md#sync-logs).
-
-| Field           | Notes                                                                     |
-|-----------------|---------------------------------------------------------------------------|
-| `rir_config`    | The config the operation ran under.                                       |
-| `operation`     | `sync`, `create`, `update`, `delete`, `reassign`, `reallocate` or `remove`. |
-| `object_type`   | The kind of record, such as `organization`, `contact`, `network` or `customer`. |
-| `object_handle` | The RIR handle, or the prefix when there is no handle.                    |
-| `status`        | `success`, `error` or `skipped`.                                          |
-| `message`       | A human-readable summary.                                                 |
-
-Deleting an `RIRConfig` deletes its user keys, organizations, contacts, networks, customers, tickets and sync logs.
+One row per operation the plugin performs against the RIR. Its fields are described in [Sync logs](../user-guide/syncing.md#sync-logs).

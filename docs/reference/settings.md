@@ -2,7 +2,7 @@
 
 The plugin reads its settings from `PLUGINS_CONFIG["netbox_rir_manager"]` in NetBox's `configuration.py`. Every key is optional. The defaults below are the `default_settings` declared in `netbox_rir_manager/__init__.py`.
 
-For a worked example and the encryption and retry background, see [Configuration](../getting-started/configuration.md).
+For a minimal setup and how to rotate the encryption key, see [Configuration](../getting-started/configuration.md).
 
 ## Summary
 
@@ -45,6 +45,8 @@ The total number of attempts for a call to ARIN that raises `ConnectionError`, `
 Default: `2`. Read alongside `api_retry_count`.
 
 The wait between attempts grows exponentially (`tenacity.wait_exponential(multiplier=1)`) and is capped at `api_retry_backoff * api_retry_count` seconds.
+
+Increase `api_retry_count` if transient network errors interrupt scheduled syncs, and `api_retry_backoff` to spread retries further apart on rate-limited connections.
 
 ### `geocoding_provider`
 

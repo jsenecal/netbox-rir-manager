@@ -61,7 +61,7 @@ See [REST API](rest-api.md) for request and response details.
 
 ## Automatic reassignment and removal
 
-These run from signals when a prefix is saved or deleted, so the NetBox permission that matters is the one on the prefix (`ipam.change_prefix`, `ipam.delete_prefix`). The queued job runs with the key of the user who edited the prefix; see [Automatic reassignment and removal](../user-guide/write-operations.md#automatic-reassignment-and-removal).
+These run from signals when a prefix is saved or deleted, so the NetBox permission that matters is the one on the prefix (`ipam.add_prefix`, `ipam.change_prefix`, `ipam.delete_prefix`): a reassignment can be queued when a prefix is created as well as when it is edited. The queued job runs with the key of the user who edited the prefix; see [Automatic reassignment and removal](../user-guide/write-operations.md#automatic-reassignment-and-removal).
 
 ## User keys
 

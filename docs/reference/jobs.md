@@ -10,7 +10,7 @@ The plugin's background work runs as NetBox jobs (`JobRunner` subclasses in `net
 | `ARIN Remove`        | `RemoveNetworkJob`    | Deleting or deactivating a prefix under an allocation with **Auto reassign** set |
 | `Scheduled RIR Sync` | `ScheduledRIRSyncJob` | NetBox's system job scheduler, daily                            |
 
-Every job runs as a NetBox user, and the changes it makes are recorded in the changelog under that user. Which RIR key each one uses is described in [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses).
+Jobs queued from a user's action, or from a prefix edit, run as a NetBox user, and the changes they make are recorded in the changelog under that user. `Scheduled RIR Sync` is a system job with no user, so the changes it makes itself are not recorded in the changelog; the `ARIN Prefix Sync` jobs it queues run as the owner of the config's default key. Which RIR key each job uses is described in [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses).
 
 ## RIR Sync
 
@@ -49,10 +49,9 @@ Removes one reassigned or reallocated network at ARIN when its prefix is deleted
 
 ## Scheduled RIR Sync
 
-A NetBox system job registered with a daily interval. It is registered when the plugin loads, so restart the RQ worker after installing or upgrading the plugin. The interval is fixed: the `sync_interval_hours` setting is not read.
+A NetBox system job registered with a fixed daily interval when the plugin loads, so restart the RQ worker after installing or upgrading the plugin. It syncs every active config with the config's default key and queues the same `ARIN Prefix Sync` jobs as a manual sync; see [Scheduled](../user-guide/syncing.md#scheduled) for the details.
 
-For each active config, it syncs with the config's **default key** and queues the same `ARIN Prefix Sync` jobs as a manual sync. A config without a default key is skipped with a warning, and a config whose sync raises an error is logged and skipped without stopping the others.
-
+- **User**: none. The changes it makes itself are not recorded in the changelog.
 - **Job data**: `configs_synced` (the number of active configs) and `total_logs`, the number of sync log rows written.
 
 Its runs are listed under **System > Background Jobs**.
