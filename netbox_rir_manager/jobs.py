@@ -428,9 +428,8 @@ def enqueue_prefix_syncs(
     """Queue one prefix discovery job per (aggregate, parent net) pair a config sync returned.
 
     Each job runs with the key the config sync used and as that key's owner, so its changes are
-    logged under the owner. For a manual sync the owner is the requesting user, who is also the
-    change log user of the config sync. The scheduled sync has no change log user, but its prefix
-    jobs still run as the default key's owner.
+    logged under the same user as the config sync's: the requesting user for a manual sync, the
+    default key's owner for the scheduled sync.
     """
     for agg, parent_net in agg_nets:
         SyncPrefixesJob.enqueue(
@@ -451,7 +450,8 @@ def sync_config_and_queue_prefixes(
     """Sync a config with user_key, then queue its per-aggregate prefix discovery.
 
     Every config sync must be followed by its prefix discovery, so both jobs go through here.
-    The caller owns the change log context the sync runs in. Returns the sync logs.
+    The caller owns the change log context the sync runs in, which should be user_key's owner so
+    the config sync and its prefix jobs are logged under the same user. Returns the sync logs.
     """
     logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=log)
     enqueue_prefix_syncs(rir_config, agg_nets, user_key, log=log)
@@ -734,10 +734,10 @@ class RemoveNetworkJob(JobRunner):
         with _changelog_context(self.job.user):
             try:
                 submit_net_remove(backend, network)
-            except ARINWriteError as exc:
-                self.logger.error(f"{network.handle}: {exc}")
+            except ARINWriteError:
+                self.logger.error(f"Failed to remove network {network.handle}")
                 self.job.data["status"] = "error"
-                self.job.data["message"] = str(exc)
+                self.job.data["message"] = "ARIN removal failed"
             else:
                 self.logger.info(f"Successfully removed network {network.handle}")
                 self.job.data["status"] = "success"
@@ -758,21 +758,22 @@ class ScheduledRIRSyncJob(JobRunner):
         total_logs = 0
         self.logger.info(f"Starting scheduled sync for {configs.count()} active configs")
 
-        with _changelog_context(self.job.user):
-            for config in configs:
-                self.logger.info(f"Syncing config: {config.name}")
+        for config in configs:
+            self.logger.info(f"Syncing config: {config.name}")
 
-                # No user initiated this run, so only the config's default key may be used.
-                user_key = config.resolve_key()
-                if not user_key:
-                    self.logger.warning(f"{config.no_key_reason()}, skipping")
-                    continue
+            # No user initiated this run, so only the config's default key may be used.
+            user_key = config.resolve_key()
+            if not user_key:
+                self.logger.warning(f"{config.no_key_reason()}, skipping")
+                continue
 
-                self.logger.info(f"Using default key {user_key.pk} for config {config.name}")
-                try:
+            self.logger.info(f"Using default key {user_key.pk} for config {config.name}")
+            # Log the changes under the key's owner, the account the RIR attributes the calls to.
+            try:
+                with _changelog_context(user_key.user):
                     total_logs += len(sync_config_and_queue_prefixes(config, user_key, log=self.logger))
-                except Exception:
-                    self.logger.exception(f"Scheduled sync failed for config {config.name}")
+            except Exception:
+                self.logger.exception(f"Scheduled sync failed for config {config.name}")
 
         self.logger.info(f"Scheduled sync complete: {configs.count()} configs, {total_logs} logs")
         self.job.data = {"configs_synced": len(configs), "total_logs": total_logs}

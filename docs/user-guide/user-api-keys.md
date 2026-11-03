@@ -14,7 +14,7 @@ Per-user keys also avoid the operational hazard of a shared secret, and make rot
 ## Which key an operation uses
 
 - **Anything a user initiates runs only with that user's own key** -- the Sync, Reassign, Reallocate, Remove, and Delete actions, and the background work an edit sets off (automatic reassignment when a prefix gets a site and tenant, automatic removal when a prefix is deleted or deactivated). If that user has no key for the config, nothing is sent to the RIR; the UI reports an error, or, for edit-driven work, a `skipped` sync log row names the user and the config.
-- **Work no user initiates** -- the scheduled sync, or automation running outside any request -- uses the config's **default key** (`RIRConfig.default_key`). If none is set, it is skipped.
+- **Work no user initiates** -- the scheduled sync, or automation running outside any request -- uses the config's **default key** (`RIRConfig.default_key`). If none is set, it is skipped. Its changes are attributed in NetBox's change log to the default key's owner.
 - **A deactivated user's keys are never used**, whether as their own key or as a config's default key. Deactivating a user stops their keys the same way deleting the user does: work that would need one is skipped and the log names the deactivated user.
 
 A user's edit never falls back to the default key, so every write at the RIR is attributable to the person who made it. Background jobs run as the acting user, so NetBox's job list and changelog record who triggered them.

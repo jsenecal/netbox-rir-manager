@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sync log is written.
 - **Breaking:** the scheduled sync now uses only the config's default key, once per
   config. Previously it ran once per key that had ever synced the config.
+- The scheduled sync now records its changes in NetBox's change log under the default
+  key's owner, the account whose RIR key made the calls. Previously its config sync
+  changes had no user while the prefix jobs it queued ran as that owner (#78).
 - CI now tests against the latest NetBox 4.5 and 4.6 releases (4.5.10
   and 4.6.10, previously 4.5.8 and 4.5.10), with Renovate keeping the
   matrix pinned to the newest release of each supported minor. The

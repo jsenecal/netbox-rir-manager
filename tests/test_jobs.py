@@ -992,6 +992,37 @@ class TestChangelogEntries:
         # No ObjectChange should be created since user is not a real User
         assert ObjectChange.objects.count() == initial_count
 
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_scheduled_sync_attributes_changes_to_default_key_owner(self, mock_backend_class, rir_config, default_key):
+        """The scheduled sync logs its changes under the owner of the key that made the calls."""
+        from core.models import ObjectChange
+
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+        from netbox_rir_manager.models import RIROrganization
+
+        mock_backend = MagicMock()
+        mock_backend.get_organization.return_value = {
+            "handle": "SCHEDLOG-ARIN",
+            "name": "Scheduled Log Org",
+            "street_address": "",
+            "city": "",
+            "state_province": "",
+            "postal_code": "",
+            "country": "",
+            "poc_links": [],
+            "raw_data": {},
+        }
+        mock_backend.find_net.return_value = None
+        mock_backend_class.from_rir_config.return_value = mock_backend
+
+        runner = make_runner(ScheduledRIRSyncJob)
+        runner.job.user = None
+        runner.run()
+
+        org = RIROrganization.objects.get(handle="SCHEDLOG-ARIN")
+        change = ObjectChange.objects.get(changed_object_id=org.pk, changed_object_type__model="rirorganization")
+        assert change.user == default_key.user
+
 
 @pytest.mark.django_db
 class TestReassignJobOutcome:

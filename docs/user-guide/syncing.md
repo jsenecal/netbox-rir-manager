@@ -20,9 +20,11 @@ From the `RIRConfig` list view, select rows and choose **Sync Selected**. The pl
 
 1. Iterates `RIRConfig.objects.filter(is_active=True)`.
 2. For each config, uses its **default key**. No user initiated the run, so no user's own key is borrowed. A config without a default key, or whose default key belongs to a deactivated user, is skipped with a warning that says which.
-3. Calls `sync_rir_config` once with that key.
+3. Calls `sync_rir_config` once with that key, under the change log context of the key's owner.
 4. Queues the same per-aggregate prefix discovery as the manual sync (see [Networks](#3-networks-and-customers)), so reassignments made outside NetBox are picked up daily. Each `SyncPrefixesJob` uses the default key and runs as that key's owner.
 5. Logs failures per config and continues -- one failing config does not abort the rest.
+
+Every change a scheduled run makes, in the config sync and in the prefix jobs it queues, is attributed in NetBox's change log to the default key's owner: the account whose RIR key made the calls. A manual sync attributes its changes to the requesting user the same way.
 
 Inspect or trigger it manually from **System > Background Jobs**.
 
