@@ -397,6 +397,18 @@ def sync_aggregate(
     return sync_log, rir_network
 
 
+def find_existing_child_net(backend: ARINBackend, parent: RIRNetwork, prefix) -> dict | None:
+    """The net ARIN already has for prefix beneath parent, or None.
+
+    ARIN answers a lookup with the most specific net covering the range, which is parent itself
+    when nothing was reassigned from it for prefix. Only a different net is an existing child.
+    """
+    net_data = backend.find_net(*prefix_range(prefix.prefix))
+    if net_data and net_data.get("handle") and net_data["handle"] != parent.handle:
+        return net_data
+    return None
+
+
 def _resolve_owned_net(backend: ARINBackend, net_data: dict, org_handle: str) -> dict | None:
     """Walk up the parent chain from the most specific net to the one registered to org_handle.
 
@@ -514,12 +526,9 @@ class SyncPrefixesJob(JobRunner):
         with _changelog_context(self.job.user):
             for pfx in prefixes:
                 self.logger.debug(f"Querying ARIN for prefix {pfx.prefix}")
-                pfx_net_data = backend.find_net(*prefix_range(pfx.prefix))
+                pfx_net_data = find_existing_child_net(backend, parent_net, pfx)
                 if pfx_net_data is None:
-                    continue
-
-                if pfx_net_data["handle"] == parent_handle:
-                    self.logger.debug(f"Prefix {pfx.prefix} returns parent net, skipping")
+                    self.logger.debug(f"No separate ARIN net for prefix {pfx.prefix}, skipping")
                     continue
 
                 _net, created = RIRNetwork.sync_from_arin(
@@ -603,40 +612,37 @@ class ReassignJob(JobRunner):
 
             start_address, end_address = prefix_range(prefix.prefix)
 
-            # Pre-flight: check what ARIN actually has for this range
+            # Pre-flight: a prefix ARIN already reassigned is synced, not reassigned again.
             self.logger.info(f"Pre-flight: querying ARIN for existing net at {start_address}-{end_address}")
-            actual_net = backend.find_net(start_address, end_address)
+            actual_net = find_existing_child_net(backend, parent_network, prefix)
             if actual_net is not None:
-                actual_handle = actual_net.get("handle")
+                actual_handle = actual_net["handle"]
+                self.logger.warning(f"Pre-flight: prefix already reassigned as {actual_handle}, syncing instead")
+                RIRNetwork.sync_from_arin(
+                    actual_net,
+                    rir_config,
+                    prefix=prefix,
+                    user_key=user_key,
+                )
+                self.job.data["status"] = "synced"
+                self.job.data["message"] = (
+                    f"Prefix already has ARIN network {actual_handle} "
+                    f"(expected parent {parent_network.handle}). Synced locally."
+                )
+                self.job.save()
 
-                # Already reassigned at ARIN (different net than parent) -- just sync it
-                if actual_handle and actual_handle != parent_network.handle:
-                    self.logger.warning(f"Pre-flight: prefix already reassigned as {actual_handle}, syncing instead")
-                    RIRNetwork.sync_from_arin(
-                        actual_net,
-                        rir_config,
-                        prefix=prefix,
-                        user_key=user_key,
-                    )
-                    self.job.data["status"] = "synced"
-                    self.job.data["message"] = (
-                        f"Prefix already has ARIN network {actual_handle} "
-                        f"(expected parent {parent_network.handle}). Synced locally."
-                    )
-                    self.job.save()
-
-                    RIRSyncLog.objects.create(
-                        rir_config=rir_config,
-                        operation="reassign",
-                        object_type="network",
-                        object_handle=actual_handle,
-                        status="skipped",
-                        message=(
-                            f"Prefix {prefix.prefix} already reassigned at ARIN as "
-                            f"{actual_handle}. Synced instead of re-reassigning."
-                        ),
-                    )
-                    return
+                RIRSyncLog.objects.create(
+                    rir_config=rir_config,
+                    operation="reassign",
+                    object_type="network",
+                    object_handle=actual_handle,
+                    status="skipped",
+                    message=(
+                        f"Prefix {prefix.prefix} already reassigned at ARIN as "
+                        f"{actual_handle}. Synced instead of re-reassigning."
+                    ),
+                )
+                return
 
             self.logger.info("Pre-flight passed")
 
