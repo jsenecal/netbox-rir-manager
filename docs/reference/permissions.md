@@ -33,7 +33,7 @@ The action pages below only require a logged-in user. They do not check a NetBox
 | **Resolve** on a Site's RIR Address panel (geocode and save an address) | Nothing else                  |
 | **Refresh** on a ticket                                  | Nothing else                          |
 
-The key is the real gate for anything sent to the RIR: without a key of their own on the config, nothing is sent (see [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses)). Control who can act at the RIR by controlling who has a key.
+The key is the real gate for anything sent to the RIR: without a key of their own on the config, nothing is sent (see [Which key an operation uses](../user-guide/user-api-keys.md#which-key-an-operation-uses)). Control who can act at the RIR by controlling who has a key. Deactivating a NetBox user stops all of their keys, including as a config's default key and in jobs already queued with them.
 
 ## REST API
 

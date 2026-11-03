@@ -29,7 +29,7 @@ A user's RIR API key for one config. See [User API Keys](../user-guide/user-api-
 
 | Field        | Notes                                                    |
 |--------------|----------------------------------------------------------|
-| `user`       | The NetBox user. Unique together with `rir_config`.      |
+| `user`       | The NetBox user. Unique together with `rir_config`. The key is not used while this user is deactivated. |
 | `rir_config` | The config the key belongs to.                           |
 | `api_key`    | Encrypted at rest; write-only in the REST API.           |
 

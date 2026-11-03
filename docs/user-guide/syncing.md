@@ -19,10 +19,12 @@ From the `RIRConfig` list view, select rows and choose **Sync Selected**. The pl
 `ScheduledRIRSyncJob` is registered as a NetBox system job that runs every [`sync_interval_hours`](../reference/settings.md#sync_interval_hours) hours, daily by default. On each run it:
 
 1. Iterates `RIRConfig.objects.filter(is_active=True)`.
-2. For each config, uses its **default key**. No user initiated the run, so no user's own key is borrowed; a config without a default key is skipped with a warning.
-3. Calls `sync_rir_config` once with that key.
+2. For each config, uses its **default key**. No user initiated the run, so no user's own key is borrowed. A config without a default key, or whose default key belongs to a deactivated user, is skipped with a warning that says which.
+3. Calls `sync_rir_config` once with that key, under the change log context of the key's owner.
 4. Queues the same per-aggregate prefix discovery as the manual sync (see [Networks](#3-networks-and-customers)), so reassignments made outside NetBox are picked up on the next run. Each `SyncPrefixesJob` uses the default key and runs as that key's owner.
 5. Logs failures per config and continues -- one failing config does not abort the rest.
+
+Every change a scheduled run makes, in the config sync and in the prefix jobs it queues, is attributed in NetBox's change log to the default key's owner: the account whose RIR key made the calls. A manual sync attributes its changes to the requesting user the same way.
 
 Inspect or trigger it manually from **System > Background Jobs**.
 
@@ -84,6 +86,7 @@ Browse them under **RIR Manager > Sync Logs**, filter by config or status, or re
 ## Failure modes
 
 - **No API key for the requesting user**: the manual sync view shows an error and redirects without enqueueing.
+- **No usable default key**: the scheduled sync skips the config and logs why: it has no default key, or the key's owner is deactivated.
 - **`backend.get_organization` returns `None`**: `RIRSyncLog` row with status `error`, `object_type=organization`. The job continues but skips contacts and networks for that config.
 - **`backend.find_net` returns `None`**: `skipped` log row with the aggregate's prefix as `object_handle` (the aggregate has no ARIN counterpart).
 - **Aggregate not registered to the config's org**: `skipped` log row with the most specific Net's handle and its owner. This also happens when the config has no `org_handle`, or when ARIN will not return a parent Net in the chain.

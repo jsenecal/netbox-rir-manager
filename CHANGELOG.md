@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sync log is written.
 - **Breaking:** the scheduled sync now uses only the config's default key, once per
   config. Previously it ran once per key that had ever synced the config.
+- The scheduled sync now records its changes in NetBox's change log under the default
+  key's owner, the account whose RIR key made the calls. Previously its config sync
+  changes had no user while the prefix jobs it queued ran as that owner (#78).
 - CI now tests against the latest NetBox 4.5 and 4.6 releases (4.5.10
   and 4.6.10, previously 4.5.8 and 4.5.10), with Renovate keeping the
   matrix pinned to the newest release of each supported minor. The
@@ -68,6 +71,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sets the hours between runs of the **Scheduled RIR Sync** (24 by default); a value
   that is not a whole number of hours, at least 1, stops NetBox from starting with an
   `ImproperlyConfigured` error. Restart NetBox and the RQ worker after changing either.
+- A key whose owner is deactivated is no longer used, as the user's own key or as a
+  config's default key. Deactivating a user now stops their keys the way deleting them
+  does: the scheduled sync skips the config, prefix sync, reassign and remove jobs queued
+  before the deactivation make no ARIN call, a queued manual RIR Sync is refused, and the
+  job message, log line or `skipped` sync log names the deactivated user. Such a key can
+  no longer be chosen as a config's default key (#75).
 - Documentation: every page in the navigation now exists. New reference pages cover
   settings, models, permissions, background jobs and backends, plus a user guide page
   for addresses and geocoding; nav entries whose content already lives on other pages
