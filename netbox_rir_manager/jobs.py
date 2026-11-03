@@ -651,7 +651,7 @@ class ReassignJob(JobRunner):
 
             self.logger.info(f"Submitting reassignment to ARIN for {prefix.prefix}")
             try:
-                ticket = submit_reassignment(
+                outcome = submit_reassignment(
                     backend,
                     parent_network,
                     user_key,
@@ -668,9 +668,14 @@ class ReassignJob(JobRunner):
                 self.job.save()
                 return
 
-            self.logger.info(f"Reassignment submitted, ticket {ticket.ticket_number}")
+            if outcome.recorded:
+                self.logger.info(outcome.message)
+            else:
+                self.logger.error(outcome.message)
             self.job.data["status"] = "success"
-            self.job.data["ticket_number"] = ticket.ticket_number
+            self.job.data["message"] = outcome.message
+            if outcome.ticket:
+                self.job.data["ticket_number"] = outcome.ticket.ticket_number
             self.job.save()
 
 
@@ -682,6 +687,8 @@ class RemoveNetworkJob(JobRunner):
 
     def run(self, *args, **kwargs):
         from netbox_rir_manager.models import RIRUserKey
+        from netbox_rir_manager.services.arin_results import ARINWriteError
+        from netbox_rir_manager.services.net_writes import submit_net_remove
 
         network_id = kwargs.get("network_id")
         user_key_id = kwargs.get("user_key_id")
@@ -693,36 +700,18 @@ class RemoveNetworkJob(JobRunner):
         self.job.save()
 
         self.logger.info(f"Removing network {network.handle} from ARIN")
-        rir_config = network.rir_config
-        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
-
-        success = backend.remove_network(network.handle)
-
-        if success:
-            self.logger.info(f"Successfully removed network {network.handle}")
-        else:
-            self.logger.error(f"Failed to remove network {network.handle}")
-
-        status = "success" if success else "error"
-        message = (
-            f"Removed network {network.handle} from ARIN"
-            if success
-            else f"Failed to remove network {network.handle} from ARIN"
-        )
+        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
 
         with _changelog_context(self.job.user):
-            RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="remove",
-                object_type="network",
-                object_handle=network.handle,
-                status=status,
-                message=message,
-            )
-
-        self.job.data["status"] = status
-        if not success:
-            self.job.data["message"] = "ARIN removal failed"
+            try:
+                submit_net_remove(backend, network)
+            except ARINWriteError:
+                self.logger.error(f"Failed to remove network {network.handle}")
+                self.job.data["status"] = "error"
+                self.job.data["message"] = "ARIN removal failed"
+            else:
+                self.logger.info(f"Successfully removed network {network.handle}")
+                self.job.data["status"] = "success"
         self.job.save()
 
 

@@ -2,13 +2,13 @@
 
 from django.utils import timezone
 
-from netbox_rir_manager.choices import normalize_ticket_status
-from netbox_rir_manager.models import RIRAddress, RIRCustomer, RIRNetwork, RIRSyncLog, RIRTicket
+from netbox_rir_manager.models import RIRAddress, RIRCustomer
+from netbox_rir_manager.services.arin_results import ARINWriteError, net_request, record_arin_result, sync_log
 
 CUSTOMER_FIELDS = ("customer_name", *RIRAddress.ADDRESS_FIELDS)
 
 
-class ReassignmentError(Exception):
+class ReassignmentError(ARINWriteError):
     """ARIN refused or failed a step of the reassignment; the message is safe to show a user."""
 
 
@@ -18,11 +18,7 @@ def reassignment_request(data):
     Returns (net, customer, org_handle) for submit_reassignment: a simple reassignment
     carries the customer's details, a detailed one the recipient org handle.
     """
-    net = {
-        "net_name": data.get("net_name") or "",
-        "start_address": str(data["start_address"]),
-        "end_address": str(data["end_address"]),
-    }
+    net = net_request(data)
     if data["reassignment_type"] == "simple":
         return net, {field: data.get(field) or "" for field in CUSTOMER_FIELDS}, None
     return net, None, data["org_handle"]
@@ -49,7 +45,8 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
     CUSTOMER_FIELDS) for a simple reassignment, which first creates the customer at ARIN,
     or org_handle for a detailed one. The child net ARIN returns is linked to prefix.
 
-    Returns the RIRTicket, or raises ReassignmentError after logging the failure.
+    Returns the ARINOutcome of record_arin_result (its ticket is None when ARIN processed the
+    reassignment immediately), or raises ReassignmentError after logging the failure.
     """
     rir_config = parent.rir_config
     net_data = dict(net)
@@ -57,7 +54,7 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
     if customer is not None:
         customer_result = backend.create_customer(parent.handle, customer)
         if customer_result is None:
-            _log(
+            sync_log(
                 rir_config,
                 "create",
                 "customer",
@@ -83,42 +80,18 @@ def submit_reassignment(backend, parent, user_key, net, *, customer=None, org_ha
 
     result = backend.reassign_network(parent.handle, net_data)
     if result is None:
-        _log(
+        sync_log(
             rir_config, "reassign", "network", parent.handle, "error", f"Reassignment of {net['start_address']} failed"
         )
         raise ReassignmentError("Reassignment failed at ARIN.")
 
-    ticket = RIRTicket.objects.create(
-        rir_config=rir_config,
-        ticket_number=result.get("ticket_number", ""),
-        ticket_type=result.get("ticket_type", "IPV4_SIMPLE_REASSIGN"),
-        status=normalize_ticket_status(result.get("ticket_status", "")),
+    return record_arin_result(
+        result,
         network=parent,
-        submitted_by=user_key,
-        created_date=timezone.now(),
-        raw_data=result.get("raw_data", {}),
-    )
-    child = result.get("net")
-    if child and child.get("handle"):
-        RIRNetwork.sync_from_arin(child, rir_config, prefix=prefix, user_key=user_key)
-
-    _log(
-        rir_config,
-        "reassign",
-        "network",
-        parent.handle,
-        "success",
-        f"Reassignment submitted, ticket {ticket.ticket_number}",
-    )
-    return ticket
-
-
-def _log(rir_config, operation, object_type, handle, status, message):
-    RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation=operation,
-        object_type=object_type,
-        object_handle=handle,
-        status=status,
-        message=message,
+        user_key=user_key,
+        operation="reassign",
+        action="Reassignment",
+        ticket_type="IPV4_SIMPLE_REASSIGN",
+        link_net=True,
+        prefix=prefix,
     )

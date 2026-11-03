@@ -19,7 +19,6 @@ from netbox.object_actions import (
 from netbox.views import generic
 
 from netbox_rir_manager.backends.arin import ARINBackend
-from netbox_rir_manager.choices import normalize_ticket_status
 from netbox_rir_manager.filtersets import (
     RIRAddressFilterSet,
     RIRConfigFilterSet,
@@ -64,8 +63,14 @@ from netbox_rir_manager.models import (
     RIRUserKey,
 )
 from netbox_rir_manager.net_names import build_net_name
+from netbox_rir_manager.services.arin_results import ARINWriteError
+from netbox_rir_manager.services.net_writes import (
+    reallocation_request,
+    submit_net_delete,
+    submit_net_remove,
+    submit_reallocation,
+)
 from netbox_rir_manager.services.reassignment import (
-    ReassignmentError,
     prefix_site,
     reassignment_request,
     submit_reassignment,
@@ -81,6 +86,15 @@ from netbox_rir_manager.tables import (
     RIRTicketTable,
     RIRUserKeyTable,
 )
+
+
+def arin_outcome_redirect(request, outcome, fallback_url):
+    """Report a write ARIN accepted, then open its ticket, or fallback_url when there is none."""
+    if not outcome.recorded:
+        messages.warning(request, outcome.message)
+    else:
+        messages.success(request, outcome.message)
+    return redirect(outcome.ticket.get_absolute_url() if outcome.ticket else fallback_url)
 
 
 # --- RIRConfig Views ---
@@ -393,13 +407,12 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
         net, customer, org_handle = reassignment_request(form.cleaned_data)
         try:
-            ticket = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
-        except ReassignmentError as exc:
+            outcome = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
+        except ARINWriteError as exc:
             messages.error(request, str(exc))
             return redirect(network.get_absolute_url())
 
-        messages.success(request, f"Reassignment submitted. Ticket: {ticket.ticket_number}")
-        return redirect(ticket.get_absolute_url())
+        return arin_outcome_redirect(request, outcome, network.get_absolute_url())
 
 
 class RIRNetworkReallocateView(LoginRequiredMixin, View):
@@ -436,45 +449,13 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-        net_data = {
-            "org_handle": form.cleaned_data["org_handle"],
-            "net_name": form.cleaned_data.get("net_name", ""),
-            "start_address": str(form.cleaned_data["start_address"]),
-            "end_address": str(form.cleaned_data["end_address"]),
-        }
-        result = backend.reallocate_network(network.handle, net_data)
-        if result is None:
-            messages.error(request, "Reallocation failed at ARIN.")
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="reallocate",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Reallocation failed",
-            )
+        net = reallocation_request(form.cleaned_data)
+        try:
+            outcome = submit_reallocation(backend, network, user_key, net)
+        except ARINWriteError as exc:
+            messages.error(request, str(exc))
             return redirect(network.get_absolute_url())
-
-        ticket = RIRTicket.objects.create(
-            rir_config=network.rir_config,
-            ticket_number=result.get("ticket_number", ""),
-            ticket_type=result.get("ticket_type", "IPV4_REALLOCATE"),
-            status=normalize_ticket_status(result.get("ticket_status", "")),
-            network=network,
-            submitted_by=user_key,
-            created_date=timezone.now(),
-            raw_data=result.get("raw_data", {}),
-        )
-        RIRSyncLog.objects.create(
-            rir_config=network.rir_config,
-            operation="reallocate",
-            object_type="network",
-            object_handle=network.handle,
-            status="success",
-            message=f"Reallocation submitted, ticket {ticket.ticket_number}",
-        )
-        messages.success(request, f"Reallocation submitted. Ticket: {ticket.ticket_number}")
-        return redirect(ticket.get_absolute_url())
+        return arin_outcome_redirect(request, outcome, network.get_absolute_url())
 
 
 class RIRNetworkRemoveView(LoginRequiredMixin, View):
@@ -496,32 +477,17 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-        success = backend.remove_network(network.handle)
-        if success:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="remove",
-                object_type="network",
-                object_handle=network.handle,
-                status="success",
-                message=f"Removed network {network.handle} from ARIN",
-            )
-            messages.success(request, f"Network {network.handle} removed from ARIN.")
+        try:
+            submit_net_remove(backend, network)
+        except ARINWriteError as exc:
+            messages.error(request, str(exc))
         else:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="remove",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Failed to remove network from ARIN",
-            )
-            messages.error(request, "Failed to remove network from ARIN.")
+            messages.success(request, f"Network {network.handle} removed from ARIN.")
         return redirect(network.get_absolute_url())
 
 
 class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
-    """Delete a network at ARIN (creates a ticket, with confirmation page)."""
+    """Delete a network at ARIN, with a confirmation page."""
 
     def get(self, request, pk):
         network = get_object_or_404(RIRNetwork, pk=pk)
@@ -539,39 +505,12 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
             return redirect(network.get_absolute_url())
 
         backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
-        result = backend.delete_network(network.handle)
-        if result is None:
-            RIRSyncLog.objects.create(
-                rir_config=network.rir_config,
-                operation="delete",
-                object_type="network",
-                object_handle=network.handle,
-                status="error",
-                message="Failed to delete network at ARIN",
-            )
-            messages.error(request, "Failed to delete network at ARIN.")
+        try:
+            outcome = submit_net_delete(backend, network, user_key)
+        except ARINWriteError as exc:
+            messages.error(request, str(exc))
             return redirect(network.get_absolute_url())
-
-        ticket = RIRTicket.objects.create(
-            rir_config=network.rir_config,
-            ticket_number=result.get("ticket_number", ""),
-            ticket_type="NET_DELETE_REQUEST",
-            status=normalize_ticket_status(result.get("ticket_status", "")),
-            network=network,
-            submitted_by=user_key,
-            created_date=timezone.now(),
-            raw_data=result.get("raw_data", {}),
-        )
-        RIRSyncLog.objects.create(
-            rir_config=network.rir_config,
-            operation="delete",
-            object_type="network",
-            object_handle=network.handle,
-            status="success",
-            message=f"Delete request submitted, ticket {ticket.ticket_number}",
-        )
-        messages.success(request, f"Delete request submitted. Ticket: {ticket.ticket_number}")
-        return redirect(ticket.get_absolute_url())
+        return arin_outcome_redirect(request, outcome, network.get_absolute_url())
 
 
 # --- Aggregate Sync View (from Aggregate detail page) ---
@@ -755,7 +694,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
         backend = ARINBackend.from_rir_config(parent_network.rir_config, api_key=user_key.api_key)
         net, customer, org_handle = reassignment_request(form.cleaned_data)
         try:
-            ticket = submit_reassignment(
+            outcome = submit_reassignment(
                 backend,
                 parent_network,
                 user_key,
@@ -765,12 +704,11 @@ class PrefixReassignView(LoginRequiredMixin, View):
                 tenant=prefix.tenant,
                 prefix=prefix,
             )
-        except ReassignmentError as exc:
+        except ARINWriteError as exc:
             messages.error(request, str(exc))
             return redirect(prefix.get_absolute_url())
 
-        messages.success(request, f"Reassignment of {prefix.prefix} submitted. Ticket: {ticket.ticket_number}")
-        return redirect(ticket.get_absolute_url())
+        return arin_outcome_redirect(request, outcome, prefix.get_absolute_url())
 
 
 # --- Site Address Resolve Views ---
