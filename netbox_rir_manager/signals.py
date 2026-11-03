@@ -100,7 +100,7 @@ def auto_reassign_prefix(sender, instance, created=False, raw=False, **kwargs):
     user = _acting_user()
     user_key = rir_config.resolve_key(user)
     if not user_key:
-        reason = _no_key_reason(rir_config, user)
+        reason = rir_config.no_key_reason(user)
         logger.warning("Auto-reassign skipped for prefix %s: %s", instance.prefix, reason)
         _log_skipped(
             rir_config, "reassign", str(instance.prefix), f"Auto-reassign of {instance.prefix} skipped: {reason}"
@@ -173,7 +173,7 @@ def _remove_child_networks(prefix, reason):
                 "allocation does not have auto-reassign enabled on an active config",
             )
         elif not network.enqueue_removal(user=user):
-            no_key = _no_key_reason(network.rir_config, user)
+            no_key = network.rir_config.no_key_reason(user)
             logger.warning(
                 "Cannot remove ARIN network %s for %s prefix %s: %s", network.handle, reason, prefix.prefix, no_key
             )
@@ -191,12 +191,6 @@ def _acting_user():
 
     user = getattr(current_request.get(), "user", None)
     return user if user is not None and user.is_authenticated else None
-
-
-def _no_key_reason(rir_config, user):
-    if user is not None:
-        return f"{user} has no API key for RIR config {rir_config}"
-    return f"RIR config {rir_config} has no default key"
 
 
 def _log_skipped(rir_config, operation, handle, message):

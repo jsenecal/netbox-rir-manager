@@ -470,7 +470,7 @@ class SyncRIRConfigJob(JobRunner):
         rir_config = RIRConfig.objects.get(pk=self.job.object_id)
         user_key = rir_config.resolve_key(self.job.user)
         if not user_key:
-            self.logger.error(f"No API key resolves for config {rir_config.name}; nothing synced")
+            self.logger.error(f"{rir_config.no_key_reason(self.job.user)}; nothing synced")
             self.job.data = {"rir_config": rir_config.name, "status": "error", "message": "No API key"}
             self.job.save()
             return
@@ -734,10 +734,10 @@ class RemoveNetworkJob(JobRunner):
         with _changelog_context(self.job.user):
             try:
                 submit_net_remove(backend, network)
-            except ARINWriteError:
-                self.logger.error(f"Failed to remove network {network.handle}")
+            except ARINWriteError as exc:
+                self.logger.error(f"{network.handle}: {exc}")
                 self.job.data["status"] = "error"
-                self.job.data["message"] = "ARIN removal failed"
+                self.job.data["message"] = str(exc)
             else:
                 self.logger.info(f"Successfully removed network {network.handle}")
                 self.job.data["status"] = "success"
@@ -765,7 +765,7 @@ class ScheduledRIRSyncJob(JobRunner):
                 # No user initiated this run, so only the config's default key may be used.
                 user_key = config.resolve_key()
                 if not user_key:
-                    self.logger.warning(f"No default key for config {config.name}, skipping")
+                    self.logger.warning(f"{config.no_key_reason()}, skipping")
                     continue
 
                 self.logger.info(f"Using default key {user_key.pk} for config {config.name}")

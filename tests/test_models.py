@@ -653,6 +653,31 @@ class TestRIRConfigResolveKey:
 
         assert rir_config.resolve_key(users[actor]) == keys[expected]
 
+    @pytest.mark.parametrize("acting", [True, False], ids=["own-key", "default-key"])
+    def test_ignores_key_of_deactivated_owner(self, rir_config, default_key, acting):
+        """A deactivated owner's key resolves for no one, as if the owner were deleted."""
+        owner = default_key.user
+        owner.is_active = False
+        owner.save()
+        rir_config.refresh_from_db()
+
+        assert rir_config.resolve_key(owner if acting else None) is None
+
+    @pytest.mark.parametrize(
+        "acting, expected",
+        [
+            pytest.param(True, "admin is deactivated", id="acting-user"),
+            pytest.param(False, "belongs to deactivated user admin", id="default-key"),
+        ],
+    )
+    def test_no_key_reason_names_deactivated_owner(self, rir_config, default_key, acting, expected):
+        owner = default_key.user
+        owner.is_active = False
+        owner.save()
+        rir_config.refresh_from_db()
+
+        assert expected in rir_config.no_key_reason(owner if acting else None)
+
     def test_default_key_must_belong_to_config(self, rir, rir_config, rir_user_key):
         from django.core.exceptions import ValidationError
 

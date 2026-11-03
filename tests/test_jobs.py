@@ -117,6 +117,22 @@ class TestScheduledSyncJob:
 
         mock_backend_class.from_rir_config.assert_not_called()
 
+    @patch("netbox_rir_manager.jobs.ARINBackend")
+    def test_scheduled_sync_skips_config_whose_default_key_owner_is_deactivated(
+        self, mock_backend_class, rir_config, default_key
+    ):
+        from netbox_rir_manager.jobs import ScheduledRIRSyncJob
+
+        default_key.user.is_active = False
+        default_key.user.save()
+
+        runner = make_runner(ScheduledRIRSyncJob)
+        runner.run()
+
+        mock_backend_class.from_rir_config.assert_not_called()
+        warning = runner.logger.warning.call_args[0][0]
+        assert "deactivated user" in warning
+
 
 @pytest.mark.django_db
 class TestRIRSyncJob:
