@@ -10,11 +10,11 @@ netbox-rir-manager bridges your NetBox IPAM data and the RIR's own database. Syn
 - **Auto-link to IPAM**: synced networks are matched to existing NetBox `Aggregate` and `Prefix` objects via `auto_link_networks`.
 - **Write operations**: reassign, reallocate, remove, and delete networks directly from the plugin or the parent Prefix detail page.
 - **Auto-reassign on prefix changes**: when a NetBox `Prefix` gains a Site and Tenant, a background reassignment can be queued automatically.
-- **Ticket tracking**: reassignments, reallocations, and deletions that need RIR-side approval create an `RIRTicket` whose status follows the RIR; writes the RIR processes immediately are recorded as a `success` sync log, with no ticket.
+- **Ticket tracking**: reassignments, reallocations, and deletions that need RIR-side approval create an `RIRTicket` recording the ticket number, type and the status the RIR returned; writes the RIR processes immediately are recorded as a `success` sync log, with no ticket.
 - **Per-user API keys**: encrypted at rest with HKDF-derived Fernet, scoped to a single `RIRConfig`.
 - **Scheduled sync**: a daily system job (`ScheduledRIRSyncJob`) keeps RIR data current.
-- **Pluggable backend architecture**: ARIN supported today via `pyregrws`; PRs welcome for RIPE, APNIC, LACNIC, AFRINIC.
-- **Address geocoding**: Site addresses are normalised into structured `RIRAddress` records using Nominatim (and optionally Google).
+- **Backend interface**: ARIN supported today via `pyregrws`, behind an abstract `RIRBackend` class; PRs welcome for RIPE, APNIC, LACNIC, AFRINIC.
+- **Address geocoding**: Site addresses are normalised into structured `RIRAddress` records using OpenStreetMap Nominatim.
 - **Full REST API** under `/api/plugins/rir-manager/` with custom action endpoints for write operations.
 - **Sync logging**: full audit trail of every read and write operation under `RIRSyncLog`.
 
@@ -53,7 +53,7 @@ netbox-rir-manager bridges your NetBox IPAM data and the RIR's own database. Syn
 - [First Sync](getting-started/first-sync.md)
 - [REST API reference](reference/rest-api.md)
 - [Settings reference](reference/settings.md)
-- [Architecture](development/architecture.md)
+- [Permissions reference](reference/permissions.md)
 - [GitHub repository](https://github.com/jsenecal/netbox-rir-manager)
 - [Issue tracker](https://github.com/jsenecal/netbox-rir-manager/issues)
 
