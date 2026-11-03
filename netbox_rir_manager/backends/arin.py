@@ -4,19 +4,39 @@ import logging
 from ipaddress import ip_address
 from typing import TYPE_CHECKING, Any
 
+import pycountry
 from pydantic import ValidationError
 from regrws.api.core import Api
 from regrws.models import Customer, Error, Net
 from tenacity import RetryError, Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from netbox_rir_manager.backends import register_backend
-from netbox_rir_manager.backends.base import RIRBackend, RIRDataError
+from netbox_rir_manager.backends.base import RIRBackend, RIRDataError, RIRRequestError
 from netbox_rir_manager.net_names import to_ascii
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from netbox_rir_manager.models import RIRConfig
+
+
+def error_detail(error: Error) -> str:
+    """ARIN's reason for an Error, on one line.
+
+    The components name each problem ("iso3166-1: A valid country code is required."), so they
+    replace ARIN's generic message when present.
+    """
+    parts = [f"{c.name}: {c.message}" for c in error.components] or [error.message]
+    return " ".join([*parts, *error.additional_info])
+
+
+def _data_error(model_cls, *problems) -> RIRDataError:
+    """An RIRDataError for data pyregrws' model_cls cannot take.
+
+    Each problem is (loc, msg): loc is the field path as a tuple, empty for the whole model.
+    """
+    text = "; ".join(f"{'.'.join(map(str, loc))}: {msg}" if loc else msg for loc, msg in problems)
+    return RIRDataError(f"Invalid {model_cls.__name__} details for ARIN: {text}")
 
 
 @register_backend
@@ -56,6 +76,17 @@ class ARINBackend(RIRBackend):
                     return func(*args, **kwargs)
         except RetryError:
             return None
+
+    def _write_call(self, func, *args, **kwargs):
+        """_call_with_retry for a write path.
+
+        Returns None if ARIN cannot be reached, and raises RIRRequestError when ARIN refuses the
+        request, including a lookup it answers with an error such as E_OBJECT_NOT_FOUND.
+        """
+        result = self._call_with_retry(func, *args, **kwargs)
+        if isinstance(result, Error):
+            raise RIRRequestError(error_detail(result))
+        return result
 
     def authenticate(self, rir_config: RIRConfig) -> bool:
         if not rir_config.org_handle:
@@ -118,27 +149,26 @@ class ARINBackend(RIRBackend):
     def _write_child_net(self, parent_handle: str, net_data: dict[str, Any], block_type: str, submit):
         """Build the child net (raising RIRDataError before any call), then submit it under the parent."""
         child_net = self._build_net(net_data, block_type, parent_handle)
-        parent = self._call_with_retry(self.api.net.from_handle, parent_handle)
-        if parent is None or isinstance(parent, Error):
+        parent = self._write_call(self.api.net.from_handle, parent_handle)
+        if parent is None:
             return None
-        result = self._call_with_retry(submit, parent, child_net)
-        if result is None or isinstance(result, Error):
+        result = self._write_call(submit, parent, child_net)
+        if result is None:
             return None
         return self._ticket_request_to_dict(result)
 
     def remove_network(self, handle: str) -> bool:
-        net = self._call_with_retry(self.api.net.from_handle, handle)
-        if net is None or isinstance(net, Error):
+        net = self._write_call(self.api.net.from_handle, handle)
+        if net is None:
             return False
-        result = self._call_with_retry(self.api.net.remove, net)
-        return not (result is None or isinstance(result, Error))
+        return self._write_call(self.api.net.remove, net) is not None
 
     def delete_network(self, handle: str) -> dict[str, Any] | None:
-        net = self._call_with_retry(self.api.net.from_handle, handle)
-        if net is None or isinstance(net, Error):
+        net = self._write_call(self.api.net.from_handle, handle)
+        if net is None:
             return None
-        result = self._call_with_retry(net.delete)
-        if result is None or isinstance(result, Error):
+        result = self._write_call(net.delete)
+        if result is None:
             return None
         return self._ticket_request_to_dict(result)
 
@@ -152,14 +182,15 @@ class ARINBackend(RIRBackend):
         """Create a recipient customer under the parent net.
 
         Raises RIRDataError when the customer details cannot form a valid Reg-RWS payload,
-        before anything is sent to ARIN.
+        before anything is sent to ARIN, and RIRRequestError when ARIN refuses the request
+        (the parent net lookup or the customer).
         """
         payload = self._customer_payload(data)
-        parent = self._call_with_retry(self.api.net.from_handle, parent_net_handle)
-        if parent is None or isinstance(parent, Error):
+        parent = self._write_call(self.api.net.from_handle, parent_net_handle)
+        if parent is None:
             return None
-        result = self._call_with_retry(self.api.customer.create_for_net, parent, **payload)
-        if result is None or isinstance(result, Error):
+        result = self._write_call(self.api.customer.create_for_net, parent, **payload)
+        if result is None:
             return None
         return self._customer_to_dict(result)
 
@@ -183,7 +214,7 @@ class ARINBackend(RIRBackend):
         try:
             version = ip_address(start).version
         except ValueError as exc:
-            raise RIRDataError(f"Invalid Net details for ARIN: start_address: {exc}") from exc
+            raise _data_error(Net, (("start_address",), exc)) from exc
         payload = {
             "version": version,
             "net_name": net_data.get("net_name") or None,
@@ -200,10 +231,7 @@ class ARINBackend(RIRBackend):
         try:
             return model_cls(**data)
         except ValidationError as exc:
-            problems = "; ".join(
-                f"{'.'.join(map(str, err['loc']))}: {err['msg']}" if err["loc"] else err["msg"] for err in exc.errors()
-            )
-            raise RIRDataError(f"Invalid {model_cls.__name__} details for ARIN: {problems}") from exc
+            raise _data_error(model_cls, *((err["loc"], err["msg"]) for err in exc.errors())) from exc
 
     @classmethod
     def _customer_payload(cls, data: dict[str, Any]) -> dict[str, Any]:
@@ -211,7 +239,9 @@ class ARINBackend(RIRBackend):
 
         Reg-RWS payloads are ASCII-only (only comments may carry accented letters), so the
         free-text fields are transliterated. Empty optional fields become None, which pyregrws
-        omits from the XML.
+        omits from the XML. pyregrws only checks the country code's length, so it is also
+        looked up in ISO 3166-1, which ARIN requires. The lookup must follow the model build:
+        pyregrws refuses a missing code there, and pycountry raises LookupError for None.
         """
         lines = [to_ascii(line).strip() for line in (data.get("street_address") or "").splitlines()]
         payload = {
@@ -222,7 +252,12 @@ class ARINBackend(RIRBackend):
             "iso3166_2": data.get("state_province") or None,
             "postal_code": to_ascii(data.get("postal_code") or "").strip() or None,
         }
-        cls._build_model(Customer, payload)
+        customer = cls._build_model(Customer, payload)
+        country = customer.iso3166_1.code2
+        if pycountry.countries.get(alpha_2=country) is None:
+            raise _data_error(
+                Customer, (("iso3166_1", "code2"), f"{country} is not an ISO 3166-1 alpha-2 country code")
+            )
         return payload
 
     # ------------------------------------------------------------------

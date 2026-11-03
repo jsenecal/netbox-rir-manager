@@ -319,22 +319,23 @@ class TestRIRNetworkActionViews:
         "failure, action",
         [("reassign", "reassign"), ("reallocate", "reallocate"), ("delete", "delete_arin"), ("remove", "remove")],
     )
+    @pytest.mark.parametrize("refused", [False, True], ids=["unreachable", "refused"])
     @patch("netbox_rir_manager.views.ARINBackend")
     def test_arin_failure_shows_error_and_logs(
-        self, mock_backend_cls, admin_client, rir_network, rir_user_key, failure, action
+        self, mock_backend_cls, admin_client, rir_network, rir_user_key, failure, action, refused
     ):
         from netbox_rir_manager.models import RIRSyncLog, RIRTicket
 
         failure = WRITE_FAILURES[failure]
-        getattr(mock_backend_cls.from_rir_config.return_value, failure.method).return_value = failure.returns
+        detail, log = failure.arrange(mock_backend_cls.from_rir_config.return_value, refused)
 
         response = admin_client.post(_action_url(action, rir_network), failure.data)
 
         assert response.status_code == 302
         assert response.url == rir_network.get_absolute_url()
-        assert _messages(response) == [("danger", failure.detail)]  # NetBox tags error messages "danger"
+        assert _messages(response) == [("danger", detail)]  # NetBox tags error messages "danger"
         error = RIRSyncLog.objects.get(status="error")
-        assert (error.operation, error.message, error.object_handle) == (*failure.log, rir_network.handle)
+        assert (error.operation, error.message, error.object_handle) == (*log, rir_network.handle)
         assert not RIRTicket.objects.exists()
 
     @patch("netbox_rir_manager.views.ARINBackend")
