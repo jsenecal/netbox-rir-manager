@@ -132,7 +132,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net, customer, org_handle = reassignment_request(serializer.validated_data)
         try:
             outcome = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
@@ -156,7 +156,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net = reallocation_request(serializer.validated_data)
         try:
             outcome = submit_reallocation(backend, network, user_key, net)
@@ -176,7 +176,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         try:
             submit_net_remove(backend, network)
         except ARINWriteError as exc:
@@ -193,7 +193,7 @@ class RIRNetworkViewSet(NetBoxModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         try:
             outcome = submit_net_delete(backend, network, user_key)
         except ARINWriteError as exc:

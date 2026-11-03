@@ -67,20 +67,19 @@ def _queued_user_key(runner: JobRunner, user_key_id: int, operation: str, object
 
 
 def sync_rir_config(
-    rir_config: RIRConfig,
-    api_key: str,
+    user_key: RIRUserKey,
     resource_types: list[str] | None = None,
-    user_key: RIRUserKey | None = None,
     log: logging.Logger = logger,
 ) -> tuple[list[RIRSyncLog], list[tuple]]:
     """
-    Sync RIR data for the given config.
+    Sync RIR data for user_key's config, calling the RIR with that key.
     resource_types: list of "organizations", "contacts", "networks". None = all.
     Returns (sync_logs, agg_nets) where agg_nets is a list of (Aggregate, RIRNetwork) tuples.
     """
+    rir_config = user_key.rir_config
     logs: list[RIRSyncLog] = []
     agg_nets: list[tuple] = []
-    backend = ARINBackend.from_rir_config(rir_config, api_key=api_key)
+    backend = ARINBackend.for_user_key(user_key)
 
     types_to_sync = resource_types or ["organizations", "contacts", "networks"]
     log.info(f"Starting sync for {rir_config.name} (types: {', '.join(types_to_sync)})")
@@ -120,15 +119,8 @@ def _sync_organization(
     org_data = backend.get_organization(rir_config.org_handle)
     if org_data is None:
         log.warning(f"Failed to retrieve organization {rir_config.org_handle} from ARIN")
-        sync_log = RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="organization",
-            object_handle=rir_config.org_handle,
-            status="error",
-            message=f"Failed to retrieve organization {rir_config.org_handle}",
-        )
-        logs.append(sync_log)
+        message = f"Failed to retrieve organization {rir_config.org_handle}"
+        logs.append(RIRSyncLog.record(rir_config, "sync", "organization", rir_config.org_handle, "error", message))
         return logs, None
 
     # Build address data from org_data
@@ -163,17 +155,9 @@ def _sync_organization(
             org.address = addr
             org.save(update_fields=["address"])
 
-    log.info(f"{'Created' if created else 'Updated'} organization {org_data['handle']}")
-
-    sync_log = RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation="sync",
-        object_type="organization",
-        object_handle=org_data["handle"],
-        status="success",
-        message=f"{'Created' if created else 'Updated'} organization {org_data['handle']}",
-    )
-    logs.append(sync_log)
+    synced = RIRSyncLog.log_synced(rir_config, "organization", org_data["handle"], created)
+    log.info(synced.message)
+    logs.append(synced)
 
     return logs, org
 
@@ -201,15 +185,9 @@ def _sync_contacts(
         poc_data = backend.get_poc(handle)
         if poc_data is None:
             log.warning(f"Failed to retrieve POC {handle}")
-            sync_log = RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="sync",
-                object_type="contact",
-                object_handle=handle,
-                status="error",
-                message=f"Failed to retrieve POC {handle}",
+            logs.append(
+                RIRSyncLog.record(rir_config, "sync", "contact", handle, "error", f"Failed to retrieve POC {handle}")
             )
-            logs.append(sync_log)
             continue
 
         # Build address data from poc_data
@@ -250,16 +228,9 @@ def _sync_contacts(
                 contact.address = addr
                 contact.save(update_fields=["address"])
 
-        log.info(f"{'Created' if created else 'Updated'} contact {poc_data['handle']}")
-        sync_log = RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="contact",
-            object_handle=poc_data["handle"],
-            status="success",
-            message=f"{'Created' if created else 'Updated'} contact {poc_data['handle']}",
-        )
-        logs.append(sync_log)
+        synced = RIRSyncLog.log_synced(rir_config, "contact", poc_data["handle"], created)
+        log.info(synced.message)
+        logs.append(synced)
 
     return logs
 
@@ -281,14 +252,8 @@ def _sync_customer_for_net(
     cust_data = backend.get_customer(customer_handle)
     if cust_data is None:
         log.warning(f"Failed to retrieve customer {customer_handle}")
-        return RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="customer",
-            object_handle=customer_handle,
-            status="error",
-            message=f"Failed to retrieve customer {customer_handle}",
-        )
+        message = f"Failed to retrieve customer {customer_handle}"
+        return RIRSyncLog.record(rir_config, "sync", "customer", customer_handle, "error", message)
 
     reg_date = cust_data.get("registration_date")
     if reg_date:
@@ -333,15 +298,9 @@ def _sync_customer_for_net(
             _customer.address = addr
             _customer.save(update_fields=["address"])
 
-    log.info(f"{'Created' if created else 'Updated'} customer {cust_data['handle']}")
-    return RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation="sync",
-        object_type="customer",
-        object_handle=cust_data["handle"],
-        status="success",
-        message=f"{'Created' if created else 'Updated'} customer {cust_data['handle']}",
-    )
+    synced = RIRSyncLog.log_synced(rir_config, "customer", cust_data["handle"], created)
+    log.info(synced.message)
+    return synced
 
 
 def _sync_aggregate_nets(
@@ -399,16 +358,21 @@ def sync_aggregate(
         aggregate=agg,
         user_key=user_key,
     )
-    log.info(f"{'Created' if created else 'Updated'} network {net_data['handle']} for aggregate {agg.prefix}")
-    sync_log = RIRSyncLog.objects.create(
-        rir_config=rir_config,
-        operation="sync",
-        object_type="network",
-        object_handle=net_data["handle"],
-        status="success",
-        message=f"{'Created' if created else 'Updated'} network {net_data['handle']}",
-    )
-    return sync_log, rir_network
+    synced = RIRSyncLog.log_synced(rir_config, "network", net_data["handle"], created)
+    log.info(f"{synced.message} for aggregate {agg.prefix}")
+    return synced, rir_network
+
+
+def find_existing_child_net(backend: ARINBackend, parent: RIRNetwork, prefix) -> dict | None:
+    """The net ARIN already has for prefix beneath parent, or None.
+
+    ARIN answers a lookup with the most specific net covering the range, which is parent itself
+    when nothing was reassigned from it for prefix. Only a different net is an existing child.
+    """
+    net_data = backend.find_net(*prefix_range(prefix.prefix))
+    if net_data and net_data.get("handle") and net_data["handle"] != parent.handle:
+        return net_data
+    return None
 
 
 def _resolve_owned_net(backend: ARINBackend, net_data: dict, org_handle: str) -> dict | None:
@@ -467,7 +431,7 @@ def sync_config_and_queue_prefixes(
     The caller owns the change log context the sync runs in, which should be user_key's owner so
     the config sync and its prefix jobs are logged under the same user. Returns the sync logs.
     """
-    logs, agg_nets = sync_rir_config(rir_config, api_key=user_key.api_key, user_key=user_key, log=log)
+    logs, agg_nets = sync_rir_config(user_key, log=log)
     enqueue_prefix_syncs(rir_config, agg_nets, user_key, log=log)
     return logs
 
@@ -520,7 +484,7 @@ class SyncPrefixesJob(JobRunner):
             return
         parent_net = RIRNetwork.objects.get(handle=parent_handle)
         rir_config = parent_net.rir_config
-        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
 
         prefixes = Prefix.objects.filter(prefix__net_contained=agg.prefix)
         self.logger.info(f"Scanning {prefixes.count()} prefixes under {agg.prefix}")
@@ -528,12 +492,9 @@ class SyncPrefixesJob(JobRunner):
         with _changelog_context(self.job.user):
             for pfx in prefixes:
                 self.logger.debug(f"Querying ARIN for prefix {pfx.prefix}")
-                pfx_net_data = backend.find_net(*prefix_range(pfx.prefix))
+                pfx_net_data = find_existing_child_net(backend, parent_net, pfx)
                 if pfx_net_data is None:
-                    continue
-
-                if pfx_net_data["handle"] == parent_handle:
-                    self.logger.debug(f"Prefix {pfx.prefix} returns parent net, skipping")
+                    self.logger.debug(f"No separate ARIN net for prefix {pfx.prefix}, skipping")
                     continue
 
                 _net, created = RIRNetwork.sync_from_arin(
@@ -542,21 +503,10 @@ class SyncPrefixesJob(JobRunner):
                     prefix=pfx,
                     user_key=user_key,
                 )
-                self.logger.info(
-                    f"{'Created' if created else 'Updated'} network {pfx_net_data['handle']} for prefix {pfx.prefix}"
+                synced = RIRSyncLog.log_synced(
+                    rir_config, "network", pfx_net_data["handle"], created, f" for prefix {pfx.prefix}"
                 )
-
-                RIRSyncLog.objects.create(
-                    rir_config=rir_config,
-                    operation="sync",
-                    object_type="network",
-                    object_handle=pfx_net_data["handle"],
-                    status="success",
-                    message=(
-                        f"{'Created' if created else 'Updated'} network "
-                        f"{pfx_net_data['handle']} for prefix {pfx.prefix}"
-                    ),
-                )
+                self.logger.info(synced.message)
 
                 _sync_customer_for_net(
                     backend,
@@ -583,7 +533,7 @@ class ReassignJob(JobRunner):
     def run(self, *args, **kwargs):
         from ipam.models import Prefix
 
-        from netbox_rir_manager.services.geocoding import resolve_site_address
+        from netbox_rir_manager.services.geocoding import SubdivisionCodeError, resolve_site_address
         from netbox_rir_manager.services.reassignment import ReassignmentError, prefix_site, submit_reassignment
 
         prefix = Prefix.objects.get(pk=kwargs.get("prefix_id"))
@@ -607,7 +557,7 @@ class ReassignJob(JobRunner):
 
             self.logger.info(f"Found parent network {parent_network.handle}")
             rir_config = parent_network.rir_config
-            backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+            backend = ARINBackend.for_user_key(user_key)
 
             # Determine reassignment type
             tenant = prefix.tenant
@@ -615,36 +565,33 @@ class ReassignJob(JobRunner):
 
             start_address, end_address = prefix_range(prefix.prefix)
 
-            # Pre-flight: check what ARIN actually has for this range
+            # Pre-flight: a prefix ARIN already reassigned is synced, not reassigned again.
             self.logger.info(f"Pre-flight: querying ARIN for existing net at {start_address}-{end_address}")
-            actual_net = backend.find_net(start_address, end_address)
+            actual_net = find_existing_child_net(backend, parent_network, prefix)
             if actual_net is not None:
-                actual_handle = actual_net.get("handle")
+                actual_handle = actual_net["handle"]
+                self.logger.warning(f"Pre-flight: prefix already reassigned as {actual_handle}, syncing instead")
+                RIRNetwork.sync_from_arin(
+                    actual_net,
+                    rir_config,
+                    prefix=prefix,
+                    user_key=user_key,
+                )
+                self.job.data["status"] = "synced"
+                self.job.data["message"] = (
+                    f"Prefix already has ARIN network {actual_handle} "
+                    f"(expected parent {parent_network.handle}). Synced locally."
+                )
+                self.job.save()
 
-                # Already reassigned at ARIN (different net than parent) -- just sync it
-                if actual_handle and actual_handle != parent_network.handle:
-                    self.logger.warning(f"Pre-flight: prefix already reassigned as {actual_handle}, syncing instead")
-                    RIRNetwork.sync_from_arin(
-                        actual_net,
-                        rir_config,
-                        prefix=prefix,
-                        user_key=user_key,
-                    )
-                    self.job.data["status"] = "synced"
-                    self.job.data["message"] = (
-                        f"Prefix already has ARIN network {actual_handle} "
-                        f"(expected parent {parent_network.handle}). Synced locally."
-                    )
-                    self.job.save()
-
-                    RIRSyncLog.log_skipped(
-                        rir_config,
-                        "reassign",
-                        actual_handle,
-                        f"Prefix {prefix.prefix} already reassigned at ARIN as "
-                        f"{actual_handle}. Synced instead of re-reassigning.",
-                    )
-                    return
+                RIRSyncLog.log_skipped(
+                    rir_config,
+                    "reassign",
+                    actual_handle,
+                    f"Prefix {prefix.prefix} already reassigned at ARIN as "
+                    f"{actual_handle}. Synced instead of re-reassigning.",
+                )
+                return
 
             self.logger.info("Pre-flight passed")
 
@@ -676,7 +623,20 @@ class ReassignJob(JobRunner):
                 # Resolve site address
                 site_address = RIRAddress.get_for_site(site)
                 if not site_address:
-                    site_address = resolve_site_address(site)
+                    try:
+                        site_address = resolve_site_address(site)
+                    except SubdivisionCodeError as exc:
+                        # Stop before anything is sent to ARIN: the customer's address is unusable.
+                        RIRSyncLog.record(
+                            rir_config,
+                            "reassign",
+                            "customer",
+                            parent_network.handle,
+                            "error",
+                            f"{prefix.prefix}: {exc}",
+                        )
+                        self._fail(prefix, str(exc))
+                        return
 
                 if not site_address:
                     self.job.data["status"] = "error"
@@ -699,10 +659,7 @@ class ReassignJob(JobRunner):
                     prefix=prefix,
                 )
             except ReassignmentError as exc:
-                self.logger.error(f"{prefix.prefix}: {exc}")
-                self.job.data["status"] = "error"
-                self.job.data["message"] = str(exc)
-                self.job.save()
+                self._fail(prefix, str(exc))
                 return
 
             if outcome.recorded:
@@ -714,6 +671,13 @@ class ReassignJob(JobRunner):
             if outcome.ticket:
                 self.job.data["ticket_number"] = outcome.ticket.ticket_number
             self.job.save()
+
+    def _fail(self, prefix, message):
+        """Log message against the prefix and end the job with it as its error."""
+        self.logger.error(f"{prefix.prefix}: {message}")
+        self.job.data["status"] = "error"
+        self.job.data["message"] = message
+        self.job.save()
 
 
 class RemoveNetworkJob(JobRunner):
@@ -735,7 +699,7 @@ class RemoveNetworkJob(JobRunner):
         self.job.save()
 
         self.logger.info(f"Removing network {network.handle} from ARIN")
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
 
         with _changelog_context(self.job.user):
             try:

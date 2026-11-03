@@ -182,20 +182,17 @@ class TestRIRNetwork:
         assert net.pk is not None
         assert str(net) == "NET-192-0-2-0-1"
 
-    def test_rir_network_link_to_aggregate(self, rir_config, rir):
-        from ipam.models import Aggregate
-
+    def test_rir_network_link_to_aggregate(self, rir_config, aggregate):
         from netbox_rir_manager.models import RIRNetwork
 
-        agg = Aggregate.objects.create(prefix="192.0.2.0/24", rir=rir)
         net = RIRNetwork.objects.create(
             rir_config=rir_config,
             handle="NET-192-0-2-0-1",
             net_name="EXAMPLE-NET",
-            aggregate=agg,
+            aggregate=aggregate,
         )
-        assert net.aggregate == agg
-        assert net in agg.rir_networks.all()
+        assert net.aggregate == aggregate
+        assert net in aggregate.rir_networks.all()
 
     def test_rir_network_link_to_prefix(self, rir_config):
         from ipam.models import Prefix
@@ -771,3 +768,22 @@ class TestDefaultKeyMigration:
         single.refresh_from_db()
         assert rir_config.default_key is None  # two keys: an administrator must choose
         assert single.default_key == single_key
+
+
+@pytest.mark.django_db
+class TestRIRAddressStateProvince:
+    def test_overlong_state_is_refused_with_one_clear_message(self):
+        """Issue #83: a state name instead of a code fails validation instead of reaching the database."""
+        from django.core.exceptions import ValidationError
+
+        from netbox_rir_manager.models import RIRAddress
+
+        address = RIRAddress(city="Town", country="DEU", state_province="North Rhine-Westphalia")
+        with pytest.raises(ValidationError) as excinfo:
+            address.full_clean()
+
+        assert "country" in excinfo.value.message_dict  # other field errors are still reported
+        assert excinfo.value.message_dict["state_province"] == [
+            "'North Rhine-Westphalia' is not an ISO 3166-2 subdivision code. Enter the code without "
+            "the country prefix, such as NY, QC or NW (at most 10 characters)."
+        ]

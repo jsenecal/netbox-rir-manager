@@ -81,6 +81,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before the deactivation make no ARIN call, a queued manual RIR Sync is refused, and the
   job message, log line or `skipped` sync log names the deactivated user. Such a key can
   no longer be chosen as a config's default key (#75).
+- Geocoding a Site whose state or province has no matching `pycountry` name, such as
+  Nominatim's `North Rhine-Westphalia`, no longer crashes with `value too long`. The
+  subdivision code now comes from Nominatim's own ISO 3166-2 code first, then from
+  `pycountry`'s local or English subdivision names. When no code can be found, nothing
+  is saved: the Resolve dialog shows the candidate with the error and no **Select**,
+  and the automatic reassignment stops with that error and an `error` sync log before
+  anything is sent to ARIN. The address model, the manual Reassign form and the API
+  reassign endpoint also refuse a state/province longer than the 10 characters the
+  field stores (#83).
 - Documentation: every page in the navigation now exists. New reference pages cover
   settings, models, permissions, background jobs and backends, plus a user guide page
   for addresses and geocoding; nav entries whose content already lives on other pages

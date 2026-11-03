@@ -47,3 +47,9 @@ class RIRSyncLog(NetBoxModel):
     def log_skipped(cls, rir_config, operation, handle, message):
         """Record a network operation that was deliberately not performed, and why."""
         return cls.record(rir_config, operation, "network", handle, "skipped", message)
+
+    @classmethod
+    def log_synced(cls, rir_config, object_type, handle, created, suffix=""):
+        """Record that a sync created or updated the object_type with handle; suffix ends the message."""
+        verb = "Created" if created else "Updated"
+        return cls.record(rir_config, "sync", object_type, handle, "success", f"{verb} {object_type} {handle}{suffix}")

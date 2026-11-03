@@ -2,6 +2,7 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -405,7 +406,7 @@ class RIRNetworkReassignView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net, customer, org_handle = reassignment_request(form.cleaned_data)
         try:
             outcome = submit_reassignment(backend, network, user_key, net, customer=customer, org_handle=org_handle)
@@ -449,7 +450,7 @@ class RIRNetworkReallocateView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net = reallocation_request(form.cleaned_data)
         try:
             outcome = submit_reallocation(backend, network, user_key, net)
@@ -477,7 +478,7 @@ class RIRNetworkRemoveView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         try:
             submit_net_remove(backend, network)
         except ARINWriteError as exc:
@@ -505,7 +506,7 @@ class RIRNetworkDeleteARINView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(network.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         try:
             outcome = submit_net_delete(backend, network, user_key)
         except ARINWriteError as exc:
@@ -535,7 +536,7 @@ class AggregateSyncView(LoginRequiredMixin, View):
 
         for user_key in user_keys:
             rir_config = user_key.rir_config
-            backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+            backend = ARINBackend.for_user_key(user_key)
             sync_log, net = sync_aggregate(backend, rir_config, aggregate, user_key=user_key)
             if net:
                 messages.success(request, f"{sync_log.message} from ARIN.")
@@ -573,19 +574,12 @@ class PrefixSyncView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(prefix.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
 
         net_data = backend.find_net(*prefix_range(prefix.prefix))
         if net_data is None:
             messages.warning(request, "No matching network found at ARIN for this prefix.")
-            RIRSyncLog.objects.create(
-                rir_config=rir_config,
-                operation="sync",
-                object_type="network",
-                object_handle=str(prefix.prefix),
-                status="skipped",
-                message=f"No ARIN network found for {prefix.prefix}",
-            )
+            RIRSyncLog.log_skipped(rir_config, "sync", str(prefix.prefix), f"No ARIN network found for {prefix.prefix}")
             return redirect(prefix.get_absolute_url())
 
         # Check if this is actually a child net (not the parent aggregate's net)
@@ -603,14 +597,7 @@ class PrefixSyncView(LoginRequiredMixin, View):
             user_key=user_key,
         )
 
-        RIRSyncLog.objects.create(
-            rir_config=rir_config,
-            operation="sync",
-            object_type="network",
-            object_handle=net_data["handle"],
-            status="success",
-            message=f"{'Created' if created else 'Updated'} network {net_data['handle']} for prefix {prefix.prefix}",
-        )
+        RIRSyncLog.log_synced(rir_config, "network", net_data["handle"], created, f" for prefix {prefix.prefix}")
 
         action = "Created" if created else "Updated"
         messages.success(request, f"{action} RIR network {net.handle} from ARIN.")
@@ -692,7 +679,7 @@ class PrefixReassignView(LoginRequiredMixin, View):
             messages.error(request, NO_API_KEY_MESSAGE)
             return redirect(prefix.get_absolute_url())
 
-        backend = ARINBackend.from_rir_config(parent_network.rir_config, api_key=user_key.api_key)
+        backend = ARINBackend.for_user_key(user_key)
         net, customer, org_handle = reassignment_request(form.cleaned_data)
         try:
             outcome = submit_reassignment(
@@ -784,6 +771,26 @@ class SiteAddressSelectView(LoginRequiredMixin, View):
             raw_geocode = json.loads(raw_geocode_str)
         except (json.JSONDecodeError, TypeError):
             raw_geocode = {}
+
+        # The dialog offers no Select for a candidate without a subdivision code; this refuses a
+        # posted address that still cannot be stored, before the existing one is replaced.
+        try:
+            RIRAddress(
+                street_address=street_address,
+                city=city,
+                state_province=state_province,
+                postal_code=postal_code,
+                country=country,
+            ).clean_fields(exclude=["site", "location", "raw_geocode", "last_resolved"])
+        except ValidationError as exc:
+            response = render(
+                request,
+                "netbox_rir_manager/htmx/site_address_resolve_error.html",
+                {"errors": exc.messages},
+            )
+            response.headers["HX-Retarget"] = "#site-address-resolve-error"
+            response.headers["HX-Reswap"] = "innerHTML"
+            return response
 
         # Delete existing site-level address (not location-specific ones)
         RIRAddress.objects.filter(site=site, location__isnull=True).delete()
