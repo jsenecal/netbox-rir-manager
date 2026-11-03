@@ -421,6 +421,42 @@ class TestPrefixSyncView:
         assert net.rir_config == legacy_setup["legacy"]
         assert net.prefix == pfx
 
+    @pytest.mark.parametrize(
+        "found, expected_message, skipped_logs",
+        [
+            pytest.param(None, ("warning", "No matching network found at ARIN for this prefix."), 1, id="no-net"),
+            pytest.param(
+                arin_net("NET-LEGACY-1"),
+                (
+                    "info",
+                    "No separate reassignment found at ARIN -- this prefix is covered by the parent allocation.",
+                ),
+                0,
+                id="parent-net",
+            ),
+        ],
+    )
+    def test_sync_tells_no_net_from_parent_net(
+        self, mock_arin, admin_client, legacy_setup, found, expected_message, skipped_logs
+    ):
+        """ARIN having no net and ARIN returning only the parent are reported differently."""
+        from ipam.models import Prefix
+
+        from netbox_rir_manager.models import RIRNetwork, RIRSyncLog
+
+        RIRNetwork.objects.create(
+            rir_config=legacy_setup["legacy"], handle="NET-LEGACY-1", aggregate=legacy_setup["agg"]
+        )
+        pfx = Prefix.objects.create(prefix="192.0.2.0/28")
+        mock_arin("views", find_net=found)
+
+        response = admin_client.post(reverse("plugins:netbox_rir_manager:prefix_sync", args=[pfx.pk]))
+
+        assert response.url == pfx.get_absolute_url()
+        assert _messages(response) == [expected_message]
+        assert RIRSyncLog.objects.filter(status="skipped", object_handle="192.0.2.0/28").count() == skipped_logs
+        assert list(RIRNetwork.objects.values_list("handle", flat=True)) == ["NET-LEGACY-1"]
+
     def test_sync_refuses_prefix_under_unlinked_aggregate(self, mock_arin, admin_client, legacy_setup):
         from ipam.models import Prefix
 
