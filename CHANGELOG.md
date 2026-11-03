@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   network, if any) instead of `201` and a ticket; `recorded` is `false` when ARIN
   made the change but NetBox could not record it. Results with a ticket still
   return `201` and the ticket (#56).
+- Every ARIN write failure now writes the message the user saw to the `error` sync
+  log, so log entries match the UI error and the REST API `detail`. Customer create,
+  reassign and reallocate messages name the start address, for example
+  `Reallocation of 192.0.2.0 failed at ARIN.`; the sync log no longer uses the older
+  "Reallocation failed", "Failed to create customer for <address>" and "Reassignment
+  of <address> failed" wording, and an unreachable ARIN is logged with the final
+  period the user sees (#77).
 
 ### Fixed
 
@@ -81,10 +88,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ARIN's reason for refusing a write is no longer discarded (#65). Customer
   create, reassign, reallocate, remove and delete now append it to the usual
   message, in the UI error, the REST API `detail` and the `error` sync log, for
-  example `Reassignment failed at ARIN: startAddress: IP range overlaps with
-  existing network(s).` A write ARIN cannot be reached for keeps the old message. The
+  example `Reassignment of 192.0.2.0 failed at ARIN: startAddress: IP range overlaps
+  with existing network(s).` A write ARIN cannot be reached for keeps the old message. The
   **ARIN Remove** job now records the same message instead of "ARIN removal
   failed".
+- `ARINBackend.update_network` raises `RIRRequestError` with ARIN's reason when ARIN
+  refuses the lookup or the save, like the other write methods, instead of returning
+  `None` (#76).
 - A simple reassignment's customer country is now checked against ISO 3166-1
   before anything is sent, so an unknown code such as `XX` is a `400` in the REST
   API (and an error in the UI) instead of a round trip to ARIN and a `502`.
