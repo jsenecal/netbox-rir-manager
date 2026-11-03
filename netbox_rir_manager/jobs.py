@@ -141,9 +141,9 @@ def _sync_organization(
             org.address = addr
             org.save(update_fields=["address"])
 
-    log.info(f"{'Created' if created else 'Updated'} organization {org_data['handle']}")
-
-    logs.append(RIRSyncLog.log_synced(rir_config, "organization", org_data["handle"], created))
+    synced = RIRSyncLog.log_synced(rir_config, "organization", org_data["handle"], created)
+    log.info(synced.message)
+    logs.append(synced)
 
     return logs, org
 
@@ -220,8 +220,9 @@ def _sync_contacts(
                 contact.address = addr
                 contact.save(update_fields=["address"])
 
-        log.info(f"{'Created' if created else 'Updated'} contact {poc_data['handle']}")
-        logs.append(RIRSyncLog.log_synced(rir_config, "contact", poc_data["handle"], created))
+        synced = RIRSyncLog.log_synced(rir_config, "contact", poc_data["handle"], created)
+        log.info(synced.message)
+        logs.append(synced)
 
     return logs
 
@@ -295,8 +296,9 @@ def _sync_customer_for_net(
             _customer.address = addr
             _customer.save(update_fields=["address"])
 
-    log.info(f"{'Created' if created else 'Updated'} customer {cust_data['handle']}")
-    return RIRSyncLog.log_synced(rir_config, "customer", cust_data["handle"], created)
+    synced = RIRSyncLog.log_synced(rir_config, "customer", cust_data["handle"], created)
+    log.info(synced.message)
+    return synced
 
 
 def _sync_aggregate_nets(
@@ -362,8 +364,9 @@ def sync_aggregate(
         aggregate=agg,
         user_key=user_key,
     )
-    log.info(f"{'Created' if created else 'Updated'} network {net_data['handle']} for aggregate {agg.prefix}")
-    return RIRSyncLog.log_synced(rir_config, "network", net_data["handle"], created), rir_network
+    synced = RIRSyncLog.log_synced(rir_config, "network", net_data["handle"], created)
+    log.info(f"{synced.message} for aggregate {agg.prefix}")
+    return synced, rir_network
 
 
 def find_existing_child_net(backend: ARINBackend, parent: RIRNetwork, prefix) -> dict | None:
